@@ -1,0 +1,30 @@
+# deps / build
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# runtime data (SQLite + uploads live here in prod and dev)
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# tooling
+.turbo/
+coverage/
+*.log
+.bun/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.zed/
