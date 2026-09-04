@@ -24,7 +24,8 @@ function createRoutes(deps: AppDeps) {
     .use('*', authMiddleware(deps.token))
     .route('/auth', authRoutes(deps))
     .route('/settings', settingsRoutes(deps))
-    .route('/status', statusRoutes(deps));
+    .route('/status', statusRoutes(deps))
+    .all('*', notFoundHandler);
 }
 
 export type AppType = ReturnType<typeof createRoutes>;
