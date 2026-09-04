@@ -1,5 +1,6 @@
 {
   "name": "@perch/cli",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "bin": {
@@ -8,5 +9,13 @@
   "scripts": {
     "build": "bun build ./src/index.ts --compile --outfile dist/perch",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@perch/core": "workspace:*",
+    "commander": "15.0.0",
+    "hono": "4.13.5"
+  },
+  "devDependencies": {
+    "@perch/server": "workspace:*"
   }
 }
