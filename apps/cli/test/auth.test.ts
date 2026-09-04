@@ -90,7 +90,7 @@ describe('auth commands', () => {
 
   test('rejects a successful response whose body is not JSON', async () => {
     const capture = makeCtx(server);
-    capture.ctx.fetch = (() =>
+    capture.ctx.fetch = ((_input, _init) =>
       Promise.resolve(
         new Response('<html></html>', {
           status: 200,
