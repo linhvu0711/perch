@@ -25,7 +25,8 @@ export async function runCli(
     .showHelpAfterError()
     .option('--json', 'print JSON')
     .option('--table', 'print a table')
-    .option('--server <url>', 'override the server URL');
+    .option('--server <url>', 'override the server URL')
+    .option('--yes', 'skip confirmation prompts');
 
   addAuthCommands(program, ctx);
   addConfigCommands(program, ctx);
@@ -35,6 +36,7 @@ export async function runCli(
     return 0;
   } catch (error) {
     const mode = resolveMode(program.opts(), ctx.isTTY);
+    if (error instanceof CliError && error.code === 'batch_failed') return 1;
     if (error instanceof CliError) {
       printError(ctx, mode, error);
       return error.exitCode;
