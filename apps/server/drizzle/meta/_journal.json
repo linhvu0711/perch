@@ -8,6 +8,13 @@
       "when": 1788501899637,
       "tag": "0000_condemned_moonstone",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1788513685232,
+      "tag": "0001_resources",
+      "breakpoints": true
     }
   ]
 }
