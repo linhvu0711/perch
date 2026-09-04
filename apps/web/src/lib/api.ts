@@ -11,6 +11,7 @@ export class ApiError extends Error {
     public status: number,
     public code: string,
     message: string,
+    public errors?: Array<{ path: string; message: string }>,
   ) {
     super(message);
   }
@@ -31,7 +32,12 @@ export async function unwrap<T>(
   try {
     const parsed = apiErrorSchema.safeParse(await response.json());
     if (parsed.success) {
-      throw new ApiError(response.status, parsed.data.code, parsed.data.message);
+      throw new ApiError(
+        response.status,
+        parsed.data.code,
+        parsed.data.message,
+        parsed.data.errors,
+      );
     }
   } catch (error) {
     if (error instanceof ApiError) throw error;

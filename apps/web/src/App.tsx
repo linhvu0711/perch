@@ -20,6 +20,26 @@ function AuthGate() {
   const me = useMe();
   const [collapsed] = useSidebarCollapsed();
   if (me.isPending) return <div className="login" />;
+  if (me.isError) {
+    return (
+      <div className="login">
+        <div className="card">
+          <div className="empty">
+            <b>Cannot reach the server</b>
+            Check that Perch is running, then retry.
+          </div>
+          <button
+            className="btn primary"
+            type="button"
+            style={{ alignSelf: 'center' }}
+            onClick={() => void me.refetch()}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
   if (me.data == null) return <Login />;
   return (
     <div className={cn('app', collapsed && 'collapsed')}>

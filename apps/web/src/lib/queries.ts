@@ -40,9 +40,9 @@ export function useLogout() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => unwrap(api.api.auth.logout.$post()),
-    onSuccess: async () => {
-      queryClient.clear();
-      await queryClient.invalidateQueries({ queryKey: ['me'] });
+    onSuccess: () => {
+      queryClient.setQueryData(['me'], null);
+      queryClient.removeQueries({ queryKey: ['settings'] });
     },
   });
 }
