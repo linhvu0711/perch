@@ -23,7 +23,8 @@ export function makeCtx(
     stderr: { write: (value) => void (stderr += value) },
     isTTY: false,
     configPath: path.join(server.dir, 'config.json'),
-    fetch: (input, init) => server.app.request(new Request(input, init)),
+    fetch: ((input, init) =>
+      server.app.request(new Request(input, init))) as typeof fetch,
     openUrl: async (url) => {
       opened.push(url);
     },

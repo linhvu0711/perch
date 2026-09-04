@@ -12,7 +12,7 @@ afterEach(() => {
   server.cleanup();
 });
 
-function request(path: string, init: RequestInit = {}): Promise<Response> {
+async function request(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set('Authorization', `Bearer ${server.token}`);
   if (init.body) headers.set('Content-Type', 'application/json');

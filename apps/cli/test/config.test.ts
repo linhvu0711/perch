@@ -87,10 +87,10 @@ describe('config commands', () => {
   test('uses the global server URL override for requests', async () => {
     const urls: string[] = [];
     const capture = makeCtx(server);
-    capture.ctx.fetch = (input, init) => {
+    capture.ctx.fetch = ((input, init) => {
       urls.push(input instanceof Request ? input.url : String(input));
       return server.app.request(new Request(input, init));
-    };
+    }) as typeof fetch;
 
     expect(
       await runCli(
