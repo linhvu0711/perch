@@ -84,6 +84,18 @@ describe('config commands', () => {
     expect(JSON.parse(badKey.err()).code).toBe('bad_key');
   });
 
+  test('rejects invalid config without modifying the file', async () => {
+    const capture = makeCtx(server);
+    const contents = '{"server-url": 5}';
+    fs.writeFileSync(capture.ctx.configPath, contents);
+
+    expect(
+      await runCli(['config', 'get', 'server-url', '--json'], capture.ctx),
+    ).toBe(1);
+    expect(JSON.parse(capture.err()).code).toBe('config_invalid');
+    expect(fs.readFileSync(capture.ctx.configPath, 'utf8')).toBe(contents);
+  });
+
   test('uses the global server URL override for requests', async () => {
     const urls: string[] = [];
     const capture = makeCtx(server);

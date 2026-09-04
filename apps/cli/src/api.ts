@@ -5,6 +5,12 @@ import { hc } from 'hono/client';
 import type { CliContext } from './context';
 import { CliError } from './output';
 
+interface JsonResponse<T> {
+  ok: boolean;
+  status: number;
+  json(): Promise<T>;
+}
+
 export function createApi(
   ctx: CliContext,
   serverUrl: string,
@@ -17,10 +23,10 @@ export function createApi(
 
   return {
     client,
-    async call<T>(fn: () => Promise<Response>): Promise<T> {
-      let response: Response;
+    async call<T>(responsePromise: Promise<JsonResponse<T>>): Promise<T> {
+      let response: JsonResponse<T>;
       try {
-        response = await fn();
+        response = await responsePromise;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         throw new CliError(
@@ -29,7 +35,7 @@ export function createApi(
         );
       }
 
-      if (response.ok) return (await response.json()) as T;
+      if (response.ok) return response.json();
 
       try {
         const parsed = apiErrorSchema.safeParse(await response.json());

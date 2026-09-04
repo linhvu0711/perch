@@ -27,6 +27,19 @@ describe('static app', () => {
   });
 
   test('falls back safely for traversal and directories', async () => {
+    fs.writeFileSync(path.join(server.dir, 'secret.txt'), 'SECRET');
+
+    for (const requestPath of [
+      '/..%2Fsecret.txt',
+      '/assets/..%2F..%2Fsecret.txt',
+    ]) {
+      const response = await server.app.request(requestPath);
+      const body = await response.text();
+      expect(response.status).toBe(200);
+      expect(body).toContain('perch-test-app');
+      expect(body).not.toContain('SECRET');
+    }
+
     const traversal = await server.app.request('/assets/../index.html');
     expect(traversal.status).toBe(200);
     expect(await traversal.text()).toContain('perch-test-app');

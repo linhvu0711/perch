@@ -16,9 +16,17 @@ export class ApiError extends Error {
   }
 }
 
-export async function unwrap<T>(responsePromise: Promise<Response>): Promise<T> {
+interface JsonResponse<T> {
+  ok: boolean;
+  status: number;
+  json(): Promise<T>;
+}
+
+export async function unwrap<T>(
+  responsePromise: Promise<JsonResponse<T>>,
+): Promise<T> {
   const response = await responsePromise;
-  if (response.ok) return (await response.json()) as T;
+  if (response.ok) return response.json();
 
   try {
     const parsed = apiErrorSchema.safeParse(await response.json());

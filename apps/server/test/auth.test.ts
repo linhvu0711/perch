@@ -50,6 +50,7 @@ describe('auth', () => {
     const cookie = login.headers.get('set-cookie') ?? '';
     expect(cookie).toContain('perch_session=test-token');
     expect(cookie).toContain('HttpOnly');
+    expect(cookie).toContain('Max-Age=2592000');
     expect(cookie).toContain('Path=/');
     expect(cookie).toContain('SameSite=Lax');
     expect(cookie).not.toContain('Secure');

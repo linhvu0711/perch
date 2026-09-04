@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { z } from 'zod';
 
 import type { CliContext } from './context';
 import { CliError } from './output';
@@ -9,6 +10,11 @@ export interface LocalConfig {
   token?: string;
 }
 
+const localConfigSchema = z.object({
+  'server-url': z.string().optional(),
+  token: z.string().optional(),
+});
+
 export const LOCAL_CONFIG_KEYS = ['server-url', 'token'] as const;
 export const REMOTE_CONFIG_KEYS = ['timezone', 'char-limit'] as const;
 
@@ -17,10 +23,7 @@ export function readConfig(configPath: string): LocalConfig {
 
   try {
     const value: unknown = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      throw new Error('config must be an object');
-    }
-    return value as LocalConfig;
+    return localConfigSchema.parse(value);
   } catch {
     throw new CliError('config_invalid', `Invalid config file: ${configPath}`);
   }

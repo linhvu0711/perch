@@ -32,8 +32,8 @@ describe('auth commands', () => {
   test('reports valid auth as a table on a TTY', async () => {
     const capture = makeCtx(server, { isTTY: true });
     expect(await runCli(['auth', 'status'], capture.ctx)).toBe(0);
-    expect(capture.out().split('\n')[0]).toStartWith('valid');
-    expect(capture.out()).toContain('true');
+    const lines = capture.out().split('\n');
+    expect(lines.some((line) => /^valid\s+true$/.test(line))).toBe(true);
   });
 
   test('maps invalid and missing tokens to distinct errors', async () => {
@@ -72,5 +72,13 @@ describe('auth commands', () => {
     expect(readConfig(capture.ctx.configPath)).toEqual({
       'server-url': 'http://example.test',
     });
+  });
+
+  test('does not create a config file when logging out without one', async () => {
+    const capture = makeCtx(server);
+    expect(fs.existsSync(capture.ctx.configPath)).toBe(false);
+
+    expect(await runCli(['auth', 'logout', '--json'], capture.ctx)).toBe(0);
+    expect(fs.existsSync(capture.ctx.configPath)).toBe(false);
   });
 });

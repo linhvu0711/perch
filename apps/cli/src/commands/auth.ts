@@ -44,9 +44,7 @@ export function addAuthCommands(program: Command, ctx: CliContext): void {
 
       const api = createApi(ctx, serverUrl, token);
       try {
-        const response = await api.call<{ user: { id: number } }>(() =>
-          api.client.api.auth.me.$get() as unknown as Promise<Response>,
-        );
+        const response = await api.call(api.client.api.auth.me.$get());
         printResult(ctx, mode, {
           valid: true,
           user_id: response.user.id,
@@ -70,8 +68,10 @@ export function addAuthCommands(program: Command, ctx: CliContext): void {
     .action(() => {
       const options = program.opts<GlobalOptions>();
       const config = readConfig(ctx.configPath);
-      delete config.token;
-      writeConfig(ctx.configPath, config);
+      if (config.token !== undefined) {
+        delete config.token;
+        writeConfig(ctx.configPath, config);
+      }
       printResult(ctx, resolveMode(options, ctx.isTTY), { ok: true });
     });
 }
