@@ -41,6 +41,7 @@ export function ResourceModal(): JSX.Element | null {
   const [notesDraft, setNotesDraft] = useState('');
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const resource = resourceQuery.data;
+  const resourceId = resource?.id;
   const saving = createNote.isPending || updateResource.isPending;
   const original = isNew
     ? { body: '', title: '' }
@@ -66,16 +67,16 @@ export function ResourceModal(): JSX.Element | null {
   }, [navigate, resourceQuery.error]);
 
   useEffect(() => {
-    if (!resource) return;
+    if (!resource || isEditing) return;
     setBodyDraft(resource.body);
     setTitleDraft(resource.title);
     setTitleTouched(false);
     setNotesDraft(resource.notes);
-  }, [resource]);
+  }, [isEditing, resource]);
 
   useEffect(() => {
     if (!isEditing) modalRef.current?.focus();
-  }, [isEditing]);
+  }, [isEditing, resourceId]);
 
   const resetDrafts = useCallback(() => {
     if (!resource) return;
