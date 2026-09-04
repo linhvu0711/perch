@@ -1,0 +1,11 @@
+{
+  "name": "@perch/server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "db:generate": "drizzle-kit generate",
+    "typecheck": "tsc --noEmit"
+  }
+}

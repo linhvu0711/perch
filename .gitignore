@@ -10,6 +10,8 @@ data/
 *.sqlite-wal
 *.sqlite-shm
 *.db
+*.db-wal
+*.db-shm
 
 # secrets
 .env

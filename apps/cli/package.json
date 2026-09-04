@@ -1,0 +1,12 @@
+{
+  "name": "@perch/cli",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "perch": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "bun build ./src/index.ts --compile --outfile dist/perch",
+    "typecheck": "tsc --noEmit"
+  }
+}
