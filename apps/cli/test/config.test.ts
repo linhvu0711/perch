@@ -84,6 +84,28 @@ describe('config commands', () => {
     expect(JSON.parse(badKey.err()).code).toBe('bad_key');
   });
 
+  test('prints remote validation details in JSON and table modes', async () => {
+    const json = makeCtx(server);
+    expect(
+      await runCli(
+        ['config', 'set', 'timezone', 'Mars/Olympus', '--json'],
+        json.ctx,
+      ),
+    ).toBe(1);
+    expect(JSON.parse(json.err()).errors[0].path).toBe('timezone');
+
+    const table = makeCtx(server, { isTTY: true });
+    expect(
+      await runCli(
+        ['config', 'set', 'timezone', 'Mars/Olympus'],
+        table.ctx,
+      ),
+    ).toBe(1);
+    expect(table.err().split('\n').some((line) => /timezone:/.test(line))).toBe(
+      true,
+    );
+  });
+
   test('rejects invalid config without modifying the file', async () => {
     const capture = makeCtx(server);
     const contents = '{"server-url": 5}';

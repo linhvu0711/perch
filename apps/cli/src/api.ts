@@ -35,7 +35,16 @@ export function createApi(
         );
       }
 
-      if (response.ok) return response.json();
+      if (response.ok) {
+        try {
+          return await response.json();
+        } catch {
+          throw new CliError(
+            'bad_response',
+            `Server at ${serverUrl} did not return JSON`,
+          );
+        }
+      }
 
       try {
         const parsed = apiErrorSchema.safeParse(await response.json());
@@ -44,6 +53,7 @@ export function createApi(
             parsed.data.code,
             parsed.data.message,
             parsed.data.code === 'unauthorized' ? 3 : 1,
+            parsed.data.errors,
           );
         }
       } catch (error) {

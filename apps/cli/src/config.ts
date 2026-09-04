@@ -31,10 +31,11 @@ export function readConfig(configPath: string): LocalConfig {
 
 export function writeConfig(configPath: string, config: LocalConfig): void {
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
-  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, {
+  const temporaryPath = `${configPath}.tmp-${process.pid}`;
+  fs.writeFileSync(temporaryPath, `${JSON.stringify(config, null, 2)}\n`, {
     mode: 0o600,
   });
-  fs.chmodSync(configPath, 0o600);
+  fs.renameSync(temporaryPath, configPath);
 }
 
 export function resolveServerUrl(

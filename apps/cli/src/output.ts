@@ -5,6 +5,7 @@ export class CliError extends Error {
     public code: string,
     message: string,
     public exitCode = 1,
+    public errors?: Array<{ path: string; message: string }>,
   ) {
     super(message);
   }
@@ -85,9 +86,16 @@ export function printError(
   mode: OutputMode,
   error: CliError,
 ): void {
-  ctx.stderr.write(
-    mode === 'json'
-      ? `${JSON.stringify({ code: error.code, message: error.message })}\n`
-      : `Error: ${error.message}\n`,
-  );
+  if (mode === 'json') {
+    const body = error.errors
+      ? { code: error.code, message: error.message, errors: error.errors }
+      : { code: error.code, message: error.message };
+    ctx.stderr.write(`${JSON.stringify(body)}\n`);
+    return;
+  }
+
+  const details = error.errors?.map(
+    ({ path, message }) => `  ${path}: ${message}`,
+  ) ?? [];
+  ctx.stderr.write([`Error: ${error.message}`, ...details].join('\n') + '\n');
 }

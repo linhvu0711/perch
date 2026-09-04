@@ -16,7 +16,11 @@ export async function runCli(
     .exitOverride()
     .configureOutput({
       writeOut: (value) => ctx.stdout.write(value),
-      writeErr: (value) => ctx.stderr.write(value),
+      writeErr: (value) => {
+        if (resolveMode(program.opts(), ctx.isTTY) === 'table') {
+          ctx.stderr.write(value);
+        }
+      },
     })
     .showHelpAfterError()
     .option('--json', 'print JSON')
@@ -30,12 +34,9 @@ export async function runCli(
     await program.parseAsync(argv, { from: 'user' });
     return 0;
   } catch (error) {
+    const mode = resolveMode(program.opts(), ctx.isTTY);
     if (error instanceof CliError) {
-      printError(
-        ctx,
-        resolveMode(program.opts(), ctx.isTTY),
-        error,
-      );
+      printError(ctx, mode, error);
       return error.exitCode;
     }
     if (error instanceof CommanderError) {
@@ -45,8 +46,13 @@ export async function runCli(
       ) {
         return 0;
       }
+      if (mode === 'json') {
+        printError(ctx, mode, new CliError('usage', error.message, 2));
+      }
       return 2;
     }
-    throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    printError(ctx, mode, new CliError('internal', message));
+    return 1;
   }
 }

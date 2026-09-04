@@ -81,4 +81,24 @@ describe('auth commands', () => {
     expect(await runCli(['auth', 'logout', '--json'], capture.ctx)).toBe(0);
     expect(fs.existsSync(capture.ctx.configPath)).toBe(false);
   });
+
+  test('prints usage errors as JSON', async () => {
+    const capture = makeCtx(server);
+    expect(await runCli(['nope', '--json'], capture.ctx)).toBe(2);
+    expect(JSON.parse(capture.err()).code).toBe('usage');
+  });
+
+  test('rejects a successful response whose body is not JSON', async () => {
+    const capture = makeCtx(server);
+    capture.ctx.fetch = (() =>
+      Promise.resolve(
+        new Response('<html></html>', {
+          status: 200,
+          headers: { 'Content-Type': 'text/html' },
+        }),
+      )) as typeof fetch;
+
+    expect(await runCli(['auth', 'status', '--json'], capture.ctx)).toBe(1);
+    expect(JSON.parse(capture.err()).code).toBe('bad_response');
+  });
 });
