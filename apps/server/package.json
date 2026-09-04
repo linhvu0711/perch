@@ -7,5 +7,15 @@
     "start": "bun src/index.ts",
     "db:generate": "drizzle-kit generate",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "0.9.1",
+    "@perch/core": "workspace:*",
+    "drizzle-orm": "0.45.2",
+    "hono": "4.13.5",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "drizzle-kit": "0.31.10"
   }
 }
