@@ -67,6 +67,22 @@ describe('auth', () => {
     expect(badCookie.status).toBe(401);
   });
 
+  test('sets Secure when secure cookies are configured', async () => {
+    const secureServer = await createTestServer({ secureCookies: true });
+    try {
+      const login = await secureServer.app.request('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: secureServer.token }),
+      });
+
+      expect(login.status).toBe(200);
+      expect(login.headers.get('set-cookie')).toContain('Secure');
+    } finally {
+      secureServer.cleanup();
+    }
+  });
+
   test('does not fall back to a cookie after a wrong bearer', async () => {
     const response = await server.app.request('/api/auth/me', {
       headers: {

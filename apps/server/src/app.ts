@@ -14,6 +14,7 @@ export type AppEnv = { Variables: { user: User } };
 export interface AppDeps {
   db: Db;
   token: string;
+  secureCookies: boolean;
   webDist: string;
   clock: Clock;
 }

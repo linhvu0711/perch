@@ -13,6 +13,7 @@ export function openDb(dbPath: string): { db: Db; sqlite: Database } {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const sqlite = new Database(dbPath, { create: true });
   sqlite.exec('PRAGMA journal_mode = WAL;');
+  sqlite.run('PRAGMA foreign_keys = ON;');
   const db = drizzle(sqlite, { schema });
   return { db, sqlite };
 }

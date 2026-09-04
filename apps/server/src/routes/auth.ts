@@ -7,7 +7,7 @@ import type { AppDeps, AppEnv } from '../app';
 import {
   COOKIE_NAME,
   sessionCookieOptions,
-  timingSafeEqualStrings,
+  userForSecret,
 } from '../auth';
 import { ApiError, validationHook } from '../errors';
 
@@ -15,7 +15,8 @@ export function authRoutes(deps: AppDeps) {
   return new Hono<AppEnv>()
     .post('/login', zValidator('json', loginBodySchema, validationHook), (c) => {
       const body = c.req.valid('json');
-      if (!timingSafeEqualStrings(body.token, deps.token)) {
+      const user = userForSecret(body.token, deps.token);
+      if (!user) {
         throw new ApiError(401, 'unauthorized', 'Invalid token');
       }
 
@@ -23,9 +24,9 @@ export function authRoutes(deps: AppDeps) {
         c,
         COOKIE_NAME,
         deps.token,
-        sessionCookieOptions(c.req.raw),
+        sessionCookieOptions(deps.secureCookies),
       );
-      return c.json({ user: { id: 1 } }, 200);
+      return c.json({ user }, 200);
     })
     .post('/logout', (c) => {
       deleteCookie(c, COOKIE_NAME, { path: '/' });

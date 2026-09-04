@@ -28,6 +28,10 @@ export function timingSafeEqualStrings(a: string, b: string): boolean {
   );
 }
 
+export function userForSecret(secret: string, token: string): User | null {
+  return timingSafeEqualStrings(secret, token) ? USER_ONE : null;
+}
+
 function readCookie(request: Request, name: string): string | undefined {
   const cookieHeader = request.headers.get('Cookie');
   if (!cookieHeader) return undefined;
@@ -51,12 +55,12 @@ export function getUser(request: Request, token: string): User | null {
   const authorization = request.headers.get('Authorization');
   const bearer = authorization?.match(/^Bearer (.+)$/i);
   if (bearer) {
-    return timingSafeEqualStrings(bearer[1] ?? '', token) ? USER_ONE : null;
+    return userForSecret(bearer[1] ?? '', token);
   }
 
   const cookie = readCookie(request, COOKIE_NAME);
   if (cookie === undefined) return null;
-  return timingSafeEqualStrings(cookie, token) ? USER_ONE : null;
+  return userForSecret(cookie, token);
 }
 
 export function authMiddleware(token: string): MiddlewareHandler<AuthEnv> {
@@ -79,12 +83,12 @@ export function authMiddleware(token: string): MiddlewareHandler<AuthEnv> {
   };
 }
 
-export function sessionCookieOptions(request: Request): CookieOptions {
+export function sessionCookieOptions(secure: boolean): CookieOptions {
   return {
     path: '/',
     httpOnly: true,
     sameSite: 'Lax',
-    secure: new URL(request.url).protocol === 'https:',
+    secure,
     maxAge: COOKIE_MAX_AGE_SECONDS,
   };
 }

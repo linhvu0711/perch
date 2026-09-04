@@ -18,6 +18,7 @@ export interface TestServer extends PerchServer {
 export async function createTestServer(opts?: {
   indexHtml?: string;
   now?: Date;
+  secureCookies?: boolean;
 }): Promise<TestServer> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'perch-test-'));
   const dbPath = path.join(dir, 'perch.db');
@@ -40,6 +41,7 @@ export async function createTestServer(opts?: {
     clock,
     xClient,
     token,
+    secureCookies: opts?.secureCookies ?? false,
     webDist,
   });
 

@@ -30,6 +30,8 @@ The server serves `apps/web/dist` at `/` and the API at `/api/*`. For web develo
 bun run dev:web
 ```
 
+Both `bun run dev` and `bun run start` run from the repository root. Relative paths in `.env` are resolved from that root.
+
 ## Check and build
 
 ```sh
@@ -65,4 +67,5 @@ The CLI stores local configuration at `~/.perch/config.json` unless `PERCH_CONFI
 | `PERCH_DB_PATH` | No | `./data/perch.db` | SQLite database path |
 | `PERCH_UPLOAD_DIR` | No | `./data/uploads` | Upload directory |
 | `PERCH_WEB_DIST` | No | `./apps/web/dist` | Built web application directory |
+| `PERCH_SECURE_COOKIES` | No | `true` | Mark the session cookie Secure; local development over `http://localhost` works with `true` because browsers treat localhost as a secure context |
 | `PORT` | No | `3000` | Server listen port |

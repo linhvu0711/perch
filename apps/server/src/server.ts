@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 
 import type { Hono } from 'hono';
 
@@ -14,6 +15,7 @@ export interface BuildServerOptions {
   clock: Clock;
   xClient: XClient;
   token: string;
+  secureCookies: boolean;
   webDist: string;
 }
 
@@ -30,10 +32,12 @@ export async function buildServer(
   const { db, sqlite } = openDb(options.dbPath);
   migrateDb(db);
   seedDb(db, options.clock.now());
+  const webDist = path.resolve(options.webDist);
   const app = createApp({
     db,
     token: options.token,
-    webDist: options.webDist,
+    secureCookies: options.secureCookies,
+    webDist,
     clock: options.clock,
   });
   const tick = createTick({

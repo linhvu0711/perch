@@ -10,9 +10,9 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run --filter @perch/server dev",
+    "dev": "bun --watch apps/server/src/index.ts",
     "dev:web": "bun run --filter @perch/web dev",
-    "start": "bun run --filter @perch/server start",
+    "start": "bun apps/server/src/index.ts",
     "build": "bun run --filter @perch/web build",
     "test": "bun test",
     "typecheck": "bun run --filter '*' typecheck",

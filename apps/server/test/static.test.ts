@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { buildServer } from '../src/server';
 import { createTestServer, type TestServer } from '../src/testing';
 
 let server: TestServer;
@@ -61,6 +62,29 @@ describe('static app', () => {
       'public, max-age=31536000, immutable',
     );
     expect(await response.text()).toBe('console.log("perch")');
+  });
+
+  test('serves assets when webDist has a trailing slash', async () => {
+    const assets = path.join(server.webDist, 'assets');
+    fs.mkdirSync(assets, { recursive: true });
+    fs.writeFileSync(path.join(assets, 'app.js'), 'trailing slash asset');
+
+    const trailingServer = await buildServer({
+      dbPath: path.join(server.dir, 'trailing.db'),
+      uploadDir: path.join(server.dir, 'trailing-uploads'),
+      clock: server.clock,
+      xClient: server.xClient,
+      token: server.token,
+      secureCookies: false,
+      webDist: `${server.webDist}${path.sep}`,
+    });
+    try {
+      const response = await trailingServer.app.request('/assets/app.js');
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe('trailing slash asset');
+    } finally {
+      trailingServer.close();
+    }
   });
 
   test('does not let the SPA shadow API errors', async () => {
