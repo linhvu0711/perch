@@ -5,6 +5,7 @@ import type { Clock } from './clock';
 import type { Db } from './db';
 import { errorHandler, notFoundHandler } from './errors';
 import { authRoutes } from './routes/auth';
+import { resourcesRoutes } from './routes/resources';
 import { settingsRoutes } from './routes/settings';
 import { statusRoutes } from './routes/status';
 import { staticHandler } from './static';
@@ -26,6 +27,7 @@ function createRoutes(deps: AppDeps) {
     .route('/auth', authRoutes(deps))
     .route('/settings', settingsRoutes(deps))
     .route('/status', statusRoutes(deps))
+    .route('/resources', resourcesRoutes(deps))
     .all('*', notFoundHandler);
 }
 
