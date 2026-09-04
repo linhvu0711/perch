@@ -17,6 +17,13 @@ export class ApiError extends Error {
   }
 }
 
+export function errorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    return error.errors?.[0]?.message ?? error.message;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
 interface JsonResponse<T> {
   ok: boolean;
   status: number;
