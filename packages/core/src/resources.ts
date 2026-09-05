@@ -24,11 +24,21 @@ export const resourceSchema = z.discriminatedUnion('type', [noteResourceSchema])
 export type Resource = z.infer<typeof resourceSchema>;
 export type NoteResource = z.infer<typeof noteResourceSchema>;
 
-export const noteCreateSchema = z.object({
-  title: z.string().trim().max(RESOURCE_TITLE_MAX).optional(),
-  notes: z.string().max(RESOURCE_NOTES_MAX).optional(),
-  body: z.string().max(NOTE_BODY_MAX),
-});
+export const noteCreateSchema = z
+  .object({
+    title: z.string().trim().max(RESOURCE_TITLE_MAX).optional(),
+    notes: z.string().max(RESOURCE_NOTES_MAX).optional(),
+    body: z.string().max(NOTE_BODY_MAX),
+  })
+  .superRefine((value, context) => {
+    if (noteTitle(value.body, value.title).length > RESOURCE_TITLE_MAX) {
+      context.addIssue({
+        code: 'custom',
+        path: ['title'],
+        message: `Title must contain at most ${RESOURCE_TITLE_MAX} characters`,
+      });
+    }
+  });
 export type NoteCreate = z.infer<typeof noteCreateSchema>;
 
 export const resourcePatchSchema = z

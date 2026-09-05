@@ -47,6 +47,12 @@ describe('resource schemas', () => {
     expect(noteCreateSchema.safeParse({}).success).toBe(false);
   });
 
+  test('rejects an over-limit derived title', () => {
+    const result = noteCreateSchema.safeParse({ body: `# ${'x'.repeat(201)}` });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues[0]?.path).toEqual(['title']);
+  });
+
   test('rejects empty resource patches and titles', () => {
     expect(resourcePatchSchema.safeParse({}).success).toBe(false);
     expect(resourcePatchSchema.safeParse({ title: '' }).success).toBe(false);
