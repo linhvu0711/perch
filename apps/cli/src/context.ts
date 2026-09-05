@@ -50,7 +50,7 @@ export function realContext(argv: string[]): CliContext {
       }
 
       const file = path.join(os.tmpdir(), `perch-${crypto.randomUUID()}.md`);
-      fs.writeFileSync(file, initial);
+      fs.writeFileSync(file, initial, { encoding: 'utf8', mode: 0o600 });
       try {
         const result = Bun.spawnSync([...editor.split(/\s+/), file], {
           stdin: 'inherit',
