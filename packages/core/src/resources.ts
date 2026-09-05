@@ -1,0 +1,120 @@
+import { z } from 'zod';
+
+export const RESOURCE_TYPES = ['tweet', 'image', 'md'] as const;
+export const resourceTypeSchema = z.enum(RESOURCE_TYPES);
+export type ResourceType = z.infer<typeof resourceTypeSchema>;
+
+export const NOTE_TITLE_FALLBACK = 'Untitled';
+export const RESOURCE_TITLE_MAX = 200;
+export const RESOURCE_NOTES_MAX = 10_000;
+export const NOTE_BODY_MAX = 1_000_000;
+export const RESOURCE_LIST_LIMIT_DEFAULT = 50;
+export const RESOURCE_LIST_LIMIT_MAX = 100;
+export const RESOURCE_BATCH_MAX = 100;
+
+export const noteResourceSchema = z.object({
+  id: z.number().int().positive(),
+  type: z.literal('md'),
+  title: z.string(),
+  notes: z.string(),
+  created_at: z.string(),
+  body: z.string(),
+});
+export const resourceSchema = z.discriminatedUnion('type', [noteResourceSchema]);
+export type Resource = z.infer<typeof resourceSchema>;
+export type NoteResource = z.infer<typeof noteResourceSchema>;
+
+export const noteCreateSchema = z
+  .object({
+    title: z.string().trim().max(RESOURCE_TITLE_MAX).optional(),
+    notes: z.string().max(RESOURCE_NOTES_MAX).optional(),
+    body: z.string().max(NOTE_BODY_MAX),
+  })
+  .superRefine((value, context) => {
+    if (noteTitle(value.body, value.title).length > RESOURCE_TITLE_MAX) {
+      context.addIssue({
+        code: 'custom',
+        path: ['title'],
+        message: `Title must contain at most ${RESOURCE_TITLE_MAX} characters`,
+      });
+    }
+  });
+export type NoteCreate = z.infer<typeof noteCreateSchema>;
+
+export const resourcePatchSchema = z
+  .object({
+    title: z.string().trim().min(1).max(RESOURCE_TITLE_MAX).optional(),
+    notes: z.string().max(RESOURCE_NOTES_MAX).optional(),
+    body: z.string().max(NOTE_BODY_MAX).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update' });
+export type ResourcePatch = z.infer<typeof resourcePatchSchema>;
+
+export const resourceListQuerySchema = z.object({
+  type: resourceTypeSchema.optional(),
+  search: z.string().trim().max(200).optional(),
+  sort: z.enum(['created']).default('created'),
+  order: z.enum(['asc', 'desc']).default('desc'),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(RESOURCE_LIST_LIMIT_MAX)
+    .default(RESOURCE_LIST_LIMIT_DEFAULT),
+  cursor: z.string().min(1).optional(),
+});
+export type ResourceListQuery = z.infer<typeof resourceListQuerySchema>;
+
+export const resourceListSchema = z.object({
+  items: z.array(resourceSchema),
+  total: z.number().int().nonnegative(),
+  next_cursor: z.string().nullable(),
+});
+export type ResourceList = z.infer<typeof resourceListSchema>;
+
+export const resourceDeleteBodySchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(RESOURCE_BATCH_MAX),
+});
+export type ResourceDeleteBody = z.infer<typeof resourceDeleteBodySchema>;
+
+export const batchErrorSchema = z.object({ code: z.string(), message: z.string() });
+export const resourceDeleteResultSchema = z.discriminatedUnion('ok', [
+  z.object({
+    id: z.number().int(),
+    ok: z.literal(true),
+    unlinked_post_ids: z.array(z.number().int()),
+  }),
+  z.object({ id: z.number().int(), ok: z.literal(false), error: batchErrorSchema }),
+]);
+export const resourceDeleteResponseSchema = z.object({
+  results: z.array(resourceDeleteResultSchema),
+});
+export type ResourceDeleteResult = z.infer<typeof resourceDeleteResultSchema>;
+export type ResourceDeleteResponse = z.infer<typeof resourceDeleteResponseSchema>;
+
+/** First ATX heading (`#` to `######`) outside fenced code blocks, trimmed, closing #s removed; null when none. */
+export function firstMarkdownHeading(body: string): string | null {
+  let insideFence = false;
+
+  for (const rawLine of body.split('\n')) {
+    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+    if (/^\s*(`{3,}|~{3,})/.test(line)) {
+      insideFence = !insideFence;
+      continue;
+    }
+    if (insideFence) continue;
+
+    const match = line.match(/^ {0,3}(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$/);
+    if (!match) continue;
+    const heading = match[2]!.trim();
+    if (heading !== '' && !/^#+$/.test(heading)) return heading;
+  }
+
+  return null;
+}
+
+/** explicit?.trim() when non-empty, else firstMarkdownHeading(body), else NOTE_TITLE_FALLBACK. */
+export function noteTitle(body: string, explicit?: string): string {
+  const title = explicit?.trim();
+  return title || firstMarkdownHeading(body) || NOTE_TITLE_FALLBACK;
+}

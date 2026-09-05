@@ -5,16 +5,9 @@ import { LogOut, Monitor, Moon, Sun, type LucideIcon } from 'lucide-react';
 import { IconButton } from '@/components/IconButton';
 import { toast } from '@/components/Toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ApiError } from '@/lib/api';
+import { errorMessage } from '@/lib/api';
 import { useLogout, useSettings, useUpdateSettings } from '@/lib/queries';
 import { useTheme, type Theme } from '@/lib/theme';
-
-function errorMessage(error: unknown): string {
-  if (error instanceof ApiError) {
-    return error.errors?.[0]?.message ?? error.message;
-  }
-  return error instanceof Error ? error.message : String(error);
-}
 
 function ThemeChoice({ label, icon: Icon, value, theme, setTheme }: { label: string; icon: LucideIcon; value: Theme; theme: Theme; setTheme(value: Theme): void }) {
   return (
