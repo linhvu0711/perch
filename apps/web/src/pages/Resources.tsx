@@ -33,7 +33,7 @@ export function Resources() {
   );
   const resources = useResources(filters);
   const items = resources.data?.pages.flatMap((page) => page.items) ?? [];
-  const total = resources.data?.pages[0]?.total ?? 0;
+  const total = Math.max(resources.data?.pages[0]?.total ?? 0, items.length);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
