@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { firstMarkdownHeading, noteTitle } from '@perch/core';
 import { Check, FileText, Pencil, Trash2, Undo2, X } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router';
+import { useBlocker, useNavigate, useParams } from 'react-router';
 
 import { ApiError, errorMessage } from '@/lib/api';
 import { formatDateTime, wordCount } from '@/lib/format';
@@ -18,7 +18,12 @@ import { Markdown } from './Markdown';
 import { NoteEditor } from './NoteEditor';
 import { toast } from './Toast';
 
-type ConfirmState = 'discard-edit' | 'discard-close' | 'delete' | null;
+type ConfirmState =
+  | 'discard-edit'
+  | 'discard-close'
+  | 'discard-navigation'
+  | 'delete'
+  | null;
 
 export function ResourceModal(): JSX.Element | null {
   const { id: idValue } = useParams();
@@ -34,6 +39,7 @@ export function ResourceModal(): JSX.Element | null {
   const updateResource = useUpdateResource();
   const deleteResources = useDeleteResources();
   const modalRef = useRef<HTMLDivElement>(null);
+  const allowNavigationRef = useRef(false);
   const [isEditing, setIsEditing] = useState(isNew);
   const [bodyDraft, setBodyDraft] = useState('');
   const [titleDraft, setTitleDraft] = useState('');
@@ -46,11 +52,15 @@ export function ResourceModal(): JSX.Element | null {
   const original = isNew
     ? { body: '', title: '' }
     : { body: resource?.body ?? '', title: resource?.title ?? '' };
+  const notesDirty = !isNew && resource !== undefined && notesDraft !== resource.notes;
   const dirty =
     isEditing &&
     (bodyDraft !== original.body ||
       titleDraft !== original.title ||
       (isNew && notesDraft !== ''));
+  const blocker = useBlocker(
+    () => (dirty || notesDirty) && !allowNavigationRef.current,
+  );
 
   useEffect(() => {
     if (invalidId) navigate('/resources', { replace: true });
@@ -86,26 +96,67 @@ export function ResourceModal(): JSX.Element | null {
     setNotesDraft(resource.notes);
   }, [resource]);
 
+  const saveNotes = useCallback(async (): Promise<boolean> => {
+    if (isNew || parsedId === null || !resource || notesDraft === resource.notes) {
+      return true;
+    }
+    try {
+      await updateResource.mutateAsync({ id: parsedId, patch: { notes: notesDraft } });
+      toast('Notes saved');
+      return true;
+    } catch (error) {
+      toast(errorMessage(error), 'warn');
+      setNotesDraft(resource.notes);
+      return false;
+    }
+  }, [isNew, notesDraft, parsedId, resource, updateResource]);
+
   const requestClose = useCallback(() => {
     if (dirty) {
       setConfirm('discard-close');
+    } else if (notesDirty) {
+      void saveNotes().then((saved) => {
+        if (!saved) return;
+        allowNavigationRef.current = true;
+        navigate('/resources');
+      });
     } else {
       navigate('/resources');
     }
-  }, [dirty, navigate]);
+  }, [dirty, navigate, notesDirty, saveNotes]);
+
+  const cancelConfirm = useCallback(() => {
+    if (confirm === 'discard-navigation' && blocker.state === 'blocked') {
+      blocker.reset();
+    }
+    setConfirm(null);
+  }, [blocker, confirm]);
+
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return;
+    const { proceed, reset } = blocker;
+    if (dirty) {
+      setConfirm('discard-navigation');
+      return;
+    }
+    void saveNotes().then((saved) => {
+      if (saved) proceed();
+      else reset();
+    });
+  }, [blocker.state, dirty, saveNotes]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       if (confirm !== null) {
-        setConfirm(null);
+        cancelConfirm();
         return;
       }
       requestClose();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [confirm, requestClose]);
+  }, [cancelConfirm, confirm, requestClose]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -143,6 +194,7 @@ export function ResourceModal(): JSX.Element | null {
         });
         toast('Note created');
         setIsEditing(false);
+        allowNavigationRef.current = true;
         navigate(`/resources/${data.id}`, { replace: true });
       } else if (parsedId !== null) {
         await updateResource.mutateAsync({
@@ -170,24 +222,19 @@ export function ResourceModal(): JSX.Element | null {
 
   function confirmDiscard(): void {
     const close = confirm === 'discard-close';
+    const navigation = confirm === 'discard-navigation';
     setConfirm(null);
+    if (navigation && blocker.state === 'blocked') {
+      blocker.proceed();
+      return;
+    }
     if (close || isNew) {
+      allowNavigationRef.current = true;
       navigate('/resources');
       return;
     }
     resetDrafts();
     setIsEditing(false);
-  }
-
-  async function saveNotes(): Promise<void> {
-    if (isNew || parsedId === null || !resource || notesDraft === resource.notes) return;
-    try {
-      await updateResource.mutateAsync({ id: parsedId, patch: { notes: notesDraft } });
-      toast('Notes saved');
-    } catch (error) {
-      toast(errorMessage(error), 'warn');
-      setNotesDraft(resource.notes);
-    }
   }
 
   async function confirmDelete(): Promise<void> {
@@ -197,6 +244,7 @@ export function ResourceModal(): JSX.Element | null {
       const result = response.results[0];
       if (result?.ok) {
         toast('Deleted');
+        allowNavigationRef.current = true;
         navigate('/resources');
       } else if (result && !result.ok) {
         toast(result.error.message, 'warn');
@@ -356,14 +404,16 @@ export function ResourceModal(): JSX.Element | null {
           </div>
         </div>
       </div>
-      {(confirm === 'discard-edit' || confirm === 'discard-close') && (
+      {(confirm === 'discard-edit' ||
+        confirm === 'discard-close' ||
+        confirm === 'discard-navigation') && (
         <ConfirmDialog
           title="Discard changes?"
           body={<p>Your edits to this note will be lost.</p>}
           ok="Discard"
           danger
           onOk={confirmDiscard}
-          onCancel={() => setConfirm(null)}
+          onCancel={cancelConfirm}
         />
       )}
       {confirm === 'delete' && resource && (

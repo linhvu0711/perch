@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
+import {
+  createBrowserRouter,
+  Navigate,
+  Route,
+  RouterProvider,
+  Routes,
+} from 'react-router';
 
 import { Sidebar } from '@/components/Sidebar';
 import { ResourceModal } from '@/components/ResourceModal';
@@ -59,11 +65,14 @@ function AuthGate() {
   );
 }
 
+const router = createBrowserRouter([{ path: '*', element: <AuthGate /> }]);
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={350} skipDelayDuration={0}>
-        <BrowserRouter><AuthGate /><Toaster /></BrowserRouter>
+        <RouterProvider router={router} />
+        <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
   );
