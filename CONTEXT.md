@@ -36,6 +36,20 @@ _Avoid_: Md file, markdown resource, doc, document
 A free-text label the User puts on Resources and Posts to group and filter them. One shared set of Tags serves both.
 _Avoid_: Label, category, topic
 
+### Mirror
+
+**Mirror**:
+A read-only copy of every Resource as files on the User's machine, one Markdown file per Resource with front matter, so an outside AI agent can read them with file tools. The server's database stays the truth.
+_Avoid_: Cache, export folder, local copy, sync folder
+
+**Pull**:
+The CLI command that refreshes the Mirror from the server in one full copy. Nothing ever goes the other way.
+_Avoid_: Sync, fetch, download, refresh
+
+**Manifest**:
+The file inside the Mirror that lists every path Pull wrote, so Pull deletes only its own files.
+_Avoid_: Index, lock file, state file
+
 ### Posts
 
 **Post**:
