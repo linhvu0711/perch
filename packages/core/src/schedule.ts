@@ -20,7 +20,7 @@ const WEEKDAY_NUMBERS: Record<string, number> = {
   sat: 6,
 };
 
-function addDays(date: string, days: number): string {
+export function addDays(date: string, days: number): string {
   const [y, m, d] = date.split('-').map(Number) as [number, number, number];
   const next = new Date(Date.UTC(y, m - 1, d + days));
   return next.toISOString().slice(0, 10);
