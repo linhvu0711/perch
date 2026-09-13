@@ -204,9 +204,8 @@ export function firstMarkdownHeading(body: string): string | null {
 
     const match = line.match(/^ {0,3}(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$/);
     if (!match) continue;
-    const heading = match[2];
-    if (!heading) continue;
-    if (heading !== '' && !/^#+$/.test(heading)) return heading;
+    const heading = match[2]?.trim();
+    if (heading && !/^#+$/.test(heading)) return heading;
   }
 
   return null;

@@ -328,10 +328,12 @@ export function listResources(db: Db, userId: number, query: ResourceListQuery):
     const escaped = query.author.replace(/[\\%_]/g, '\\$&');
     filterConditions.push(sql`${resources.tweetAuthorUsername} LIKE ${escaped} ESCAPE '\\'`);
   }
-  const timezone = getSettings(db, userId).timezone;
-  if (query.from)
-    filterConditions.push(gte(resources.createdAt, zonedDayStart(query.from, timezone)));
-  if (query.to) filterConditions.push(lt(resources.createdAt, zonedDayEnd(query.to, timezone)));
+  if (query.from || query.to) {
+    const timezone = getSettings(db, userId).timezone;
+    if (query.from)
+      filterConditions.push(gte(resources.createdAt, zonedDayStart(query.from, timezone)));
+    if (query.to) filterConditions.push(lt(resources.createdAt, zonedDayEnd(query.to, timezone)));
+  }
 
   const totalRow = db
     .select({ value: count() })

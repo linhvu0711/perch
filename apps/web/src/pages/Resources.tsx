@@ -33,7 +33,7 @@ export function Resources() {
 
   const chooseType = (next: ResourceType | undefined) => {
     setType(next);
-    if (next === 'md') setAuthor(undefined);
+    if (next !== undefined && next !== 'tweet') setAuthor(undefined);
   };
 
   useEffect(() => {
@@ -181,7 +181,11 @@ export function Resources() {
             <TooltipContent>Notes</TooltipContent>
           </Tooltip>
         </div>
-        <AuthorFilter value={author} disabled={type === 'md'} onChange={setAuthor} />
+        <AuthorFilter
+          value={author}
+          disabled={type !== undefined && type !== 'tweet'}
+          onChange={setAuthor}
+        />
         <div className="search">
           <Search size={16} strokeWidth={1.75} />
           <input

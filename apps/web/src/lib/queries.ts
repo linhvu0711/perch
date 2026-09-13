@@ -229,6 +229,7 @@ export function useDeleteResources() {
         }
       }
       void queryClient.invalidateQueries({ queryKey: ['resources', 'list'] });
+      void queryClient.invalidateQueries({ queryKey: ['resources', 'authors'] });
       void queryClient.invalidateQueries({ queryKey: ['counts'] });
     },
   });
