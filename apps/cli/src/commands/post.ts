@@ -6,6 +6,7 @@ import {
   type Post,
   type PostPatch,
   type PostPreview,
+  type PostStatus,
 } from '@perch/core';
 import type { Command } from 'commander';
 
@@ -214,7 +215,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
           api.client.api.posts.$get({
             query: {
               ...(commandOptions.status !== undefined
-                ? { status: commandOptions.status }
+                ? { status: commandOptions.status as PostStatus }
                 : {}),
               ...(commandOptions.search !== undefined
                 ? { search: commandOptions.search }

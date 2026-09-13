@@ -16,7 +16,9 @@ export function Resources() {
   const [type, setType] = useState<ResourceType | undefined>();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [order, setOrder] = useState<'asc' | 'desc'>('desc');
+  const [sort, setSort] = useState<'newest' | 'oldest' | 'most' | 'least'>(
+    'newest',
+  );
   const [uploadOpen, setUploadOpen] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -29,9 +31,10 @@ export function Resources() {
     () => ({
       ...(type !== undefined ? { type } : {}),
       ...(debouncedSearch !== '' ? { search: debouncedSearch } : {}),
-      order,
+      sort: sort === 'most' || sort === 'least' ? ('used' as const) : ('created' as const),
+      order: sort === 'oldest' || sort === 'least' ? ('asc' as const) : ('desc' as const),
     }),
-    [type, debouncedSearch, order],
+    [type, debouncedSearch, sort],
   );
   const resources = useResources(filters);
   const items = resources.data?.pages.flatMap((page) => page.items) ?? [];
@@ -164,11 +167,15 @@ export function Resources() {
               <select
                 className="sel"
                 aria-label="Sort"
-                value={order}
-                onChange={(event) => setOrder(event.target.value as 'asc' | 'desc')}
+                value={sort}
+                onChange={(event) =>
+                  setSort(event.target.value as 'newest' | 'oldest' | 'most' | 'least')
+                }
               >
-                <option value="desc">Newest</option>
-                <option value="asc">Oldest</option>
+                <option value="newest">Newest</option>
+                <option value="oldest">Oldest</option>
+                <option value="most">Most used</option>
+                <option value="least">Least used</option>
               </select>
             </TooltipTrigger>
             <TooltipContent>Sort</TooltipContent>

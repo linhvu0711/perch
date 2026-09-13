@@ -40,7 +40,11 @@ export function ResourceCard({ resource }: { resource: Resource }): JSX.Element 
         excerpt && <div className="body">{excerpt}</div>
       )}
       <div className="foot">
-        <span className="uses">not used</span>
+        <span className="uses">
+          {resource.used_by === 0
+            ? 'not used'
+            : `used by ${resource.used_by} post${resource.used_by === 1 ? '' : 's'}`}
+        </span>
       </div>
     </Link>
   );
