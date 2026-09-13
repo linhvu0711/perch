@@ -34,6 +34,8 @@ export function makeCtx(
     isTTY: false,
     stdinIsTTY: over.stdinIsTTY ?? false,
     configPath: path.join(server.dir, 'config.json'),
+    homeDir: server.dir,
+    now: () => new Date('2026-09-04T10:00:00Z'),
     fetch: ((input, init) =>
       server.app.request(new Request(input, init))) as typeof fetch,
     openUrl: async (url) => {

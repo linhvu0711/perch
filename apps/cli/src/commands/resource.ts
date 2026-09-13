@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import {
   firstMarkdownHeading,
+  resourceSchema,
   RESOURCE_TYPES,
   type Resource,
   type ResourcePatch,
@@ -11,8 +12,9 @@ import {
 import type { Command } from 'commander';
 
 import { createApi } from '../api';
-import { resolveServerUrl, resolveToken } from '../config';
+import { resolveMirrorDir, resolveServerUrl, resolveToken } from '../config';
 import type { CliContext } from '../context';
+import { applyMirror } from '../mirror';
 import { CliError, formatTable, printResult, resolveMode } from '../output';
 
 interface GlobalOptions {
@@ -497,5 +499,38 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
 
       const failed = response.results.filter((result) => !result.ok).length;
       if (failed > 0) throw new BatchFailure(failed, response.results.length);
+    });
+
+  resource
+    .command('pull')
+    .description('Copy every Resource into the Mirror')
+    .option('--dir <path>')
+    .action(async (commandOptions: { dir?: string }) => {
+      const options = program.opts<GlobalOptions>();
+      const mode = resolveMode(options, ctx.isTTY);
+      const serverUrl = resolveServerUrl(ctx, options.server);
+      const dir = resolveMirrorDir(ctx, commandOptions.dir);
+      const api = apiFor(program, ctx);
+      const text = await api.callText(api.client.api.resources.export.$get());
+      const resources: Resource[] = [];
+      for (const line of text.split('\n')) {
+        if (line === '') continue;
+        try {
+          resources.push(resourceSchema.parse(JSON.parse(line)));
+        } catch {
+          throw new CliError(
+            'bad_response',
+            `Server at ${serverUrl} sent an invalid export line`,
+          );
+        }
+      }
+      const result = applyMirror(dir, resources, ctx.now());
+      printResult(ctx, mode, {
+        dir,
+        added: result.added,
+        updated: result.updated,
+        removed: result.removed,
+        pulled_at: result.pulled_at,
+      });
     });
 }

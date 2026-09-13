@@ -7,15 +7,17 @@ import { CliError } from './output';
 
 export interface LocalConfig {
   'server-url'?: string;
+  'mirror-dir'?: string;
   token?: string;
 }
 
 const localConfigSchema = z.object({
   'server-url': z.string().optional(),
+  'mirror-dir': z.string().optional(),
   token: z.string().optional(),
 });
 
-export const LOCAL_CONFIG_KEYS = ['server-url', 'token'] as const;
+export const LOCAL_CONFIG_KEYS = ['server-url', 'token', 'mirror-dir'] as const;
 export const REMOTE_CONFIG_KEYS = ['timezone', 'char-limit'] as const;
 
 export function readConfig(configPath: string): LocalConfig {
@@ -52,4 +54,15 @@ export function resolveServerUrl(
 
 export function resolveToken(ctx: CliContext): string | undefined {
   return ctx.env.PERCH_TOKEN ?? readConfig(ctx.configPath).token;
+}
+
+export function resolveMirrorDir(
+  ctx: CliContext,
+  flagValue?: string,
+): string {
+  return (
+    flagValue ??
+    readConfig(ctx.configPath)['mirror-dir'] ??
+    path.join(ctx.homeDir, '.perch', 'resources')
+  );
 }
