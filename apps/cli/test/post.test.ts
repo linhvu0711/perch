@@ -442,10 +442,7 @@ describe('post status and schedule', () => {
 
     const future = makeCtx(server);
     expect(
-      await runCli(
-        ['post', 'schedule', '1', '--at', '2026-09-10 09:00', '--json'],
-        future.ctx,
-      ),
+      await runCli(['post', 'schedule', '1', '--at', '2026-09-10 09:00', '--json'], future.ctx),
     ).toBe(0);
     expect(JSON.parse(future.out()).scheduled_at).toBe('2026-09-10T09:00:00.000Z');
 
@@ -475,9 +472,7 @@ describe('post status and schedule', () => {
     await runCli(['post', 'schedule', '1', '--at', '2026-09-10 09:00', '--json'], setup.ctx);
 
     const unschedule = makeCtx(server);
-    expect(
-      await runCli(['post', 'unschedule', '1', '999', '--json'], unschedule.ctx),
-    ).toBe(1);
+    expect(await runCli(['post', 'unschedule', '1', '999', '--json'], unschedule.ctx)).toBe(1);
     expect(JSON.parse(unschedule.out())).toEqual([
       { id: 1, ok: true },
       { id: 999, ok: false, error: { code: 'not_found', message: 'Post 999 not found' } },
@@ -492,16 +487,20 @@ describe('post status and schedule', () => {
 
     const scheduled = makeCtx(server);
     expect(await runCli(['post', 'list', '--scheduled', '--json'], scheduled.ctx)).toBe(0);
-    expect((JSON.parse(scheduled.out()) as { items: Array<{ id: number }> }).items.map((p) => p.id)).toEqual([1]);
+    expect(
+      (JSON.parse(scheduled.out()) as { items: Array<{ id: number }> }).items.map((p) => p.id),
+    ).toEqual([1]);
 
     const unscheduled = makeCtx(server);
     expect(await runCli(['post', 'list', '--unscheduled', '--json'], unscheduled.ctx)).toBe(0);
-    expect((JSON.parse(unscheduled.out()) as { items: Array<{ id: number }> }).items.map((p) => p.id)).toEqual([2]);
+    expect(
+      (JSON.parse(unscheduled.out()) as { items: Array<{ id: number }> }).items.map((p) => p.id),
+    ).toEqual([2]);
 
     const both = makeCtx(server);
-    expect(
-      await runCli(['post', 'list', '--scheduled', '--unscheduled', '--json'], both.ctx),
-    ).toBe(1);
+    expect(await runCli(['post', 'list', '--scheduled', '--unscheduled', '--json'], both.ctx)).toBe(
+      1,
+    );
     expect(JSON.parse(both.err())).toEqual({
       code: 'bad_args',
       message: 'Use one of --scheduled or --unscheduled',

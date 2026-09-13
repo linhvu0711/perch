@@ -58,7 +58,9 @@ function printPost(ctx: CliContext, options: GlobalOptions, post: Post): void {
       published: post.published_at ?? '',
       links: post.links.map((link) => link.resource_id).join(', '),
       media: post.media.map((item) => item.position).join(', '),
-      ready: post.ready.checks.map((check) => `${check.ok ? 'ok' : 'no'} ${check.label}`).join('; '),
+      ready: post.ready.checks
+        .map((check) => `${check.ok ? 'ok' : 'no'} ${check.label}`)
+        .join('; '),
       created: post.created_at,
       updated: post.updated_at,
     })}\n\n${post.text}\n`,

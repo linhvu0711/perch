@@ -29,9 +29,7 @@ test('promoteChecks returns every failing check', () => {
 });
 
 test('readyChecks labels', () => {
-  expect(
-    readyChecks({ text: '', limit: 25_000, mediaCount: 2, accountConnected: false }),
-  ).toEqual({
+  expect(readyChecks({ text: '', limit: 25_000, mediaCount: 2, accountConnected: false })).toEqual({
     ok: false,
     checks: [
       { code: 'text', ok: false, label: 'Text is not empty' },

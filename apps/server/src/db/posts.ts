@@ -1,9 +1,8 @@
 import {
-  dayBoundsUtc,
   DEMOTE_FROM,
+  dayBoundsUtc,
   effectiveCharLimit,
   estimateCost,
-  parseScheduleTime,
   POST_MEDIA_MAX,
   type Post,
   type PostCreate,
@@ -16,12 +15,13 @@ import {
   type PostPatch,
   type PostPreview,
   type PostScheduleBody,
-  type PostStatusResponse,
-  postListTitle,
   type PostStatus,
+  type PostStatusResponse,
+  PROMOTE_FROM,
+  parseScheduleTime,
+  postListTitle,
   previewSegments,
   promoteChecks,
-  PROMOTE_FROM,
   type Ready,
   readyChecks,
   SCHEDULE_FROM,
@@ -278,7 +278,9 @@ export function listPosts(
     filterConditions.push(sql`${sortTime} <= ${dayBoundsUtc(query.to, timeZone).end.getTime()}`);
   }
   if (query.scheduled !== undefined) {
-    filterConditions.push(query.scheduled ? isNotNull(posts.scheduledAt) : isNull(posts.scheduledAt));
+    filterConditions.push(
+      query.scheduled ? isNotNull(posts.scheduledAt) : isNull(posts.scheduledAt),
+    );
   }
   if (query.resource_id !== undefined) {
     filterConditions.push(
