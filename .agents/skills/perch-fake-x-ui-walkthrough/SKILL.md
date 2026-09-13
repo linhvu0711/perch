@@ -12,7 +12,7 @@ None for fake X. Set a disposable `PERCH_TOKEN` and use it on the login screen. 
 - Ensure Bun is available; this environment has `~/.bun/bin/bun`.
 - From the repo root, install dependencies if needed and build the web app; the fake server serves `apps/web/dist`, not a live frontend dev bundle.
 - Start `PERCH_TOKEN=<disposable-token> bun apps/server/scripts/dev-fake.ts`.
-- Open the exact origin required by the test plan, enter the configured token, and press Enter. Keep the origin consistent through the test.
+- Open `http://127.0.0.1:3000`, enter the configured token, and press Enter. Keep this origin consistent through the test; the fake OAuth callback always returns to 127.0.0.1, so testing on another origin loses authentication.
 - Every server process creates a fresh temporary SQLite DB. Restarting is a clean-state reset, and may require reauthentication.
 - Verify the listening process actually stopped before restarting: a terminated shell wrapper can leave its child alive. Send SIGTERM to the verified server PID if needed.
 - Stop the process after testing; confirm port 3000 is no longer listening.
@@ -31,7 +31,7 @@ None for fake X. Set a disposable `PERCH_TOKEN` and use it on the login screen. 
 - To exercise failed-save restoration, abort one mutation request while leaving the browser online, require a `requestfailed` event, then remove the abort and trigger the next flush without further typing. Offline mode can pause TanStack mutations instead of reaching the application's error handler, so it is not sufficient evidence of retry-after-failure.
 - With mixed resources, verify Notes filtering excludes images, linked-image usage is shown, and uploading refreshes the visible sidebar count. When testing exports, check derived-field omission for every resource type, not only notes.
 - Check insertion focus, pending-save retention across navigation, and premature DELETE requests independently of visible toasts.
-- When testing manual Load more, wait at the list bottom before clicking, check the initial row count remains stable, then verify the final count and unique IDs.
+- When testing manual Load more, disable or intercept IntersectionObserver-driven fetching before navigating (the resources list auto-fetches when its sentinel is visible), then click `Load more`, check the initial row count remains stable, and verify the final count and unique IDs.
 - If a modal covers the sidebar, inspect live counts after closing it rather than treating hidden DOM text as visible evidence.
 
 ## Evidence capture
