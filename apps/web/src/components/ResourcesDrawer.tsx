@@ -163,7 +163,7 @@ export function ResourcesDrawer(props: {
         }
         files.push(file);
       }
-      if (overflow) toast('4 images max', 'warn');
+      if (overflow) toast(`${POST_MEDIA_MAX} images max`, 'warn');
       if (files.length === 0) return;
       const postId = props.post?.id ?? (await props.ensurePostId?.());
       if (postId === undefined || postId === null) return;

@@ -250,8 +250,14 @@ export function detachMedia(
       }
     });
   });
+  let cleanupError: unknown;
   for (const row of deleted) {
-    remove(row.path);
+    try {
+      remove(row.path);
+    } catch (error) {
+      cleanupError ??= error;
+    }
   }
+  if (cleanupError !== undefined) throw cleanupError;
   return getPost(db, userId, postId);
 }

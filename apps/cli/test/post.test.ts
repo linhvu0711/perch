@@ -317,6 +317,29 @@ describe('post attach and detach', () => {
     expect(JSON.parse(detachAll.out())).toEqual([]);
   });
 
+  test('reports a read_failed result for an unreadable file', async () => {
+    const { png } = await attachFixtures();
+
+    const attach = makeCtx(server);
+    expect(
+      await runCli(
+        ['post', 'attach', '1', '--file', png, path.join(server.dir, 'missing.png'), '--json'],
+        attach.ctx,
+      ),
+    ).toBe(1);
+    const results = JSON.parse(attach.out()) as Array<{
+      name: string;
+      ok: boolean;
+      media?: { position: number };
+      error?: { code: string };
+    }>;
+    expect(results[0]?.name).toBe('missing.png');
+    expect(results[0]?.ok).toBe(false);
+    expect(results[0]?.error?.code).toBe('read_failed');
+    expect(results[1]?.ok).toBe(true);
+    expect(results[1]?.media?.position).toBe(1);
+  });
+
   test('rejects bad attach and detach flags', async () => {
     await attachFixtures();
 

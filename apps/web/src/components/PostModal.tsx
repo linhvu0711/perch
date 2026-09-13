@@ -403,7 +403,10 @@ export function PostModal(): JSX.Element | null {
               <div className="field">
                 {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the slot grid */}
                 <label>
-                  Images <span className="faint">{viewPost.media.length} of 4</span>
+                  Images{' '}
+                  <span className="faint">
+                    {viewPost.media.length} of {POST_MEDIA_MAX}
+                  </span>
                 </label>
                 <div className="slots">
                   {[0, 1, 2, 3].slice(0, POST_MEDIA_MAX).map((index) => {
