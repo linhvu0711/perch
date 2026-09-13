@@ -103,6 +103,9 @@ export function useDisconnectX() {
 export interface ResourceFilters {
   type?: ResourceType;
   search?: string;
+  author?: string;
+  from?: string;
+  to?: string;
   sort?: 'created' | 'used';
   order: 'asc' | 'desc';
 }
@@ -121,6 +124,9 @@ export function useResources(
           query: {
             ...(filters.type !== undefined ? { type: filters.type } : {}),
             ...(filters.search !== undefined ? { search: filters.search } : {}),
+            ...(filters.author !== undefined ? { author: filters.author } : {}),
+            ...(filters.from !== undefined ? { from: filters.from } : {}),
+            ...(filters.to !== undefined ? { to: filters.to } : {}),
             sort: filters.sort ?? 'created',
             order: filters.order,
             limit: String(pageSize),
@@ -130,6 +136,18 @@ export function useResources(
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor ?? undefined,
+  });
+}
+
+export function useSaveTweets() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { urls: string[]; refresh?: boolean }) =>
+      unwrap(api.api.resources.tweets.$post({ json: input })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['resources'] });
+      void queryClient.invalidateQueries({ queryKey: ['counts'] });
+    },
   });
 }
 

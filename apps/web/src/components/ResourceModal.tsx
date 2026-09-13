@@ -311,6 +311,26 @@ export function ResourceModal(): JSX.Element | null {
 
   if (!isNew && !resource) return null;
 
+  if (resource?.type === 'tweet') {
+    return (
+      <div className="scrim" onMouseDown={(event) => event.target === event.currentTarget && requestClose()}>
+        <div className="modal" role="dialog" aria-modal="true" aria-label="Tweet" tabIndex={-1} ref={modalRef}>
+          <div className="mhead">
+            <span className="id">#{resource.id}</span>
+            <span className="kind"><FileText />Tweet</span>
+            <div className="right"><IconButton label="Close (Esc)" icon={X} variant="ghost" onClick={requestClose} /></div>
+          </div>
+          <div className="rbody"><div className="rmain">
+            <b>@{resource.author_username}</b>
+            <p>{resource.text}</p>
+            <p className="muted">{formatDateTime(resource.posted_at)}</p>
+            <a href={resource.tweet_url} target="_blank" rel="noopener noreferrer">Open on X</a>
+          </div></div>
+        </div>
+      </div>
+    );
+  }
+
   const isImage = resource?.type === 'image';
   const displayedBody = isEditing ? bodyDraft : resource?.type === 'md' ? resource.body : '';
   const displayedTitle = isEditing ? titleDraft : resource?.title ?? '';

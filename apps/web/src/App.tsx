@@ -10,6 +10,7 @@ import {
 import { Sidebar } from '@/components/Sidebar';
 import { PostModal } from '@/components/PostModal';
 import { ResourceModal } from '@/components/ResourceModal';
+import { SaveTweetsModal } from '@/components/SaveTweetsModal';
 import { Toaster } from '@/components/Toast';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useMe } from '@/lib/queries';
@@ -58,6 +59,7 @@ function AuthGate() {
           <Route path=":id" element={<PostModal />} />
         </Route>
         <Route path="/resources" element={<Resources />}>
+          <Route path="save-tweets" element={<SaveTweetsModal />} />
           <Route path=":id" element={<ResourceModal />} />
         </Route>
         <Route path="/calendar" element={<Calendar />} />

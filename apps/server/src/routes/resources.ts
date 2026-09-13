@@ -8,6 +8,7 @@ import {
   resourceDeleteBodySchema,
   resourceListQuerySchema,
   resourcePatchSchema,
+  tweetCreateSchema,
   type Resource,
 } from '@perch/core';
 import { zValidator } from '@hono/zod-validator';
@@ -24,6 +25,7 @@ import {
   InvalidCursorError,
   listAllResources,
   listResources,
+  listTweetAuthors,
   updateResource,
 } from '../db/resources';
 import { ApiError, validationHook } from '../errors';
@@ -37,6 +39,9 @@ function notFound(id: number): ApiError {
 
 export function resourcesRoutes(deps: AppDeps) {
   return new Hono<AppEnv>()
+    .get('/authors', (c) =>
+      c.json({ authors: listTweetAuthors(deps.db, c.get('user').id) }),
+    )
     .get(
       '/',
       zValidator('query', resourceListQuerySchema, validationHook),
@@ -68,6 +73,18 @@ export function resourcesRoutes(deps: AppDeps) {
             deps.clock.now(),
           ),
           201,
+        ),
+    )
+    .post(
+      '/tweets',
+      zValidator('json', tweetCreateSchema, validationHook),
+      async (c) =>
+        c.json(
+          await deps.tweets.saveTweets(
+            c.get('user').id,
+            c.req.valid('json'),
+          ),
+          200,
         ),
     )
     .post('/images', async (c) => {

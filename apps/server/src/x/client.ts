@@ -15,7 +15,9 @@ export interface XMe {
 export interface XTweet {
   id: string;
   text: string;
+  authorId?: string;
   authorUsername: string;
+  postedAt?: string;
   hasMedia: boolean;
   isArticle: boolean;
   noteText: string | null;

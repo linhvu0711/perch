@@ -1,12 +1,13 @@
 import type { JSX } from 'react';
 import type { Resource } from '@perch/core';
-import { FileText, Image } from 'lucide-react';
+import { Bird, FileText, Image } from 'lucide-react';
 import { Link } from 'react-router';
 
 import { formatBytes, formatDayMonth, noteExcerpt } from '@/lib/format';
 
 export function ResourceCard({ resource }: { resource: Resource }): JSX.Element {
   const isImage = resource.type === 'image';
+  const isTweet = resource.type === 'tweet';
   const excerpt = resource.type === 'md' ? noteExcerpt(resource.body) : '';
   return (
     <Link to={`/resources/${resource.id}`} className="card res">
@@ -16,6 +17,11 @@ export function ResourceCard({ resource }: { resource: Resource }): JSX.Element 
             <>
               <Image />
               Image
+            </>
+          ) : isTweet ? (
+            <>
+              <Bird />
+              Tweet
             </>
           ) : (
             <>
@@ -36,6 +42,8 @@ export function ResourceCard({ resource }: { resource: Resource }): JSX.Element 
       <div className="title">{resource.title}</div>
       {isImage ? (
         <div className="body">{formatBytes(resource.bytes)}</div>
+      ) : isTweet ? (
+        <div className="body">@{resource.author_username} · {resource.text}</div>
       ) : (
         excerpt && <div className="body">{excerpt}</div>
       )}

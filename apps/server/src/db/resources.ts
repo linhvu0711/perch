@@ -1,5 +1,6 @@
 import {
   noteTitle,
+  tweetTitle,
   type ImageResource,
   type NoteCreate,
   type Resource,
@@ -7,6 +8,9 @@ import {
   type ResourceList,
   type ResourceListQuery,
   type ResourcePatch,
+  type TweetResource,
+  zonedDayEnd,
+  zonedDayStart,
 } from '@perch/core';
 import {
   and,
@@ -14,6 +18,7 @@ import {
   count,
   desc,
   eq,
+  gte,
   gt,
   lt,
   or,
@@ -25,6 +30,7 @@ import {
 import { decodeCursor, encodeCursor } from './cursor';
 import type { Db } from './index';
 import { postLinks, resources } from './schema';
+import { getSettings } from './settings';
 
 export class InvalidCursorError extends Error {}
 
@@ -62,6 +68,33 @@ function toResource(row: ResourceRow, usedBy = 0): Resource {
       ...(usedBy > 0 ? { used_by: usedBy } : {}),
     };
   }
+  if (row.type === 'tweet') {
+    if (
+      row.tweetUrl === null ||
+      row.tweetXId === null ||
+      row.tweetAuthorId === null ||
+      row.tweetAuthorUsername === null ||
+      row.tweetText === null ||
+      row.tweetPostedAt === null
+    ) {
+      throw new Error('tweet row without tweet fields');
+    }
+    const resource: TweetResource = {
+      id: row.id,
+      type: 'tweet',
+      title: row.title,
+      notes: row.notes,
+      created_at: row.createdAt.toISOString(),
+      tweet_url: row.tweetUrl,
+      tweet_x_id: row.tweetXId,
+      author_id: row.tweetAuthorId,
+      author_username: row.tweetAuthorUsername,
+      text: row.tweetText,
+      posted_at: row.tweetPostedAt.toISOString(),
+      ...(usedBy > 0 ? { used_by: usedBy } : {}),
+    };
+    return resource;
+  }
   if (row.type !== 'md') throw new Error('unsupported resource type');
 
   return {
@@ -73,6 +106,107 @@ function toResource(row: ResourceRow, usedBy = 0): Resource {
     body: row.mdBody ?? '',
     used_by: usedBy,
   };
+}
+
+export function createTweet(
+  db: Db,
+  userId: number,
+  input: {
+    url: string;
+    xId: string;
+    authorId: string;
+    authorUsername: string;
+    text: string;
+    postedAt: Date;
+  },
+  now: Date,
+): TweetResource {
+  const row = db
+    .insert(resources)
+    .values({
+      userId,
+      type: 'tweet',
+      title: tweetTitle(input.text),
+      notes: '',
+      createdAt: now,
+      tweetUrl: input.url,
+      tweetXId: input.xId,
+      tweetAuthorId: input.authorId,
+      tweetAuthorUsername: input.authorUsername,
+      tweetText: input.text,
+      tweetPostedAt: input.postedAt,
+    })
+    .returning()
+    .get();
+  if (!row) throw new Error('tweet insert failed');
+  return toResource(row) as TweetResource;
+}
+
+export function getTweetByXId(
+  db: Db,
+  userId: number,
+  xId: string,
+): TweetResource | null {
+  const row = db
+    .select(resourceColumns())
+    .from(resources)
+    .where(
+      and(
+        eq(resources.userId, userId),
+        eq(resources.type, 'tweet'),
+        eq(resources.tweetXId, xId),
+      ),
+    )
+    .get();
+  return row ? (toResource(row, row.usedBy) as TweetResource) : null;
+}
+
+export function updateTweet(
+  db: Db,
+  userId: number,
+  id: number,
+  input: {
+    url: string;
+    xId: string;
+    authorId: string;
+    authorUsername: string;
+    text: string;
+    postedAt: Date;
+    title: string;
+  },
+): TweetResource | null {
+  db.update(resources)
+    .set({
+      title: input.title,
+      tweetUrl: input.url,
+      tweetXId: input.xId,
+      tweetAuthorId: input.authorId,
+      tweetAuthorUsername: input.authorUsername,
+      tweetText: input.text,
+      tweetPostedAt: input.postedAt,
+    })
+    .where(and(eq(resources.id, id), eq(resources.userId, userId)))
+    .run();
+  return getTweetByXId(db, userId, input.xId);
+}
+
+export interface ResourceAuthor {
+  username: string;
+  count: number;
+}
+
+export function listTweetAuthors(db: Db, userId: number): ResourceAuthor[] {
+  return db
+    .select({
+      username: resources.tweetAuthorUsername,
+      count: count(),
+    })
+    .from(resources)
+    .where(and(eq(resources.userId, userId), eq(resources.type, 'tweet')))
+    .groupBy(resources.tweetAuthorUsername)
+    .orderBy(sql`lower(${resources.tweetAuthorUsername})`)
+    .all()
+    .filter((row): row is { username: string; count: number } => row.username !== null);
 }
 
 export function createNote(db: Db, userId: number, input: NoteCreate, now: Date): Resource {
@@ -193,9 +327,19 @@ export function listResources(
       or(
         sql`${resources.title} LIKE ${pattern} ESCAPE '\\'`,
         sql`${resources.mdBody} LIKE ${pattern} ESCAPE '\\'`,
+        sql`${resources.tweetText} LIKE ${pattern} ESCAPE '\\'`,
       )!,
     );
   }
+  if (query.author) {
+    const escaped = query.author.replace(/[\\%_]/g, '\\$&');
+    filterConditions.push(
+      sql`${resources.tweetAuthorUsername} LIKE ${escaped} ESCAPE '\\'`,
+    );
+  }
+  const timezone = getSettings(db, userId).timezone;
+  if (query.from) filterConditions.push(gte(resources.createdAt, zonedDayStart(query.from, timezone)));
+  if (query.to) filterConditions.push(lt(resources.createdAt, zonedDayEnd(query.to, timezone)));
 
   const totalRow = db
     .select({ value: count() })

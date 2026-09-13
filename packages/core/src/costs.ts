@@ -1,6 +1,8 @@
 export const X_COSTS_USD = {
   getMe: 0.01,
   getTweet: 0.005,
+  getTweetAuthor: 0.01,
+  saveTweet: 0.015,
   publish: 0.015,
   publishWithUrl: 0.2,
   mediaUpload: 0,

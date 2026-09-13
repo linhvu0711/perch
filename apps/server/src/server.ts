@@ -8,6 +8,7 @@ import type { Clock } from './clock';
 import { migrateDb, openDb, seedDb } from './db';
 import { createTick } from './scheduler';
 import { createXAccountService } from './x/accounts';
+import { createTweetService } from './x/tweets';
 import type { XClient } from './x/client';
 import type { XOAuthConfig } from './x/oauth';
 
@@ -42,6 +43,12 @@ export async function buildServer(
     xClient: options.xClient,
     xOAuth: options.xOAuth ?? null,
   });
+  const tweets = createTweetService({
+    db,
+    clock: options.clock,
+    accounts,
+    xClient: options.xClient,
+  });
   const app = createApp({
     db,
     token: options.token,
@@ -50,6 +57,7 @@ export async function buildServer(
     uploadDir: options.uploadDir,
     clock: options.clock,
     accounts,
+    tweets,
   });
   const tick = createTick({
     db,

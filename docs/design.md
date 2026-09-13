@@ -92,7 +92,7 @@ settings     user_id, timezone, char_limit_override
 
 | action | cost |
 |---|---|
-| save a tweet (`GET /2/tweets/:id`) | $0.005 |
+| save a tweet (`GET /2/tweets/:id`) | $0.015 |
 | publish, no link | $0.015 |
 | publish, text has a URL | $0.200 |
 | connect X (`GET /2/users/me`) | $0.010 |

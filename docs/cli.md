@@ -46,7 +46,7 @@ perch resource delete <id>... [--yes]
 perch resource pull [--dir <path>]               copy every Resource into the Mirror
 ```
 
-- `add tweet` fetches `GET /2/tweets/:id` ($0.005). Rejects with a reason: media, article, retweet, reply, quote. A URL already saved returns the existing resource, no X call, exit 0. `--refresh` forces a re-fetch.
+- `add tweet` fetches `GET /2/tweets/:id` ($0.015). Rejects with a reason: media, article, retweet, reply, quote. A URL already saved returns the existing resource, no X call, exit 0. `--refresh` forces a re-fetch.
 - `add image`: PNG, JPG, WebP, GIF; 5 MB max. Title defaults to the file name.
 - `add md`: title defaults to the first `#` heading, else the file name.
 - `edit --content` and `-e` apply to md only; `--title` / `--notes` apply to every type.

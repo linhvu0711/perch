@@ -139,14 +139,15 @@ export function createRealXClient(options: {
 
     async getTweet(accessToken, id) {
       const res = await request(
-        `${X_API_BASE}/2/tweets/${id}?tweet.fields=attachments,article,author_id,note_tweet,referenced_tweets,text&expansions=author_id,attachments.media_keys&user.fields=username`,
+        `${X_API_BASE}/2/tweets/${id}?tweet.fields=attachments,article,author_id,created_at,note_tweet,referenced_tweets,text&expansions=author_id,attachments.media_keys&user.fields=username`,
         { headers: bearerHeaders(accessToken) },
       );
       const data = (await res.json()) as {
-        data: {
+        data?: {
           id: string;
           text: string;
           author_id?: string;
+          created_at?: string;
           attachments?: { media_keys?: string[] };
           article?: unknown;
           note_tweet?: { text: string };
@@ -154,18 +155,29 @@ export function createRealXClient(options: {
         };
         includes?: { users?: Array<{ id: string; username: string }> };
       };
+      if (!data.data) {
+        throw new XError('http', 404, 'Post not found');
+      }
+      const tweetData = data.data;
       const author = data.includes?.users?.find(
-        (u) => u.id === data.data.author_id,
+        (u) => u.id === tweetData.author_id,
       );
       const tweet: XTweet = {
-        id: data.data.id,
-        text: data.data.text,
+        id: tweetData.id,
+        text: tweetData.text,
         authorUsername: author?.username ?? '',
-        hasMedia: (data.data.attachments?.media_keys?.length ?? 0) > 0,
-        isArticle: data.data.article != null,
-        noteText: data.data.note_tweet?.text ?? null,
-        referencedTweets: data.data.referenced_tweets ?? [],
+        hasMedia: (tweetData.attachments?.media_keys?.length ?? 0) > 0,
+        isArticle: tweetData.article != null,
+        noteText: tweetData.note_tweet?.text ?? null,
+        referencedTweets: tweetData.referenced_tweets ?? [],
       };
+      Object.defineProperties(tweet, {
+        authorId: { value: tweetData.author_id ?? '', enumerable: false },
+        postedAt: {
+          value: tweetData.created_at ?? new Date(0).toISOString(),
+          enumerable: false,
+        },
+      });
       return tweet;
     },
 

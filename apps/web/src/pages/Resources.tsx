@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ResourceType } from '@perch/core';
-import { FilePlus, FileText, Image, LayoutGrid, Search, Upload } from 'lucide-react';
+import { Bird, BookmarkPlus, FilePlus, FileText, Image, LayoutGrid, Search, Upload } from 'lucide-react';
 import { Outlet, useNavigate } from 'react-router';
 
 import { Empty } from '@/components/Empty';
@@ -109,6 +109,11 @@ export function Resources() {
           variant="primary"
           onClick={() => navigate('/resources/new')}
         />
+        <IconButton
+          label="Save tweets"
+          icon={BookmarkPlus}
+          onClick={() => navigate('/resources/save-tweets')}
+        />
       </div>
       <div className="filters">
         <div className="seg icons" role="group" aria-label="Type">
@@ -124,6 +129,14 @@ export function Resources() {
               </button>
             </TooltipTrigger>
             <TooltipContent>All</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button" aria-label="Tweets" aria-pressed={type === 'tweet'} onClick={() => setType('tweet')}>
+                <Bird size={16} strokeWidth={1.75} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Tweets</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
