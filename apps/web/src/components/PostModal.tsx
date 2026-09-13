@@ -517,6 +517,15 @@ export function PostModal(): JSX.Element | null {
                     : 'Missed. No X account was connected at that time. Pick a new time, or clear the time.'}
                 </div>
               )}
+              {!isNew &&
+                viewPost.status === 'draft' &&
+                !viewPost.missed &&
+                viewPost.reason === 'still a draft' && (
+                  <div className="banner missed" role="status">
+                    <TriangleAlert size={16} strokeWidth={1.75} />
+                    Still a draft. Drafts are never sent. Promote it, or clear the time.
+                  </div>
+                )}
               {!isNew && viewPost.status === 'failed' && (
                 <div className="banner failed" role="alert">
                   <TriangleAlert size={16} strokeWidth={1.75} />
