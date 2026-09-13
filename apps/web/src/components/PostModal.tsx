@@ -135,6 +135,7 @@ export function PostModal(): JSX.Element | null {
         try {
           id = (await ensureCreated()).id;
         } catch (error) {
+          pendingRef.current = { ...patch, ...pendingRef.current };
           toast(errorMessage(error), 'warn');
           return;
         }
