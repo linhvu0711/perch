@@ -9,6 +9,7 @@ import { authRoutes } from './routes/auth';
 import { resourcesRoutes } from './routes/resources';
 import { settingsRoutes } from './routes/settings';
 import { statusRoutes } from './routes/status';
+import { xCallbackHandler } from './routes/xCallback';
 import { staticHandler } from './static';
 import type { XAccountService } from './x/accounts';
 
@@ -42,6 +43,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   app.route('/', createRoutes(deps));
   app.onError(errorHandler);
   app.notFound(notFoundHandler);
+  app.get('/auth/x/callback', xCallbackHandler(deps));
   app.get('*', staticHandler(deps.webDist));
   return app;
 }

@@ -9,8 +9,14 @@ type ValidationResult =
 
 export class ApiError extends Error {
   constructor(
-    public status: 400 | 401 | 404 | 500,
-    public code: 'validation' | 'unauthorized' | 'not_found' | 'internal',
+    public status: 400 | 401 | 404 | 409 | 500 | 503,
+    public code:
+      | 'validation'
+      | 'unauthorized'
+      | 'not_found'
+      | 'reconnect_required'
+      | 'internal'
+      | 'not_configured',
     message: string,
     public errors?: Array<{ path: string; message: string }>,
   ) {

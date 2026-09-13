@@ -1,17 +1,35 @@
 import {
   effectiveCharLimit,
+  X_COSTS_USD,
+  X_ENDPOINTS,
   type AccountStatus,
+  type ConnectStart,
 } from '@perch/core';
 
 import type { Clock } from '../clock';
 import type { Db } from '../db';
+import { logApiCall } from '../db/apiCalls';
 import { getSettings } from '../db/settings';
-import { getConnectedAccount, toXAccount } from '../db/xAccounts';
-import type { XClient } from './client';
-import type { XOAuthConfig } from './oauth';
+import { connectAccount, getConnectedAccount, toXAccount } from '../db/xAccounts';
+import { ApiError } from '../errors';
+import type { XClient, XMe, XTokens } from './client';
+import {
+  buildAuthorizeUrl,
+  createPkce,
+  createStateStore,
+  type XOAuthConfig,
+} from './oauth';
 
 export interface XAccountService {
   status(userId: number): AccountStatus;
+  startConnect(userId: number): ConnectStart;
+  completeConnect(input: {
+    code?: string;
+    state?: string;
+    error?: string;
+  }): Promise<
+    { ok: true } | { ok: false; reason: 'denied' | 'expired' | 'failed' }
+  >;
 }
 
 export function createXAccountService(deps: {
@@ -20,6 +38,8 @@ export function createXAccountService(deps: {
   xClient: XClient;
   xOAuth: XOAuthConfig | null;
 }): XAccountService {
+  const states = createStateStore(deps.clock);
+
   return {
     status(userId) {
       const row = getConnectedAccount(deps.db, userId);
@@ -31,6 +51,80 @@ export function createXAccountService(deps: {
           row?.subscriptionType ?? null,
         ),
       };
+    },
+
+    startConnect(userId) {
+      if (!deps.xOAuth) {
+        throw new ApiError(
+          503,
+          'not_configured',
+          'X OAuth is not configured. Set PERCH_X_CLIENT_ID and PERCH_X_CLIENT_SECRET.',
+        );
+      }
+      const pkce = createPkce();
+      const state = states.put({
+        userId,
+        codeVerifier: pkce.codeVerifier,
+      });
+      return {
+        authorize_url: buildAuthorizeUrl(deps.xOAuth, {
+          state,
+          codeChallenge: pkce.codeChallenge,
+        }),
+      };
+    },
+
+    async completeConnect(input) {
+      const entry = input.state ? states.take(input.state) : null;
+      if (!entry) return { ok: false, reason: 'expired' };
+      if (input.error || !input.code) return { ok: false, reason: 'denied' };
+
+      let tokens: XTokens;
+      let me: XMe;
+      try {
+        tokens = await deps.xClient.exchangeCode({
+          code: input.code,
+          codeVerifier: entry.codeVerifier,
+          redirectUri: deps.xOAuth!.redirectUri,
+        });
+        me = await deps.xClient.getMe(tokens.accessToken);
+      } catch (error) {
+        console.error(error);
+        return { ok: false, reason: 'failed' };
+      }
+
+      const now = deps.clock.now();
+      const { replacedTokens } = deps.db.transaction((tx) => {
+        const result = connectAccount(tx, entry.userId, {
+          xUserId: me.id,
+          username: me.username,
+          subscriptionType: me.subscriptionType,
+          tokens,
+          now,
+        });
+        logApiCall(tx, entry.userId, {
+          endpoint: X_ENDPOINTS.getMe,
+          costUsd: X_COSTS_USD.getMe,
+          xAccountId: result.account.id,
+          now,
+        });
+        return result;
+      });
+
+      for (const replaced of replacedTokens) {
+        try {
+          await deps.xClient.revokeToken(replaced.refreshToken);
+        } catch (error) {
+          console.error(error);
+        }
+        try {
+          await deps.xClient.revokeToken(replaced.accessToken);
+        } catch (error) {
+          console.error(error);
+        }
+      }
+
+      return { ok: true };
     },
   };
 }
