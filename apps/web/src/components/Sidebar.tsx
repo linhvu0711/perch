@@ -12,7 +12,7 @@ import {
 import { NavLink } from 'react-router';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useCounts } from '@/lib/queries';
+import { useAccount, useCounts } from '@/lib/queries';
 import { useSidebarCollapsed } from '@/lib/sidebar';
 
 function CollapsedTip({ collapsed, label, children }: { collapsed: boolean; label: string; children: ReactNode }) {
@@ -53,6 +53,8 @@ function NavigationItem({
 export function Sidebar() {
   const [collapsed, setCollapsed] = useSidebarCollapsed();
   const counts = useCounts();
+  const account = useAccount();
+  const connected = account.data?.account ?? null;
 
   function expandFromSidebar(event: MouseEvent<HTMLElement>): void {
     const target = event.target;
@@ -92,8 +94,24 @@ export function Sidebar() {
 
       <div className="spacer" />
       <div className="acct">
-        <span className="avatar none" />
-        <div className="who">No X account<small>Connect in Settings</small></div>
+        {connected ? (
+          <>
+            <span className="avatar" />
+            <div className="who">
+              @{connected.username}
+              <small>
+                {connected.reconnect_required
+                  ? 'Reconnect required'
+                  : `${connected.subscription_type} · ${account.data!.char_limit.toLocaleString('en-US')} chars`}
+              </small>
+            </div>
+          </>
+        ) : (
+          <>
+            <span className="avatar none" />
+            <div className="who">No X account<small>Connect in Settings</small></div>
+          </>
+        )}
       </div>
     </aside>
   );

@@ -1,6 +1,7 @@
 import packageJson from '../package.json' with { type: 'json' };
 import { Command, CommanderError } from 'commander';
 
+import { addAccountCommands } from './commands/account';
 import { addAuthCommands } from './commands/auth';
 import { addConfigCommands } from './commands/config';
 import { addResourceCommands } from './commands/resource';
@@ -29,6 +30,7 @@ export async function runCli(
     .option('--server <url>', 'override the server URL')
     .option('--yes', 'skip confirmation prompts');
 
+  addAccountCommands(program, ctx);
   addAuthCommands(program, ctx);
   addConfigCommands(program, ctx);
   addResourceCommands(program, ctx);

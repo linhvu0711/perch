@@ -4,11 +4,14 @@ import { authMiddleware, type User } from './auth';
 import type { Clock } from './clock';
 import type { Db } from './db';
 import { errorHandler, notFoundHandler } from './errors';
+import { accountRoutes } from './routes/account';
 import { authRoutes } from './routes/auth';
 import { resourcesRoutes } from './routes/resources';
 import { settingsRoutes } from './routes/settings';
 import { statusRoutes } from './routes/status';
+import { xCallbackHandler } from './routes/xCallback';
 import { staticHandler } from './static';
+import type { XAccountService } from './x/accounts';
 
 export type AppEnv = { Variables: { user: User } };
 
@@ -18,6 +21,7 @@ export interface AppDeps {
   secureCookies: boolean;
   webDist: string;
   clock: Clock;
+  accounts: XAccountService;
 }
 
 function createRoutes(deps: AppDeps) {
@@ -27,6 +31,7 @@ function createRoutes(deps: AppDeps) {
     .route('/auth', authRoutes(deps))
     .route('/settings', settingsRoutes(deps))
     .route('/status', statusRoutes(deps))
+    .route('/account', accountRoutes(deps))
     .route('/resources', resourcesRoutes(deps))
     .all('*', notFoundHandler);
 }
@@ -38,6 +43,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   app.route('/', createRoutes(deps));
   app.onError(errorHandler);
   app.notFound(notFoundHandler);
+  app.get('/auth/x/callback', xCallbackHandler(deps));
   app.get('*', staticHandler(deps.webDist));
   return app;
 }

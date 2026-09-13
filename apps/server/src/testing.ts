@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { fixedClock } from './clock';
 import { buildServer, type PerchServer } from './server';
-import { fakeXClient, type FakeXClient } from './x/client';
+import { fakeXClient, type FakeXClient } from './x/fake';
 
 export interface TestServer extends PerchServer {
   token: string;
@@ -19,6 +19,7 @@ export async function createTestServer(opts?: {
   indexHtml?: string;
   now?: Date;
   secureCookies?: boolean;
+  xOAuthConfigured?: boolean;
 }): Promise<TestServer> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'perch-test-'));
   const dbPath = path.join(dir, 'perch.db');
@@ -43,6 +44,14 @@ export async function createTestServer(opts?: {
     token,
     secureCookies: opts?.secureCookies ?? false,
     webDist,
+    xOAuth:
+      opts?.xOAuthConfigured === false
+        ? null
+        : {
+            clientId: 'test-client-id',
+            redirectUri: 'http://127.0.0.1:3000/auth/x/callback',
+            authorizeUrl: 'https://x.com/i/oauth2/authorize',
+          },
   });
 
   return {

@@ -13,7 +13,7 @@ bun install
 cp .env.example .env
 ```
 
-Set `PERCH_TOKEN` in `.env` to a private shared secret before starting the server.
+Set `PERCH_TOKEN` in `.env` to a private shared secret before starting the server. To enable Connect X, also set `PERCH_X_CLIENT_ID`, `PERCH_X_CLIENT_SECRET`, and `PERCH_PUBLIC_URL`.
 
 ## Run
 
@@ -69,3 +69,6 @@ The CLI stores local configuration at `~/.perch/config.json` unless `PERCH_CONFI
 | `PERCH_WEB_DIST` | No | `./apps/web/dist` | Built web application directory |
 | `PERCH_SECURE_COOKIES` | No | `true` | Mark the session cookie Secure; local development over `http://localhost` works with `true` because browsers treat localhost as a secure context |
 | `PORT` | No | `3000` | Server listen port |
+| `PERCH_X_CLIENT_ID` | No | — | X OAuth "Web App" client id; enables Connect X |
+| `PERCH_X_CLIENT_SECRET` | No | — | X OAuth "Web App" client secret |
+| `PERCH_PUBLIC_URL` | No | `http://127.0.0.1:3000` | Public base URL; must match the callback URL registered at X, so open the app at this URL |

@@ -36,6 +36,25 @@ export const meSchema = z.object({
 
 export const statusSchema = z.object({
   timezone: z.string(),
+  month_cost_usd: z.number(),
+});
+
+export const xAccountSchema = z.object({
+  id: z.number().int(),
+  x_user_id: z.string(),
+  username: z.string(),
+  subscription_type: z.string(),
+  connected_at: z.string(),
+  reconnect_required: z.boolean(),
+});
+
+export const accountStatusSchema = z.object({
+  account: xAccountSchema.nullable(),
+  char_limit: z.number().int(),
+});
+
+export const connectStartSchema = z.object({
+  authorize_url: z.string(),
 });
 
 export const apiErrorSchema = z.object({
@@ -56,4 +75,7 @@ export type SettingsPatch = z.infer<typeof settingsPatchSchema>;
 export type LoginBody = z.infer<typeof loginBodySchema>;
 export type Me = z.infer<typeof meSchema>;
 export type Status = z.infer<typeof statusSchema>;
+export type XAccount = z.infer<typeof xAccountSchema>;
+export type AccountStatus = z.infer<typeof accountStatusSchema>;
+export type ConnectStart = z.infer<typeof connectStartSchema>;
 export type ApiError = z.infer<typeof apiErrorSchema>;

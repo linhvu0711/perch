@@ -53,6 +53,7 @@ export function useLogout() {
     onSuccess: () => {
       queryClient.setQueryData(['me'], null);
       queryClient.removeQueries({ queryKey: ['settings'] });
+      queryClient.removeQueries({ queryKey: ['account'] });
     },
   });
 }
@@ -62,7 +63,35 @@ export function useUpdateSettings() {
   return useMutation({
     mutationFn: (patch: SettingsPatch) =>
       unwrap(api.api.settings.$patch({ json: patch })),
-    onSuccess: (data) => queryClient.setQueryData(['settings'], data),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['settings'], data);
+      void queryClient.invalidateQueries({ queryKey: ['account'] });
+    },
+  });
+}
+
+export function useAccount() {
+  const me = useMe();
+  return useQuery({
+    queryKey: ['account'],
+    queryFn: () => unwrap(api.api.account.$get()),
+    enabled: me.data != null,
+  });
+}
+
+export function useConnectX() {
+  return useMutation({
+    mutationFn: () => unwrap(api.api.account.connect.$post()),
+  });
+}
+
+export function useDisconnectX() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(api.api.account.disconnect.$post()),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['account'], data);
+    },
   });
 }
 

@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { systemClock } from './clock';
 import { buildServer } from './server';
+import { createRealXClient } from './x/real';
 
 export { buildServer } from './server';
 export type { AppType } from './app';
@@ -35,6 +36,23 @@ if (import.meta.main) {
   );
   const port = Number(process.env.PORT || '3000');
 
+  const xClientId = process.env.PERCH_X_CLIENT_ID;
+  const xClientSecret = process.env.PERCH_X_CLIENT_SECRET;
+  const publicUrl = (
+    process.env.PERCH_PUBLIC_URL || `http://127.0.0.1:${port}`
+  ).replace(/\/$/, '');
+  const xOAuth =
+    xClientId && xClientSecret
+      ? {
+          clientId: xClientId,
+          redirectUri: `${publicUrl}/auth/x/callback`,
+          authorizeUrl: 'https://x.com/i/oauth2/authorize',
+        }
+      : null;
+  if (!xOAuth) {
+    console.warn('X OAuth is not configured; Connect X is disabled');
+  }
+
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   fs.mkdirSync(uploadDir, { recursive: true });
 
@@ -42,7 +60,11 @@ if (import.meta.main) {
     dbPath,
     uploadDir,
     clock: systemClock,
-    xClient: {},
+    xClient: createRealXClient({
+      clientId: xClientId ?? '',
+      clientSecret: xClientSecret ?? '',
+    }),
+    xOAuth,
     token,
     secureCookies: secureCookiesValue === 'true',
     webDist,
@@ -67,4 +89,5 @@ if (import.meta.main) {
   process.once('SIGINT', shutdown);
 
   console.log(`perch server on http://localhost:${port}`);
+  console.log(`public url ${publicUrl}`);
 }

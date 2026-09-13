@@ -27,6 +27,7 @@ perch auth status                     is the token valid, which user
 perch auth login                      prints and opens the web UI login page
 perch auth logout                     clears the local token
 perch account show                    connected X account: @handle, subscription, char limit, connected since
+perch account disconnect [--yes]      revoke the X token at X and disconnect; keeps history
 perch status                          account, next 5 due posts, missed count, failed count, month cost
 ```
 
