@@ -22,13 +22,13 @@ The CLI is a thin client; every command is one or more HTTP calls to the server.
 
 ```
 perch config get <key>
-perch config set <key> <value>        keys: server-url, token, timezone, char-limit
+perch config set <key> <value>        keys: server-url, token, mirror-dir, timezone, char-limit
 perch auth status                     is the token valid, which user
 perch auth login                      prints and opens the web UI login page
 perch auth logout                     clears the local token
 perch account show                    connected X account: @handle, subscription, char limit, connected since
 perch account disconnect [--yes]      revoke the X token at X and disconnect; keeps history
-perch status                          account, next 5 due posts, missed count, failed count, month cost
+perch status                          account, next 5 due posts, missed count, failed count, month cost; Mirror path and last pull time
 ```
 
 ### Resources
@@ -43,6 +43,7 @@ perch resource show <id>                          full text, note body, or image
 perch resource edit <id>  [--title s] [--notes s] [--content <path>|-] [-e]
 perch resource tag <id>...  [--add t]... [--remove t]...
 perch resource delete <id>... [--yes]
+perch resource pull [--dir <path>]               copy every Resource into the Mirror
 ```
 
 - `add tweet` fetches `GET /2/tweets/:id` ($0.005). Rejects with a reason: media, article, retweet, reply, quote. A URL already saved returns the existing resource, no X call, exit 0. `--refresh` forces a re-fetch.
@@ -51,6 +52,7 @@ perch resource delete <id>... [--yes]
 - `edit --content` and `-e` apply to md only; `--title` / `--notes` apply to every type.
 - `list --author` applies to tweets only. `--from` / `--to` filter on the date saved.
 - `delete` removes links from all posts (published too) and prints which posts were unlinked.
+- `pull` writes `notes/<yyyy-mm-dd>-<id>-<slug>.md` with YAML front matter and a `manifest.json`; only changed files are rewritten; only Manifest paths are deleted; nothing is written when the download fails.
 
 ### Posts
 

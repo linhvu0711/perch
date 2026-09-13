@@ -53,6 +53,7 @@ Decisions from the design session on 2026-09-03. Big, hard-to-reverse ones have 
 | 34 | publish a draft | allowed: `publish` promotes first with the same checks, then sends | 0005 |
 | 35 | big lists | cursor paging on the server (`limit` + opaque `cursor`, `next_cursor` in JSON); web = "load more" on scroll for posts (50), resources (30), drawer (20); calendar loads one month/week, 3 per day then "+N more" opens the week; dropdowns load all and filter client-side; dashboard attention list caps at 10 with "See all" | — |
 | 36 | backups | Litestream → Cloudflare R2 for SQLite; images copied to the same bucket on upload | 0002 |
+| 37 | mirror | read-only Markdown Mirror at ~/.perch/resources via perch resource pull; manifest.json lists written paths; SQLite stays the truth | 0009 |
 | — | alt text on media | not supported | 0007 |
 | — | multi-user later | `user_id` on every table now, nothing else | 0003 |
 
