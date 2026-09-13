@@ -98,7 +98,7 @@ is only about how code is written.
 
 ## Formatting
 
-- Biome is the formatter and linter. `bun run check:changed` must pass on every change. The whole-repo `bun run lint` must pass once #32 fixes the remaining lint errors. [biome]
+- Biome is the formatter and linter. `bun run check:changed` must pass on every change. The whole-repo `bun run lint` must pass. [biome]
 - Two spaces, no tabs. [biome]
 - Line width 100. [biome]
 - Single quotes in TypeScript, double quotes in JSX attributes. [biome]

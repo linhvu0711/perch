@@ -117,7 +117,7 @@ cites a rule or names a smell.
 
 ### Scope
 - A PR has one topic. (`CODING_STANDARDS.md`)
-- A PR does not fix unrelated files to make whole-repo lint green until #33 lands. (`CLAUDE.md`)
+- A PR does not fix unrelated files to make whole-repo lint green. (`CLAUDE.md`)
 - A PR that builds an item from the Out of Scope list in `docs/spec/perch-v1.md` is creep unless the task names it.
 - A price change touches only `packages/core`.
 - No X SDK dependency lands without an ADR that supersedes `docs/adr/0010`.

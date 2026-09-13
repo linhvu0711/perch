@@ -7,7 +7,7 @@ Vocabulary is in `CONTEXT.md`. Product rules are in `docs/spec/perch-v1.md` and
 
 Before you finish a change, run `bun run typecheck`, `bun test`, and
 `bun run check:changed`. The last one runs Biome on the files that differ from
-`main`. The whole-repo `bun run lint` stays red until #32 fixes the remaining lint errors;
-do not fix unrelated files to make it green.
+`main`. The whole-repo `bun run lint` must pass. Do not fix unrelated files in a
+feature PR; open a chore.
 
 Read `REVIEW.md` before you review a pull request.
