@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 import {
   formatCost,
+  POST_LIST_LIMIT_DEFAULT,
   POST_STATUSES,
   type Post,
   type PostPatch,
@@ -13,13 +14,7 @@ import type { Command } from 'commander';
 import { createApi } from '../api';
 import { resolveServerUrl, resolveToken } from '../config';
 import type { CliContext } from '../context';
-import {
-  BatchFailure,
-  CliError,
-  formatTable,
-  printResult,
-  resolveMode,
-} from '../output';
+import { BatchFailure, CliError, formatTable, printResult, resolveMode } from '../output';
 
 interface GlobalOptions {
   json?: boolean;
@@ -43,11 +38,7 @@ function positiveId(value: string, plural = false): number {
   return Number(value);
 }
 
-function printPost(
-  ctx: CliContext,
-  options: GlobalOptions,
-  post: Post,
-): void {
+function printPost(ctx: CliContext, options: GlobalOptions, post: Post): void {
   const mode = resolveMode(options, ctx.isTTY);
   if (mode === 'json') {
     printResult(ctx, mode, post);
@@ -93,13 +84,8 @@ function wordWrap(text: string, width: number): string[] {
   return lines;
 }
 
-function printPreviewCard(
-  ctx: CliContext,
-  preview: PostPreview,
-  text: string,
-): void {
-  const lines =
-    text === '' ? ['Nothing yet.'] : text.split('\n').flatMap((l) => wordWrap(l, 56));
+function printPreviewCard(ctx: CliContext, preview: PostPreview, text: string): void {
+  const lines = text === '' ? ['Nothing yet.'] : text.split('\n').flatMap((l) => wordWrap(l, 56));
   const border = `+${'-'.repeat(58)}+`;
   ctx.stdout.write(
     `${border}\n${lines.map((line) => `| ${line.padEnd(56)} |`).join('\n')}\n${border}\n` +
@@ -150,17 +136,13 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
         },
       ) => {
         const text = await readTextInput(ctx, commandOptions, stdinArg);
-        const from = (commandOptions.from ?? []).map((value) =>
-          positiveId(value, true),
-        );
+        const from = (commandOptions.from ?? []).map((value) => positiveId(value, true));
 
         const api = apiFor(program, ctx);
         const created = await api.call(
           api.client.api.posts.$post({
             json: {
-              ...(commandOptions.title !== undefined
-                ? { title: commandOptions.title }
-                : {}),
+              ...(commandOptions.title !== undefined ? { title: commandOptions.title } : {}),
               text,
               ...(from.length > 0 ? { from } : {}),
             },
@@ -177,7 +159,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
     .option('--search <q>')
     .option('--from <d>')
     .option('--to <d>')
-    .option('--limit <n>', 'page size', '50')
+    .option('--limit <n>', 'page size', String(POST_LIST_LIMIT_DEFAULT))
     .option('--cursor <cursor>')
     .action(
       async (commandOptions: {
@@ -217,17 +199,11 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
               ...(commandOptions.status !== undefined
                 ? { status: commandOptions.status as PostStatus }
                 : {}),
-              ...(commandOptions.search !== undefined
-                ? { search: commandOptions.search }
-                : {}),
-              ...(commandOptions.from !== undefined
-                ? { from: commandOptions.from }
-                : {}),
+              ...(commandOptions.search !== undefined ? { search: commandOptions.search } : {}),
+              ...(commandOptions.from !== undefined ? { from: commandOptions.from } : {}),
               ...(commandOptions.to !== undefined ? { to: commandOptions.to } : {}),
               limit: String(Number(commandOptions.limit)),
-              ...(commandOptions.cursor !== undefined
-                ? { cursor: commandOptions.cursor }
-                : {}),
+              ...(commandOptions.cursor !== undefined ? { cursor: commandOptions.cursor } : {}),
             },
           }),
         );
@@ -264,9 +240,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
     .action(async (idValue: string) => {
       const id = positiveId(idValue);
       const api = apiFor(program, ctx);
-      const found = await api.call(
-        api.client.api.posts[':id'].$get({ param: { id: String(id) } }),
-      );
+      const found = await api.call(api.client.api.posts[':id'].$get({ param: { id: String(id) } }));
       printPost(ctx, program.opts<GlobalOptions>(), found);
     });
 
@@ -285,9 +259,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
         printResult(ctx, mode, preview);
         return;
       }
-      const found = await api.call(
-        api.client.api.posts[':id'].$get({ param: { id: String(id) } }),
-      );
+      const found = await api.call(api.client.api.posts[':id'].$get({ param: { id: String(id) } }));
       printPreviewCard(ctx, preview, found.text);
     });
 
@@ -332,16 +304,12 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
 
         const api = apiFor(program, ctx);
         const patch: PostPatch = {
-          ...(commandOptions.title !== undefined
-            ? { title: commandOptions.title }
-            : {}),
+          ...(commandOptions.title !== undefined ? { title: commandOptions.title } : {}),
         };
         let current: Post | undefined;
 
         if (commandOptions.editor) {
-          current = await api.call(
-            api.client.api.posts[':id'].$get({ param: { id: String(id) } }),
-          );
+          current = await api.call(api.client.api.posts[':id'].$get({ param: { id: String(id) } }));
           patch.text = await ctx.editText(current.text);
         } else {
           const text = await readTextInput(ctx, commandOptions, stdinArg);
@@ -378,11 +346,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
           json: { resource_ids: ids },
         }),
       );
-      printResult(
-        ctx,
-        resolveMode(program.opts<GlobalOptions>(), ctx.isTTY),
-        response.results,
-      );
+      printResult(ctx, resolveMode(program.opts<GlobalOptions>(), ctx.isTTY), response.results);
       const failed = response.results.filter((result) => !result.ok).length;
       if (failed > 0) throw new BatchFailure(failed, response.results.length);
     });
@@ -401,11 +365,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
           json: { resource_ids: ids },
         }),
       );
-      printResult(
-        ctx,
-        resolveMode(program.opts<GlobalOptions>(), ctx.isTTY),
-        response.results,
-      );
+      printResult(ctx, resolveMode(program.opts<GlobalOptions>(), ctx.isTTY), response.results);
       const failed = response.results.filter((result) => !result.ok).length;
       if (failed > 0) throw new BatchFailure(failed, response.results.length);
     });
@@ -419,10 +379,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
 
       if (!options.yes) {
         if (!ctx.isTTY || !ctx.stdinIsTTY) {
-          throw new CliError(
-            'confirm_required',
-            'Refusing to delete without --yes',
-          );
+          throw new CliError('confirm_required', 'Refusing to delete without --yes');
         }
         const confirmed = await ctx.confirm(
           `Delete ${ids.length} post${ids.length === 1 ? '' : 's'} (${ids.join(', ')})?`,
@@ -434,9 +391,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
       }
 
       const api = apiFor(program, ctx);
-      const response = await api.call(
-        api.client.api.posts.$delete({ json: { ids } }),
-      );
+      const response = await api.call(api.client.api.posts.$delete({ json: { ids } }));
       const mode = resolveMode(options, ctx.isTTY);
       if (mode === 'json') {
         printResult(ctx, mode, response.results);

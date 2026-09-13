@@ -3,7 +3,7 @@ import {
   CHAR_LIMIT_MAX,
   charLimitOverrideSchema,
   DEFAULT_TIMEZONE,
-  formatUsd,
+  formatCost,
   X_COSTS_USD,
 } from '@perch/core';
 import { LogOut, type LucideIcon, Monitor, Moon, Sun } from 'lucide-react';
@@ -129,7 +129,7 @@ export function Settings() {
             <div className="k">No account connected</div>
             <div className="d">
               Connect an X account to publish. One account at a time. Costs{' '}
-              {formatUsd(X_COSTS_USD.getMe)} once.
+              {formatCost(X_COSTS_USD.getMe)} once.
             </div>
           </div>
           <button className="btn primary" onClick={() => setConfirm('connect')}>
@@ -310,7 +310,7 @@ export function Settings() {
           body={
             <p>
               You will be sent to X to approve Perch. Scopes: read and write posts, upload media,
-              read your profile. The plan check costs <b>{formatUsd(X_COSTS_USD.getMe)}</b> once.
+              read your profile. The plan check costs <b>{formatCost(X_COSTS_USD.getMe)}</b> once.
             </p>
           }
           ok="Continue to X"

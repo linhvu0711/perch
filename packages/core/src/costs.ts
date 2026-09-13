@@ -6,10 +6,6 @@ export const X_COSTS_USD = {
   mediaUpload: 0,
 } as const;
 
-export function formatUsd(amount: number): string {
-  return `$${amount.toFixed(3)}`;
-}
-
 export const X_ENDPOINTS = {
   getMe: 'GET /2/users/me',
   getTweet: 'GET /2/tweets/:id',
