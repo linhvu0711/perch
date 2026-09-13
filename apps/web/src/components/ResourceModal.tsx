@@ -359,7 +359,7 @@ export function ResourceModal(): JSX.Element | null {
               <b>@{resource.author_username}</b>
               <p>{resource.text}</p>
               <p className="muted">{formatDateTime(resource.posted_at)}</p>
-              <a href={resource.tweet_url} target="_blank" rel="noopener noreferrer">
+              <a href={resource.url} target="_blank" rel="noopener noreferrer">
                 Open on X
               </a>
             </div>
