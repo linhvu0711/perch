@@ -6,6 +6,18 @@ export const POST_MEDIA_MAX = 4;
 export const PROMOTE_FROM = ['draft'] as const;
 export const DEMOTE_FROM = ['official', 'failed'] as const;
 export const SCHEDULE_FROM = ['draft', 'official'] as const;
+export const PUBLISH_FROM = ['draft', 'official'] as const;
+export const RETRY_FROM = ['failed'] as const;
+export const RETRY_DELAYS_MS = [60_000, 300_000, 900_000] as const;
+
+/** The time of the next send attempt after a failure, or null when no retry is left. */
+export function nextAttemptAt(scheduledAt: Date, failedAttempts: number): Date | null {
+  const delay = RETRY_DELAYS_MS[failedAttempts - 1];
+  if (delay === undefined) {
+    return null;
+  }
+  return new Date(scheduledAt.getTime() + delay);
+}
 
 /** Checks a post must pass to be promoted, in order; an empty list means ready. */
 export function promoteChecks(input: {

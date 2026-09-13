@@ -33,6 +33,7 @@ import {
   count,
   desc,
   eq,
+  getTableColumns,
   inArray,
   isNotNull,
   isNull,
@@ -44,7 +45,7 @@ import {
 import { decodePostCursor, encodePostCursor } from './cursor';
 import type { Db } from './index';
 import { type MediaFiles, mediaForPosts } from './postMedia';
-import { postLinks, postMedia, posts, postTags, resources } from './schema';
+import { postLinks, postMedia, posts, postTags, resources, xAccounts } from './schema';
 import { getSettings } from './settings';
 import { addPostTags, tagIdsByName, tagsForPosts, tagsForResources } from './tags';
 import { getConnectedAccount } from './xAccounts';
@@ -93,9 +94,10 @@ export class TagExistsError extends Error {
 }
 
 type PostRow = typeof posts.$inferSelect;
+type PostJoinRow = PostRow & { username: string | null };
 
 function toPost(
-  row: PostRow,
+  row: PostJoinRow,
   links: PostLink[],
   media: PostMedia[],
   limit: number,
@@ -111,6 +113,10 @@ function toPost(
     published_at: row.publishedAt?.toISOString() ?? null,
     x_account_id: row.xAccountId,
     x_post_id: row.xPostId,
+    x_post_url:
+      row.username !== null && row.xPostId !== null
+        ? `https://x.com/${row.username}/status/${row.xPostId}`
+        : null,
     last_error: row.lastError,
     retry_count: row.retryCount,
     created_at: row.createdAt.toISOString(),
@@ -247,8 +253,9 @@ export async function createPost(
 
 export function getPost(db: Db, userId: number, id: number): Post | null {
   const row = db
-    .select()
+    .select({ ...getTableColumns(posts), username: xAccounts.username })
     .from(posts)
+    .leftJoin(xAccounts, eq(xAccounts.id, posts.xAccountId))
     .where(and(eq(posts.id, id), eq(posts.userId, userId)))
     .get();
   if (!row) return null;
@@ -350,8 +357,9 @@ export function listPosts(
   }
 
   const rows = db
-    .select()
+    .select({ ...getTableColumns(posts), username: xAccounts.username })
     .from(posts)
+    .leftJoin(xAccounts, eq(xAccounts.id, posts.xAccountId))
     .where(and(...pageConditions))
     .orderBy(sql`${sortTime} IS NULL`, desc(sortTime), desc(posts.id))
     .limit(query.limit + 1)
@@ -421,7 +429,7 @@ export function updatePost(
   return getPost(db, userId, id);
 }
 
-function getPostRow(db: Db, userId: number, id: number): PostRow | undefined {
+export function getPostRow(db: Db, userId: number, id: number): PostRow | undefined {
   return db
     .select()
     .from(posts)

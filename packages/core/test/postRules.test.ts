@@ -2,9 +2,12 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   DEMOTE_FROM,
+  nextAttemptAt,
   PROMOTE_FROM,
+  PUBLISH_FROM,
   promoteChecks,
   readyChecks,
+  RETRY_FROM,
   SCHEDULE_FROM,
 } from '../src/postRules';
 
@@ -46,4 +49,17 @@ describe('status rules', () => {
     expect(DEMOTE_FROM).toEqual(['official', 'failed']);
     expect(SCHEDULE_FROM).toEqual(['draft', 'official']);
   });
+});
+
+test('nextAttemptAt walks +1, +5, +15 from the schedule time, then stops', () => {
+  const scheduledAt = new Date('2026-09-04T10:30:00Z');
+  expect(nextAttemptAt(scheduledAt, 1)?.toISOString()).toBe('2026-09-04T10:31:00.000Z');
+  expect(nextAttemptAt(scheduledAt, 2)?.toISOString()).toBe('2026-09-04T10:35:00.000Z');
+  expect(nextAttemptAt(scheduledAt, 3)?.toISOString()).toBe('2026-09-04T10:45:00.000Z');
+  expect(nextAttemptAt(scheduledAt, 4)).toBeNull();
+});
+
+test('publish and retry status rules', () => {
+  expect(PUBLISH_FROM).toEqual(['draft', 'official']);
+  expect(RETRY_FROM).toEqual(['failed']);
 });

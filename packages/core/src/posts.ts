@@ -42,6 +42,7 @@ export const postSchema = z.object({
   published_at: z.string().nullable(),
   x_account_id: z.number().int().nullable(),
   x_post_id: z.string().nullable(),
+  x_post_url: z.string().nullable(),
   last_error: z.string().nullable(),
   retry_count: z.number().int(),
   created_at: z.string(),

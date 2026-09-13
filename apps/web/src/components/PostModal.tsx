@@ -62,6 +62,7 @@ const EMPTY_POST: Post = {
   published_at: null,
   x_account_id: null,
   x_post_id: null,
+  x_post_url: null,
   last_error: null,
   retry_count: 0,
   created_at: '',
