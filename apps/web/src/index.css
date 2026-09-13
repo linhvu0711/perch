@@ -1316,6 +1316,18 @@ textarea:focus-visible {
 .ta::placeholder {
   color: var(--text-3);
 }
+.dt {
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 6px 9px;
+  background: var(--surface);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  width: 118px;
+}
+.dt.time {
+  width: 64px;
+}
 .field {
   margin-bottom: 16px;
 }
@@ -1444,6 +1456,27 @@ textarea:focus-visible {
 }
 .metric .v.bad {
   color: var(--failed);
+}
+ul.checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+ul.checks li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--text-2);
+}
+ul.checks li.bad {
+  color: var(--failed);
+}
+ul.checks li.ok svg {
+  color: var(--published);
 }
 .linked {
   display: flex;

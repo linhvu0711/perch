@@ -241,6 +241,7 @@ export interface PostFilters {
   status?: PostStatus;
   search?: string;
   resource_id?: number;
+  scheduled?: boolean;
 }
 
 export const POSTS_PAGE_SIZE = 50;
@@ -256,6 +257,9 @@ export function usePosts(filters: PostFilters, enabled = true) {
             ...(filters.search !== undefined ? { search: filters.search } : {}),
             ...(filters.resource_id !== undefined
               ? { resource_id: String(filters.resource_id) }
+              : {}),
+            ...(filters.scheduled !== undefined
+              ? { scheduled: filters.scheduled ? ('true' as const) : ('false' as const) }
               : {}),
             limit: String(POSTS_PAGE_SIZE),
             ...(pageParam !== undefined ? { cursor: pageParam } : {}),
@@ -323,6 +327,63 @@ export function useDeletePosts() {
       void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
       void queryClient.invalidateQueries({ queryKey: ['counts'] });
       void queryClient.invalidateQueries({ queryKey: ['resources', 'list'] });
+    },
+  });
+}
+
+export function usePromotePosts() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: number[]) => unwrap(api.api.posts.promote.$post({ json: { ids } })),
+    onSuccess: (data) => {
+      for (const result of data.results) {
+        if (result.ok) {
+          void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', result.id] });
+        }
+      }
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
+    },
+  });
+}
+
+export function useDemotePosts() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: number[]) => unwrap(api.api.posts.demote.$post({ json: { ids } })),
+    onSuccess: (data) => {
+      for (const result of data.results) {
+        if (result.ok) {
+          void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', result.id] });
+        }
+      }
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
+    },
+  });
+}
+
+export function useUnschedulePosts() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: number[]) => unwrap(api.api.posts.unschedule.$post({ json: { ids } })),
+    onSuccess: (data) => {
+      for (const result of data.results) {
+        if (result.ok) {
+          void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', result.id] });
+        }
+      }
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
+    },
+  });
+}
+
+export function useSchedulePost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, at }: { id: number; at: string }) =>
+      unwrap(api.api.posts[':id'].schedule.$post({ param: { id: String(id) }, json: { at } })),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['posts', 'detail', data.id], data);
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
     },
   });
 }

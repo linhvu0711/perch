@@ -1,5 +1,8 @@
 import type { PostStatus } from '@perch/core';
 import {
+  Calendar,
+  CalendarClock,
+  CalendarOff,
   CircleAlert,
   CircleCheck,
   LayoutGrid,
@@ -34,6 +37,7 @@ const STATUS_TABS: Array<{
 export function Posts() {
   const navigate = useNavigate();
   const [status, setStatus] = useState<PostStatus | undefined>();
+  const [scheduled, setScheduled] = useState<boolean | undefined>();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -45,9 +49,10 @@ export function Posts() {
   const filters = useMemo(
     () => ({
       ...(status !== undefined ? { status } : {}),
+      ...(scheduled !== undefined ? { scheduled } : {}),
       ...(debouncedSearch !== '' ? { search: debouncedSearch } : {}),
     }),
-    [status, debouncedSearch],
+    [status, scheduled, debouncedSearch],
   );
   const posts = usePosts(filters);
   const items = posts.data?.pages.flatMap((page) => page.items) ?? [];
@@ -121,6 +126,50 @@ export function Posts() {
               <TooltipContent>{tab.label}</TooltipContent>
             </Tooltip>
           ))}
+        </div>
+        <div className="seg icons" role="group" aria-label="Scheduled">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="Any time"
+                aria-pressed={scheduled === undefined}
+                data-status="all"
+                onClick={() => setScheduled(undefined)}
+              >
+                <Calendar size={16} strokeWidth={1.75} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Any time</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="Scheduled"
+                aria-pressed={scheduled === true}
+                data-status="scheduled"
+                onClick={() => setScheduled(true)}
+              >
+                <CalendarClock size={16} strokeWidth={1.75} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Scheduled</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="Unscheduled"
+                aria-pressed={scheduled === false}
+                data-status="unscheduled"
+                onClick={() => setScheduled(false)}
+              >
+                <CalendarOff size={16} strokeWidth={1.75} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Unscheduled</TooltipContent>
+          </Tooltip>
         </div>
         <div className="search right">
           <Search size={16} strokeWidth={1.75} />

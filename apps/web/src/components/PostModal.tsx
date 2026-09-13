@@ -3,27 +3,46 @@ import {
   CHAR_LIMIT_DEFAULT,
   COST_POST_USD,
   COST_POST_WITH_URL_USD,
+  DEFAULT_TIMEZONE,
   estimateCost,
   formatCost,
   POST_MEDIA_MAX,
+  readyChecks,
   weightedLength,
 } from '@perch/core';
-import { FileText, FolderOpen, Plus, Trash2, X } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  FileText,
+  FolderOpen,
+  Plus,
+  Trash2,
+  TriangleAlert,
+  X,
+} from 'lucide-react';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 
 import { ApiError, errorMessage } from '@/lib/api';
+import { formatSchedule } from '@/lib/format';
 import {
   useAccount,
   useCreatePost,
   useDeletePosts,
+  useDemotePosts,
   useDetachMedia,
   usePost,
+  usePromotePosts,
+  useSchedulePost,
+  useSettings,
   useUnlinkResources,
+  useUnschedulePosts,
   useUpdatePost,
 } from '@/lib/queries';
 
 import { ConfirmDialog } from './ConfirmDialog';
+import { DateTimePicker } from './DateTimePicker';
 import { IconButton } from './IconButton';
 import { Lightbox } from './Lightbox';
 import { PostPreview } from './PostPreview';
@@ -64,9 +83,15 @@ export function PostModal(): JSX.Element | null {
 
   const postQuery = usePost(isNew || invalidId ? null : parsedId);
   const account = useAccount();
+  const settings = useSettings();
+  const timeZone = settings.data?.timezone ?? DEFAULT_TIMEZONE;
   const createPost = useCreatePost();
   const updatePost = useUpdatePost();
   const deletePosts = useDeletePosts();
+  const promotePosts = usePromotePosts();
+  const demotePosts = useDemotePosts();
+  const schedulePost = useSchedulePost();
+  const unschedulePosts = useUnschedulePosts();
   const unlinkResources = useUnlinkResources();
   const detachMedia = useDetachMedia();
   const modalRef = useRef<HTMLDivElement>(null);
@@ -353,8 +378,55 @@ export function PostModal(): JSX.Element | null {
           <div className="mhead">
             <span className="id">{isNew ? 'new' : `#${viewPost.id}`}</span>
             <StatusPill status={viewPost.status} />
-            <span className="muted">{isNew ? 'New draft' : 'Not scheduled'}</span>
+            <span className="muted">
+              {isNew
+                ? 'New draft'
+                : viewPost.scheduled_at !== null
+                  ? `Scheduled · ${formatSchedule(viewPost.scheduled_at, timeZone)}`
+                  : 'Not scheduled'}
+            </span>
             <div className="right">
+              {!isNew && viewPost.status === 'draft' && (
+                <IconButton
+                  label="Promote to official"
+                  icon={ArrowUp}
+                  variant="primary"
+                  onClick={() => {
+                    if (currentId === undefined) return;
+                    void (async () => {
+                      const ok = await drain();
+                      if (!ok) return;
+                      try {
+                        const response = await promotePosts.mutateAsync([currentId]);
+                        const result = response.results[0];
+                        if (result !== undefined && result.ok) {
+                          toast('Promoted');
+                        } else if (result !== undefined) {
+                          toast(result.error.errors?.[0]?.message ?? result.error.message, 'warn');
+                        }
+                      } catch (error) {
+                        toast(errorMessage(error), 'warn');
+                      }
+                    })();
+                  }}
+                />
+              )}
+              {!isNew && (viewPost.status === 'official' || viewPost.status === 'failed') && (
+                <IconButton
+                  label="Demote to draft"
+                  icon={ArrowDown}
+                  variant="ghost"
+                  onClick={() => {
+                    if (currentId === undefined) return;
+                    void demotePosts
+                      .mutateAsync([currentId])
+                      .then((response) => {
+                        if (response.results[0]?.ok) toast('Demoted to draft');
+                      })
+                      .catch((error: unknown) => toast(errorMessage(error), 'warn'));
+                  }}
+                />
+              )}
               {!isNew && (
                 <IconButton
                   label="Delete post"
@@ -476,6 +548,39 @@ export function PostModal(): JSX.Element | null {
                 </div>
               </div>
               <div className="field">
+                {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the picker */}
+                <label>Schedule</label>
+                <DateTimePicker
+                  value={viewPost.scheduled_at}
+                  timeZone={timeZone}
+                  disabled={readOnly}
+                  onSet={(at) => {
+                    void (async () => {
+                      const postId = await ensurePostId();
+                      if (postId === null) return;
+                      try {
+                        await schedulePost.mutateAsync({ id: postId, at });
+                        toast('Schedule saved');
+                      } catch (error) {
+                        toast(errorMessage(error), 'warn');
+                      }
+                    })();
+                  }}
+                  onClear={() => {
+                    if (currentId === undefined) return;
+                    void unschedulePosts
+                      .mutateAsync([currentId])
+                      .then(() => toast('Schedule cleared'))
+                      .catch((error: unknown) => toast(errorMessage(error), 'warn'));
+                  }}
+                />
+                {viewPost.status === 'draft' && viewPost.scheduled_at !== null && (
+                  <span className="note">
+                    A scheduled <b>draft</b> is not sent. Promote it so the scheduler sends it.
+                  </span>
+                )}
+              </div>
+              <div className="field">
                 {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the links list */}
                 <label>
                   Linked resources <span className="faint">{viewPost.links.length}</span>
@@ -547,9 +652,33 @@ export function PostModal(): JSX.Element | null {
                 </div>
                 <div className="card metric">
                   <div className="l">Publish as</div>
-                  <div className="v">—</div>
+                  <div className="v">
+                    {account.data?.account != null ? `@${account.data.account.username}` : '—'}
+                  </div>
                 </div>
               </div>
+              {!readOnly && (
+                <div>
+                  <h2>Ready to publish?</h2>
+                  <ul className="checks">
+                    {readyChecks({
+                      text: viewPost.text,
+                      limit: viewPost.limit,
+                      mediaCount: viewPost.media.length,
+                      accountConnected: account.data?.account != null,
+                    }).checks.map((check) => (
+                      <li key={check.code} className={check.ok ? 'ok' : 'bad'}>
+                        {check.ok ? (
+                          <Check size={14} strokeWidth={2} />
+                        ) : (
+                          <TriangleAlert size={14} strokeWidth={1.75} />
+                        )}
+                        {check.label}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className="note">
                 {hasUrl ? (
                   <>

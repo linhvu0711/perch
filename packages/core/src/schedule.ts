@@ -44,6 +44,12 @@ function parseTime(input: string): string | null {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
+const ISO_RE = /^(\d{4}-\d{2}-\d{2})t(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(z|[+-]\d{2}:\d{2})?$/;
+const DATE_TIME_RE = /^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})$/;
+const RELATIVE_RE = /^\+(\d+)([mhd])$/;
+const TODAY_RE = /^(today|tomorrow) (.+)$/;
+const WEEKDAY_RE = /^(?:next )?(sun|mon|tue|wed|thu|fri|sat)[a-z]* (.+)$/;
+
 /**
  * Parses `input` as a time in `timeZone` and returns the UTC instant.
  * Forms: ISO, `YYYY-MM-DD HH:mm`, `+Nm`/`+Nh`/`+Nd`, `today|tomorrow <time>`,
@@ -54,11 +60,12 @@ export function parseScheduleTime(input: string, timeZone: string, now: Date): D
   const value = input.trim().toLowerCase();
   let result: Date;
 
-  let match = /^(\d{4}-\d{2}-\d{2})t(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(z|[+-]\d{2}:\d{2})?$/.exec(
-    value,
-  );
-  if (match !== null) {
-    const date = match[1]!;
+  const isoMatch = ISO_RE.exec(value);
+  const dateTimeMatch = isoMatch === null ? DATE_TIME_RE.exec(value) : null;
+  const relMatch = isoMatch === null && dateTimeMatch === null ? RELATIVE_RE.exec(value) : null;
+  if (isoMatch !== null) {
+    const match = isoMatch;
+    const date = match[1] as string;
     const [y, m, d] = date.split('-').map(Number) as [number, number, number];
     if (!isCalendarDate(y, m, d)) return null;
     if (match[4] !== undefined) {
@@ -66,13 +73,15 @@ export function parseScheduleTime(input: string, timeZone: string, now: Date): D
       if (Number.isNaN(parsed.getTime())) return null;
       result = parsed;
     } else {
-      result = zonedToUtc(date, `${match[2]!}:${match[3]!}`, timeZone);
+      result = zonedToUtc(date, `${match[2]}:${match[3]}`, timeZone);
     }
-  } else if ((match = /^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})$/.exec(value)) !== null) {
-    const [y, m, d] = match[1]!.split('-').map(Number) as [number, number, number];
+  } else if (dateTimeMatch !== null) {
+    const match = dateTimeMatch;
+    const [y, m, d] = (match[1] as string).split('-').map(Number) as [number, number, number];
     if (!isCalendarDate(y, m, d)) return null;
-    result = zonedToUtc(match[1]!, `${match[2]!}:${match[3]!}`, timeZone);
-  } else if ((match = /^\+(\d+)([mhd])$/.exec(value)) !== null) {
+    result = zonedToUtc(match[1] as string, `${match[2]}:${match[3]}`, timeZone);
+  } else if (relMatch !== null) {
+    const match = relMatch;
     const amount = Number(match[1]);
     if (match[2] === 'm') {
       result = new Date(now.getTime() + amount * 60_000);
@@ -82,27 +91,24 @@ export function parseScheduleTime(input: string, timeZone: string, now: Date): D
       const parts = zonedParts(now, timeZone);
       result = zonedToUtc(addDays(parts.date, amount), parts.time, timeZone);
     }
-  } else if ((match = /^(today|tomorrow) (.+)$/.exec(value)) !== null) {
-    const time = parseTime(match[2]!);
-    if (time === null) return null;
-    const parts = zonedParts(now, timeZone);
-    result = zonedToUtc(
-      match[1] === 'tomorrow' ? addDays(parts.date, 1) : parts.date,
-      time,
-      timeZone,
-    );
-  } else if (
-    (match = /^(?:next )?(sun|mon|tue|wed|thu|fri|sat)[a-z]* (.+)$/.exec(value)) !== null
-  ) {
-    const time = parseTime(match[2]!);
-    if (time === null) return null;
-    const parts = zonedParts(now, timeZone);
-    const target = WEEKDAY_NUMBERS[match[1]!] ?? 0;
-    let delta = (target - parts.weekday + 7) % 7;
-    if (delta === 0) delta = 7;
-    result = zonedToUtc(addDays(parts.date, delta), time, timeZone);
   } else {
-    return null;
+    const word = TODAY_RE.exec(value) ?? WEEKDAY_RE.exec(value);
+    if (word === null) return null;
+    const time = parseTime(word[2] as string);
+    if (time === null) return null;
+    const parts = zonedParts(now, timeZone);
+    if (word[1] === 'today' || word[1] === 'tomorrow') {
+      result = zonedToUtc(
+        word[1] === 'tomorrow' ? addDays(parts.date, 1) : parts.date,
+        time,
+        timeZone,
+      );
+    } else {
+      const target = WEEKDAY_NUMBERS[word[1] as string] ?? 0;
+      let delta = (target - parts.weekday + 7) % 7;
+      if (delta === 0) delta = 7;
+      result = zonedToUtc(addDays(parts.date, delta), time, timeZone);
+    }
   }
 
   result.setSeconds(0, 0);

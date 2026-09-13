@@ -1,11 +1,13 @@
-import type { Post } from '@perch/core';
+import { DEFAULT_TIMEZONE, type Post } from '@perch/core';
 import { Link } from 'react-router';
 
 import { formatDateTime, formatDayMonth } from '@/lib/format';
+import { useSettings } from '@/lib/queries';
 
 import { StatusPill } from './StatusPill';
 
 export function PostRow({ post }: { post: Post }) {
+  const timeZone = useSettings().data?.timezone ?? DEFAULT_TIMEZONE;
   const time = post.scheduled_at ?? post.published_at;
   const firstLine = post.text.split('\n', 1)[0]?.trim() ?? '';
 
@@ -16,8 +18,8 @@ export function PostRow({ post }: { post: Post }) {
           <span className="muted">no time</span>
         ) : (
           <>
-            <b>{formatDayMonth(time)}</b>
-            {formatDateTime(time)}
+            <b>{formatDayMonth(time, timeZone)}</b>
+            {formatDateTime(time, timeZone)}
           </>
         )}
       </div>

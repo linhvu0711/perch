@@ -1,6 +1,7 @@
-import type { Post } from '@perch/core';
-import { foldPreview, previewSegments } from '@perch/core';
+import { DEFAULT_TIMEZONE, foldPreview, type Post, previewSegments } from '@perch/core';
 import { useState } from 'react';
+
+import { useSettings } from '@/lib/queries';
 
 function Segments({ text }: { text: string }) {
   const segments = previewSegments(text);
@@ -23,6 +24,7 @@ function Segments({ text }: { text: string }) {
 }
 
 export function PostPreview({ post }: { post: Post }) {
+  const timeZone = useSettings().data?.timezone ?? DEFAULT_TIMEZONE;
   const [expanded, setExpanded] = useState(false);
   const fold = foldPreview(post.text);
   const visible = expanded ? post.text : fold.visible;
@@ -78,9 +80,11 @@ export function PostPreview({ post }: { post: Post }) {
             ? new Date(post.scheduled_at).toLocaleString('en-US', {
                 hour: '2-digit',
                 minute: '2-digit',
+                hour12: false,
                 month: 'short',
                 day: 'numeric',
                 year: 'numeric',
+                timeZone,
               })
             : 'Not scheduled'}
         </div>
