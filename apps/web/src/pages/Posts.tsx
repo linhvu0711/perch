@@ -11,7 +11,7 @@ import {
   Search,
   ShieldCheck,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type JSX, useEffect, useMemo, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router';
 
 import { Empty } from '@/components/Empty';
@@ -58,7 +58,7 @@ export function Posts() {
   const items = posts.data?.pages.flatMap((page) => page.items) ?? [];
   const total = Math.max(posts.data?.pages[0]?.total ?? 0, items.length);
 
-  let content;
+  let content: JSX.Element;
   if (posts.isPending) {
     content = <div className="countline">Loading…</div>;
   } else if (posts.isError) {
