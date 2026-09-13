@@ -1,11 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import {
-  MIRROR_MANIFEST_FILE,
-  mirrorManifestSchema,
-  type MirrorManifest,
-} from '@perch/core';
+import { MIRROR_MANIFEST_FILE, type MirrorManifest, mirrorManifestSchema } from '@perch/core';
 import type { Command } from 'commander';
 
 import { resolveMirrorDir } from '../config';

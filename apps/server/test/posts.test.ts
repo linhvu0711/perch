@@ -175,9 +175,7 @@ describe('posts', () => {
     expect((await list('?status=published')).items.map((i) => i.id)).toEqual([5]);
     expect((await list('?search=banana')).items.map((i) => i.id)).toEqual([1]);
     expect((await list('?search=BANANA')).items.map((i) => i.id)).toEqual([1]);
-    expect(
-      (await list('?from=2026-09-11&to=2026-09-12')).items.map((i) => i.id),
-    ).toEqual([4, 5]);
+    expect((await list('?from=2026-09-11&to=2026-09-12')).items.map((i) => i.id)).toEqual([4, 5]);
     expect((await list('?from=2026-09-12')).items.map((i) => i.id)).toEqual([4]);
     expect((await list('?to=2026-09-10')).items.map((i) => i.id)).toEqual([3]);
     expect((await list('?resource_id=1')).items.map((i) => i.id)).toEqual([2]);

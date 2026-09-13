@@ -21,12 +21,7 @@ export const noteResourceSchema = z.object({
   body: z.string(),
   used_by: z.number().int().nonnegative().optional(),
 });
-export const IMAGE_MIME_TYPES = [
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/gif',
-] as const;
+export const IMAGE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const;
 export const IMAGE_BYTES_MAX = 5 * 1024 * 1024;
 export const imageResourceSchema = z.object({
   id: z.number().int().positive(),

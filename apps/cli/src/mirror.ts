@@ -3,9 +3,9 @@ import path from 'node:path';
 
 import {
   MIRROR_MANIFEST_FILE,
+  type MirrorManifest,
   mirrorFile,
   mirrorManifestSchema,
-  type MirrorManifest,
   type Resource,
 } from '@perch/core';
 
@@ -31,9 +31,7 @@ export function applyMirror(
   if (fs.existsSync(manifestPath)) {
     let parsed: ReturnType<typeof mirrorManifestSchema.safeParse> | null = null;
     try {
-      parsed = mirrorManifestSchema.safeParse(
-        JSON.parse(fs.readFileSync(manifestPath, 'utf8')),
-      );
+      parsed = mirrorManifestSchema.safeParse(JSON.parse(fs.readFileSync(manifestPath, 'utf8')));
     } catch {
       // syntax or read error: treated as an invalid manifest below
     }
@@ -46,9 +44,7 @@ export function applyMirror(
     old = parsed.data;
   }
 
-  const entries = resources
-    .map(mirrorFile)
-    .filter((e): e is NonNullable<typeof e> => e !== null);
+  const entries = resources.map(mirrorFile).filter((e): e is NonNullable<typeof e> => e !== null);
   const nextPaths = entries.map((e) => e.path).sort();
 
   writeManifest(dir, {
@@ -63,9 +59,7 @@ export function applyMirror(
   for (const entry of entries) {
     const full = path.join(dir, entry.path);
     try {
-      const existing = fs.existsSync(full)
-        ? fs.readFileSync(full, 'utf8')
-        : null;
+      const existing = fs.existsSync(full) ? fs.readFileSync(full, 'utf8') : null;
       if (existing === entry.content) continue;
       fs.mkdirSync(path.dirname(full), { recursive: true });
       fs.writeFileSync(full, entry.content);

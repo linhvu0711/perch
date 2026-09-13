@@ -18,10 +18,7 @@ export function toXAccount(row: XAccountRow): XAccount {
   };
 }
 
-export function getConnectedAccount(
-  db: Db,
-  userId: number,
-): XAccountRow | null {
+export function getConnectedAccount(db: Db, userId: number): XAccountRow | null {
   const row = db
     .select()
     .from(xAccounts)
@@ -56,19 +53,14 @@ export function connectAccount(
       .all();
 
     for (const row of replaced) {
-      tx.update(xAccounts)
-        .set({ disconnectedAt: input.now })
-        .where(eq(xAccounts.id, row.id))
-        .run();
+      tx.update(xAccounts).set({ disconnectedAt: input.now }).where(eq(xAccounts.id, row.id)).run();
     }
 
     const expiresAt = new Date(input.now.getTime() + input.tokens.expiresIn * 1000);
     const existing = tx
       .select()
       .from(xAccounts)
-      .where(
-        and(eq(xAccounts.userId, userId), eq(xAccounts.xUserId, input.xUserId)),
-      )
+      .where(and(eq(xAccounts.userId, userId), eq(xAccounts.xUserId, input.xUserId)))
       .get();
 
     const account = existing
@@ -116,12 +108,7 @@ export function connectAccount(
   });
 }
 
-export function storeRefreshedTokens(
-  db: Db,
-  id: number,
-  tokens: XTokens,
-  now: Date,
-): void {
+export function storeRefreshedTokens(db: Db, id: number, tokens: XTokens, now: Date): void {
   db.update(xAccounts)
     .set({
       accessToken: tokens.accessToken,
@@ -134,17 +121,11 @@ export function storeRefreshedTokens(
 }
 
 export function markReconnectRequired(db: Db, id: number): void {
-  db.update(xAccounts)
-    .set({ reconnectRequired: true })
-    .where(eq(xAccounts.id, id))
-    .run();
+  db.update(xAccounts).set({ reconnectRequired: true }).where(eq(xAccounts.id, id)).run();
 }
 
 export function disconnectAccount(db: Db, id: number, now: Date): void {
-  db.update(xAccounts)
-    .set({ disconnectedAt: now })
-    .where(eq(xAccounts.id, id))
-    .run();
+  db.update(xAccounts).set({ disconnectedAt: now }).where(eq(xAccounts.id, id)).run();
 }
 
 export function accountsDueForRefresh(db: Db, before: Date): XAccountRow[] {

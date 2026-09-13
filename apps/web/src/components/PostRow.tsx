@@ -24,13 +24,9 @@ export function PostRow({ post }: { post: Post }) {
       <div className="txt">
         {post.title !== '' && <b>{post.title}</b>}
         {firstLine !== '' && firstLine !== post.title && (
-          <span className={post.title !== '' ? 'muted' : undefined}>
-            {firstLine}
-          </span>
+          <span className={post.title !== '' ? 'muted' : undefined}>{firstLine}</span>
         )}
-        {post.title === '' && firstLine === '' && (
-          <span className="faint">Empty post</span>
-        )}
+        {post.title === '' && firstLine === '' && <span className="faint">Empty post</span>}
       </div>
       <span className="pid">#{post.id}</span>
       <StatusPill status={post.status} />

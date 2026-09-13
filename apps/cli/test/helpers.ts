@@ -3,11 +3,12 @@ import path from 'node:path';
 import type { TestServer } from '@perch/server/testing';
 
 import type { CliContext } from '../src/context';
+import type { CliEnv } from '../src/env';
 
 export function makeCtx(
   server: TestServer,
   over: Partial<CliContext> & {
-    env?: Record<string, string>;
+    env?: CliEnv;
     stdin?: string;
     stdinIsTTY?: boolean;
     confirmAnswer?: boolean;
@@ -29,15 +30,22 @@ export function makeCtx(
   const ctx: CliContext = {
     argv: [],
     env: { PERCH_TOKEN: server.token, ...over.env },
-    stdout: { write: (value) => void (stdout += value) },
-    stderr: { write: (value) => void (stderr += value) },
+    stdout: {
+      write: (value) => {
+        stdout += value;
+      },
+    },
+    stderr: {
+      write: (value) => {
+        stderr += value;
+      },
+    },
     isTTY: false,
     stdinIsTTY: over.stdinIsTTY ?? false,
     configPath: path.join(server.dir, 'config.json'),
     homeDir: server.dir,
     now: () => new Date('2026-09-04T10:00:00Z'),
-    fetch: ((input, init) =>
-      server.app.request(new Request(input, init))) as typeof fetch,
+    fetch: ((input, init) => server.app.request(new Request(input, init))) as typeof fetch,
     openUrl: async (url) => {
       opened.push(url);
     },

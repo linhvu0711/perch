@@ -1,26 +1,14 @@
 import {
-  noteTitle,
   type ImageResource,
   type NoteCreate,
+  noteTitle,
   type Resource,
   type ResourceDeleteResponse,
   type ResourceList,
   type ResourceListQuery,
   type ResourcePatch,
 } from '@perch/core';
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  gt,
-  lt,
-  or,
-  sql,
-  getTableColumns,
-  type SQL,
-} from 'drizzle-orm';
+import { and, asc, count, desc, eq, getTableColumns, gt, lt, or, type SQL, sql } from 'drizzle-orm';
 
 import { decodeCursor, encodeCursor } from './cursor';
 import type { Db } from './index';
@@ -178,11 +166,7 @@ export function listAllResources(db: Db, userId: number): Resource[] {
   return rows.map((row) => toResource(row, row.usedBy));
 }
 
-export function listResources(
-  db: Db,
-  userId: number,
-  query: ResourceListQuery,
-): ResourceList {
+export function listResources(db: Db, userId: number, query: ResourceListQuery): ResourceList {
   const filterConditions: SQL[] = [eq(resources.userId, userId)];
 
   if (query.type !== undefined) filterConditions.push(eq(resources.type, query.type));
@@ -217,9 +201,7 @@ export function listResources(
             lt(sortValue, key.createdAt),
             and(
               eq(sortValue, key.createdAt),
-              sortByUsed
-                ? gt(resources.id, key.id)
-                : lt(resources.id, key.id),
+              sortByUsed ? gt(resources.id, key.id) : lt(resources.id, key.id),
             ),
           )!
         : or(

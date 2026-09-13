@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { foldPreview, previewSegments } from '@perch/core';
 import type { Post } from '@perch/core';
+import { foldPreview, previewSegments } from '@perch/core';
+import { useState } from 'react';
 
 function Segments({ text }: { text: string }) {
   const segments = previewSegments(text);
@@ -41,9 +41,7 @@ export function PostPreview({ post }: { post: Post }) {
               {paragraphs.map((paragraph, index) => (
                 <p key={index}>
                   <Segments text={paragraph} />
-                  {!expanded && fold.folded && index === paragraphs.length - 1
-                    ? '…'
-                    : ''}
+                  {!expanded && fold.folded && index === paragraphs.length - 1 ? '…' : ''}
                 </p>
               ))}
               {fold.folded && (

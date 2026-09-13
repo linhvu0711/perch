@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
+import type { Post } from '@perch/core';
 import {
   CHAR_LIMIT_DEFAULT,
   COST_POST_USD,
@@ -7,8 +7,8 @@ import {
   formatCost,
   weightedLength,
 } from '@perch/core';
-import type { Post } from '@perch/core';
 import { FileText, FolderOpen, Trash2, X } from 'lucide-react';
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 
 import { ApiError, errorMessage } from '@/lib/api';
@@ -43,7 +43,7 @@ const EMPTY_POST: Post = {
   updated_at: '',
   character_count: 0,
   limit: CHAR_LIMIT_DEFAULT,
-  estimated_cost: 0.015,
+  estimated_cost: COST_POST_USD,
   links: [],
   media: [],
 };
@@ -72,9 +72,7 @@ export function PostModal(): JSX.Element | null {
   const pendingRef = useRef<{ title?: string; text?: string }>({});
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [confirm, setConfirm] = useState<'delete' | null>(null);
-  const [drafts, setDrafts] = useState<{ title: string; text: string } | null>(
-    null,
-  );
+  const [drafts, setDrafts] = useState<{ title: string; text: string } | null>(null);
 
   const post = postQuery.data;
   const readOnly = post?.status === 'published';
@@ -90,10 +88,7 @@ export function PostModal(): JSX.Element | null {
   }, [invalidId, navigate]);
 
   useEffect(() => {
-    if (
-      postQuery.error instanceof ApiError &&
-      postQuery.error.status === 404
-    ) {
+    if (postQuery.error instanceof ApiError && postQuery.error.status === 404) {
       toast('Post not found', 'warn');
       navigate('/posts', { replace: true });
     }
@@ -128,8 +123,7 @@ export function PostModal(): JSX.Element | null {
   const flush = useCallback((): Promise<boolean> => {
     queueRef.current = queueRef.current.then(async () => {
       const patch = pendingRef.current;
-      const hasChanges =
-        patch.title !== undefined || patch.text !== undefined;
+      const hasChanges = patch.title !== undefined || patch.text !== undefined;
       pendingRef.current = {};
       let id = currentId;
       if (id === undefined) {
@@ -160,8 +154,7 @@ export function PostModal(): JSX.Element | null {
     let ok = await flush();
     while (
       ok &&
-      (pendingRef.current.title !== undefined ||
-        pendingRef.current.text !== undefined)
+      (pendingRef.current.title !== undefined || pendingRef.current.text !== undefined)
     ) {
       ok = await flush();
     }
@@ -240,9 +233,7 @@ export function PostModal(): JSX.Element | null {
       const result = response.results.find((r) => r.id === currentId);
       if (result === undefined || !result.ok) {
         throw new Error(
-          result !== undefined && !result.ok
-            ? result.error.message
-            : 'Delete failed',
+          result !== undefined && !result.ok ? result.error.message : 'Delete failed',
         );
       }
       setConfirm(null);
@@ -284,9 +275,7 @@ export function PostModal(): JSX.Element | null {
     return loadingShell(<div className="muted">Loading…</div>);
   }
   if (!isNew && postQuery.isError) {
-    return loadingShell(
-      <div className="muted">{errorMessage(postQuery.error)}</div>,
-    );
+    return loadingShell(<div className="muted">{errorMessage(postQuery.error)}</div>);
   }
 
   const viewPost: Post = {
@@ -298,11 +287,7 @@ export function PostModal(): JSX.Element | null {
     limit: post?.limit ?? account.data?.char_limit ?? CHAR_LIMIT_DEFAULT,
   };
   const over = viewPost.character_count > viewPost.limit;
-  const metricClass = over
-    ? 'bad'
-    : viewPost.character_count === 0
-      ? 'warn'
-      : 'ok';
+  const metricClass = over ? 'bad' : viewPost.character_count === 0 ? 'warn' : 'ok';
   const hasUrl = viewPost.estimated_cost > COST_POST_USD;
 
   return (
@@ -322,9 +307,7 @@ export function PostModal(): JSX.Element | null {
           <div className="mhead">
             <span className="id">{isNew ? 'new' : `#${viewPost.id}`}</span>
             <StatusPill status={viewPost.status} />
-            <span className="muted">
-              {isNew ? 'New draft' : 'Not scheduled'}
-            </span>
+            <span className="muted">{isNew ? 'New draft' : 'Not scheduled'}</span>
             <div className="right">
               {!isNew && (
                 <IconButton
@@ -335,12 +318,7 @@ export function PostModal(): JSX.Element | null {
                   onClick={() => setConfirm('delete')}
                 />
               )}
-              <IconButton
-                label="Close (Esc)"
-                icon={X}
-                variant="ghost"
-                onClick={requestClose}
-              />
+              <IconButton label="Close (Esc)" icon={X} variant="ghost" onClick={requestClose} />
             </div>
           </div>
           <div className="mbody">
@@ -379,8 +357,7 @@ export function PostModal(): JSX.Element | null {
               </div>
               <div className="field">
                 <label>
-                  Linked resources{' '}
-                  <span className="faint">{viewPost.links.length}</span>
+                  Linked resources <span className="faint">{viewPost.links.length}</span>
                   {!readOnly && (
                     <span className="right">
                       <IconButton
@@ -417,9 +394,7 @@ export function PostModal(): JSX.Element | null {
                                 resource_ids: [link.resource_id],
                               })
                               .then(() => toast('Unlinked'))
-                              .catch((error: unknown) =>
-                                toast(errorMessage(error), 'warn'),
-                              );
+                              .catch((error: unknown) => toast(errorMessage(error), 'warn'));
                           }}
                         >
                           <X size={14} strokeWidth={1.75} />
@@ -437,8 +412,7 @@ export function PostModal(): JSX.Element | null {
                 <div className="card metric">
                   <div className="l">Characters</div>
                   <div className={`v ${metricClass}`}>
-                    {viewPost.character_count.toLocaleString()} /{' '}
-                    {viewPost.limit.toLocaleString()}
+                    {viewPost.character_count.toLocaleString()} / {viewPost.limit.toLocaleString()}
                   </div>
                 </div>
                 <div className="card metric">
@@ -455,15 +429,13 @@ export function PostModal(): JSX.Element | null {
               <div className="note">
                 {hasUrl ? (
                   <>
-                    <b>This post has a link.</b> X bills it at{' '}
-                    {formatCost(COST_POST_WITH_URL_USD)} instead of{' '}
-                    {formatCost(COST_POST_USD)}.
+                    <b>This post has a link.</b> X bills it at {formatCost(COST_POST_WITH_URL_USD)}{' '}
+                    instead of {formatCost(COST_POST_USD)}.
                   </>
                 ) : (
                   <>
-                    <b>Cost rule.</b> A post is {formatCost(COST_POST_USD)}.
-                    Any http(s) link makes it{' '}
-                    {formatCost(COST_POST_WITH_URL_USD)}. Images are free.
+                    <b>Cost rule.</b> A post is {formatCost(COST_POST_USD)}. Any http(s) link makes
+                    it {formatCost(COST_POST_WITH_URL_USD)}. Images are free.
                   </>
                 )}
               </div>

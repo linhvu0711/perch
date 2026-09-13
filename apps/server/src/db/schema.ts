@@ -98,9 +98,7 @@ export const xAccounts = sqliteTable(
     expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
     connectedAt: integer('connected_at', { mode: 'timestamp_ms' }).notNull(),
     disconnectedAt: integer('disconnected_at', { mode: 'timestamp_ms' }),
-    reconnectRequired: integer('reconnect_required', { mode: 'boolean' })
-      .notNull()
-      .default(false),
+    reconnectRequired: integer('reconnect_required', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => [uniqueIndex('x_accounts_user_x_user_idx').on(t.userId, t.xUserId)],
 );

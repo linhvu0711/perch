@@ -8,9 +8,7 @@ let current: Theme = readTheme();
 export function readTheme(): Theme {
   try {
     const value = localStorage.getItem('perch-theme');
-    return value === 'light' || value === 'dark' || value === 'system'
-      ? value
-      : 'system';
+    return value === 'light' || value === 'dark' || value === 'system' ? value : 'system';
   } catch {
     return 'system';
   }

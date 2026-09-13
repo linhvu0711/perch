@@ -32,13 +32,9 @@ export function addOpenCommands(program: Command, ctx: CliContext): void {
         const api = createApi(ctx, serverUrl, resolveToken(ctx));
 
         if (kind === 'post') {
-          await api.call(
-            api.client.api.posts[':id'].$get({ param: { id: String(id) } }),
-          );
+          await api.call(api.client.api.posts[':id'].$get({ param: { id: String(id) } }));
         } else {
-          await api.call(
-            api.client.api.resources[':id'].$get({ param: { id: String(id) } }),
-          );
+          await api.call(api.client.api.resources[':id'].$get({ param: { id: String(id) } }));
         }
 
         const url = `${serverUrl}/${kind}s/${id}`;

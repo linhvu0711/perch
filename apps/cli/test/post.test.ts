@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
+import { POST_LIST_LIMIT_DEFAULT } from '@perch/core';
 import type { TestServer } from '@perch/server/testing';
 import { createTestServer } from '@perch/server/testing';
 
@@ -43,9 +44,7 @@ describe('post create', () => {
     fs.writeFileSync(filePath, 'from file');
 
     const text = makeCtx(server);
-    expect(
-      await runCli(['post', 'create', '--text', 'Hello world', '--json'], text.ctx),
-    ).toBe(0);
+    expect(await runCli(['post', 'create', '--text', 'Hello world', '--json'], text.ctx)).toBe(0);
     expect(JSON.parse(text.out())).toMatchObject({
       status: 'draft',
       text: 'Hello world',
@@ -70,10 +69,7 @@ describe('post create', () => {
 
     const both = makeCtx(server);
     expect(
-      await runCli(
-        ['post', 'create', '--text', 'a', '--file', filePath, '--json'],
-        both.ctx,
-      ),
+      await runCli(['post', 'create', '--text', 'a', '--file', filePath, '--json'], both.ctx),
     ).toBe(1);
     expect(JSON.parse(both.err()).code).toBe('bad_args');
 
@@ -93,17 +89,12 @@ describe('post edit', () => {
 
     const text = makeCtx(server);
     expect(
-      await runCli(
-        ['post', 'edit', '1', '--text', 'new', '--title', 'T', '--json'],
-        text.ctx,
-      ),
+      await runCli(['post', 'edit', '1', '--text', 'new', '--title', 'T', '--json'], text.ctx),
     ).toBe(0);
     expect(JSON.parse(text.out())).toMatchObject({ text: 'new', title: 'T' });
 
     const file = makeCtx(server);
-    expect(
-      await runCli(['post', 'edit', '1', '--file', filePath, '--json'], file.ctx),
-    ).toBe(0);
+    expect(await runCli(['post', 'edit', '1', '--file', filePath, '--json'], file.ctx)).toBe(0);
     expect(JSON.parse(file.out())).toMatchObject({ text: 'from file' });
 
     const stdin = makeCtx(server, { stdin: 'from stdin' });
@@ -134,10 +125,7 @@ describe('post list and show', () => {
     const one = makeCtx(server);
     await runCli(['post', 'create', '--text', 'banana split', '--json'], one.ctx);
     const two = makeCtx(server);
-    await runCli(
-      ['post', 'create', '--title', 'Named', '--text', 'body', '--json'],
-      two.ctx,
-    );
+    await runCli(['post', 'create', '--title', 'Named', '--text', 'body', '--json'], two.ctx);
 
     const all = makeCtx(server);
     expect(await runCli(['post', 'list', '--json'], all.ctx)).toBe(0);
@@ -148,15 +136,10 @@ describe('post list and show', () => {
 
     const search = makeCtx(server);
     await runCli(['post', 'list', '--search', 'banana', '--json'], search.ctx);
-    expect(JSON.parse(search.out()).items.map((i: { id: number }) => i.id)).toEqual(
-      [1],
-    );
+    expect(JSON.parse(search.out()).items.map((i: { id: number }) => i.id)).toEqual([1]);
 
     const status = makeCtx(server);
-    await runCli(
-      ['post', 'list', '--status', 'published', '--json'],
-      status.ctx,
-    );
+    await runCli(['post', 'list', '--status', 'published', '--json'], status.ctx);
     expect(JSON.parse(status.out()).items).toEqual([]);
 
     const page1 = makeCtx(server);
@@ -168,14 +151,10 @@ describe('post list and show', () => {
       ['post', 'list', '--limit', '1', '--cursor', first.next_cursor, '--json'],
       page2.ctx,
     );
-    expect(JSON.parse(page2.out()).items.map((i: { id: number }) => i.id)).toEqual(
-      [1],
-    );
+    expect(JSON.parse(page2.out()).items.map((i: { id: number }) => i.id)).toEqual([1]);
 
     const badStatus = makeCtx(server);
-    expect(
-      await runCli(['post', 'list', '--status', 'nope', '--json'], badStatus.ctx),
-    ).toBe(1);
+    expect(await runCli(['post', 'list', '--status', 'nope', '--json'], badStatus.ctx)).toBe(1);
     expect(JSON.parse(badStatus.err()).code).toBe('bad_value');
 
     const table = makeCtx(server, { isTTY: true });
@@ -192,6 +171,23 @@ describe('post list and show', () => {
     const badId = makeCtx(server);
     expect(await runCli(['post', 'show', 'abc', '--json'], badId.ctx)).toBe(1);
     expect(JSON.parse(badId.err()).code).toBe('bad_args');
+  });
+
+  test('lists at most POST_LIST_LIMIT_DEFAULT posts by default', async () => {
+    // Given: POST_LIST_LIMIT_DEFAULT + 1 posts
+    for (let i = 0; i < POST_LIST_LIMIT_DEFAULT + 1; i++) {
+      const ctx = makeCtx(server);
+      await runCli(['post', 'create', '--text', `post ${i}`, '--json'], ctx.ctx);
+    }
+
+    // When: post list without --limit
+    const list = makeCtx(server);
+    await runCli(['post', 'list', '--json'], list.ctx);
+
+    // Then: the page holds the core default, not a CLI copy
+    const result = JSON.parse(list.out());
+    expect(result.items).toHaveLength(POST_LIST_LIMIT_DEFAULT);
+    expect(result.total).toBe(POST_LIST_LIMIT_DEFAULT + 1);
   });
 });
 
@@ -233,12 +229,9 @@ describe('post link and unlink', () => {
     await runCli(['post', 'create', '--json'], setup.ctx);
 
     const link = makeCtx(server);
-    expect(
-      await runCli(
-        ['post', 'link', '1', '--resource', '1', '999', '--json'],
-        link.ctx,
-      ),
-    ).toBe(1);
+    expect(await runCli(['post', 'link', '1', '--resource', '1', '999', '--json'], link.ctx)).toBe(
+      1,
+    );
     expect(JSON.parse(link.out())).toEqual([
       { id: 1, ok: true },
       {
@@ -250,22 +243,13 @@ describe('post link and unlink', () => {
     expect(link.err()).toBe('');
 
     const link2 = makeCtx(server);
-    expect(
-      await runCli(['post', 'link', '1', '--resource', '2', '--json'], link2.ctx),
-    ).toBe(0);
+    expect(await runCli(['post', 'link', '1', '--resource', '2', '--json'], link2.ctx)).toBe(0);
 
     const unlink = makeCtx(server);
-    expect(
-      await runCli(
-        ['post', 'unlink', '1', '--resource', '1', '--json'],
-        unlink.ctx,
-      ),
-    ).toBe(0);
+    expect(await runCli(['post', 'unlink', '1', '--resource', '1', '--json'], unlink.ctx)).toBe(0);
 
     const bad = makeCtx(server);
-    expect(
-      await runCli(['post', 'link', '1', '--resource', 'abc', '--json'], bad.ctx),
-    ).toBe(1);
+    expect(await runCli(['post', 'link', '1', '--resource', 'abc', '--json'], bad.ctx)).toBe(1);
     expect(JSON.parse(bad.err()).code).toBe('bad_args');
   });
 });
@@ -282,9 +266,7 @@ describe('post delete', () => {
     expect((await getPost(1)).status).toBe(200);
 
     const yes = makeCtx(server);
-    expect(
-      await runCli(['post', 'delete', '1', '999', '--yes', '--json'], yes.ctx),
-    ).toBe(1);
+    expect(await runCli(['post', 'delete', '1', '999', '--yes', '--json'], yes.ctx)).toBe(1);
     expect(JSON.parse(yes.out())).toEqual([
       { id: 1, ok: true },
       {

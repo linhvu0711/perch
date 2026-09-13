@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react';
 import { Feather } from 'lucide-react';
+import { type FormEvent, useState } from 'react';
 
 import { toast } from '@/components/Toast';
 import { ApiError } from '@/lib/api';
@@ -26,16 +26,34 @@ export function Login() {
     <div className="login">
       <form className="card" onSubmit={submit}>
         <div className="brand">
-          <span className="logo"><Feather size={16} strokeWidth={1.75} /></span>
+          <span className="logo">
+            <Feather size={16} strokeWidth={1.75} />
+          </span>
           <span>Perch</span>
         </div>
         <div className="field">
           <label htmlFor="token">Access token</label>
-          <input id="token" type="password" placeholder="PERCH_TOKEN" autoFocus autoComplete="current-password" value={token} onChange={(event) => setToken(event.target.value)} />
-          <span className="note">The single shared secret from the server config. The CLI uses the same one.</span>
-          {error && <span className="error" role="alert">{error}</span>}
+          <input
+            id="token"
+            type="password"
+            placeholder="PERCH_TOKEN"
+            autoFocus
+            autoComplete="current-password"
+            value={token}
+            onChange={(event) => setToken(event.target.value)}
+          />
+          <span className="note">
+            The single shared secret from the server config. The CLI uses the same one.
+          </span>
+          {error && (
+            <span className="error" role="alert">
+              {error}
+            </span>
+          )}
         </div>
-        <button className="btn primary" type="submit" disabled={login.isPending || token === ''}>Sign in</button>
+        <button className="btn primary" type="submit" disabled={login.isPending || token === ''}>
+          Sign in
+        </button>
       </form>
     </div>
   );

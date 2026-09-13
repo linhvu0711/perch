@@ -31,7 +31,9 @@ async function create(input: Record<string, unknown>): Promise<Resource> {
   return (await response.json()) as Resource;
 }
 
-async function upload(files: { name: string; bytes: Uint8Array; type?: string }[]): Promise<Response> {
+async function upload(
+  files: { name: string; bytes: Uint8Array; type?: string }[],
+): Promise<Response> {
   const form = new FormData();
   for (const file of files) {
     form.append(

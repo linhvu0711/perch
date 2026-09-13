@@ -3,11 +3,14 @@ import path from 'node:path';
 
 import {
   firstMarkdownHeading,
-  resourceSchema,
+  RESOURCE_LIST_LIMIT_DEFAULT,
+  RESOURCE_LIST_LIMIT_MAX,
   RESOURCE_TYPES,
   type Resource,
   type ResourcePatch,
   type ResourceType,
+  resourceListQuerySchema,
+  resourceSchema,
 } from '@perch/core';
 import type { Command } from 'commander';
 
@@ -15,13 +18,7 @@ import { createApi } from '../api';
 import { resolveMirrorDir, resolveServerUrl, resolveToken } from '../config';
 import type { CliContext } from '../context';
 import { applyMirror } from '../mirror';
-import {
-  BatchFailure,
-  CliError,
-  formatTable,
-  printResult,
-  resolveMode,
-} from '../output';
+import { BatchFailure, CliError, formatTable, printResult, resolveMode } from '../output';
 
 interface GlobalOptions {
   json?: boolean;
@@ -45,11 +42,7 @@ function positiveId(value: string, plural = false): number {
   return Number(value);
 }
 
-function printResource(
-  ctx: CliContext,
-  options: GlobalOptions,
-  resource: Resource,
-): void {
+function printResource(ctx: CliContext, options: GlobalOptions, resource: Resource): void {
   const mode = resolveMode(options, ctx.isTTY);
   if (mode === 'json') {
     printResult(ctx, mode, resource);
@@ -217,13 +210,8 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
           const response = await api.call(
             api.client.api.resources.images.$post({
               form: {
-                files: new File(
-                  [bytes.slice().buffer as ArrayBuffer],
-                  path.basename(inputPath),
-                ),
-                ...(commandOptions.title !== undefined
-                  ? { title: commandOptions.title }
-                  : {}),
+                files: new File([bytes.slice().buffer as ArrayBuffer], path.basename(inputPath)),
+                ...(commandOptions.title !== undefined ? { title: commandOptions.title } : {}),
               },
             }),
           );
@@ -284,7 +272,7 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
     .option('--search <q>')
     .option('--sort <sort>', 'sort field', 'created')
     .option('--desc', 'newest first')
-    .option('--limit <n>', 'page size', '50')
+    .option('--limit <n>', 'page size', String(RESOURCE_LIST_LIMIT_DEFAULT))
     .option('--cursor <cursor>')
     .action(
       async (commandOptions: {
@@ -310,8 +298,13 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
             `Unknown sort: ${commandOptions.sort}. Use created or used`,
           );
         }
-        if (!/^\d+$/.test(commandOptions.limit) || Number(commandOptions.limit) <= 0) {
-          throw new CliError('bad_value', '--limit must be a positive integer');
+        const parsedLimit = resourceListQuerySchema.shape.limit.safeParse(commandOptions.limit);
+        if (!parsedLimit.success) {
+          throw new CliError(
+            'usage',
+            `--limit must be a whole number from 1 to ${RESOURCE_LIST_LIMIT_MAX}`,
+            2,
+          );
         }
 
         const options = program.opts<GlobalOptions>();
@@ -322,15 +315,11 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
               ...(commandOptions.type !== undefined
                 ? { type: commandOptions.type as ResourceType }
                 : {}),
-              ...(commandOptions.search !== undefined
-                ? { search: commandOptions.search }
-                : {}),
+              ...(commandOptions.search !== undefined ? { search: commandOptions.search } : {}),
               sort: commandOptions.sort as 'created' | 'used',
               order: commandOptions.desc ? 'desc' : 'asc',
-              limit: String(Number(commandOptions.limit)),
-              ...(commandOptions.cursor !== undefined
-                ? { cursor: commandOptions.cursor }
-                : {}),
+              limit: String(parsedLimit.data),
+              ...(commandOptions.cursor !== undefined ? { cursor: commandOptions.cursor } : {}),
             },
           }),
         );
@@ -412,12 +401,8 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
 
         const api = apiFor(program, ctx);
         const patch: ResourcePatch = {
-          ...(commandOptions.title !== undefined
-            ? { title: commandOptions.title }
-            : {}),
-          ...(commandOptions.notes !== undefined
-            ? { notes: commandOptions.notes }
-            : {}),
+          ...(commandOptions.title !== undefined ? { title: commandOptions.title } : {}),
+          ...(commandOptions.notes !== undefined ? { notes: commandOptions.notes } : {}),
         };
         let current: Resource | undefined;
 
@@ -463,10 +448,7 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
 
       if (!options.yes) {
         if (!ctx.isTTY || !ctx.stdinIsTTY) {
-          throw new CliError(
-            'confirm_required',
-            'Refusing to delete without --yes',
-          );
+          throw new CliError('confirm_required', 'Refusing to delete without --yes');
         }
         const confirmed = await ctx.confirm(
           `Delete ${ids.length} resource${ids.length === 1 ? '' : 's'} (${ids.join(', ')})?`,
@@ -478,9 +460,7 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
       }
 
       const api = apiFor(program, ctx);
-      const response = await api.call(
-        api.client.api.resources.$delete({ json: { ids } }),
-      );
+      const response = await api.call(api.client.api.resources.$delete({ json: { ids } }));
       const mode = resolveMode(options, ctx.isTTY);
       if (mode === 'json') {
         printResult(ctx, mode, response.results);
@@ -518,10 +498,7 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
         try {
           resources.push(resourceSchema.parse(JSON.parse(line)));
         } catch {
-          throw new CliError(
-            'bad_response',
-            `Server at ${serverUrl} sent an invalid export line`,
-          );
+          throw new CliError('bad_response', `Server at ${serverUrl} sent an invalid export line`);
         }
       }
       const result = applyMirror(dir, resources, ctx.now());
