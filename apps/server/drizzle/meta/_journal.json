@@ -64,6 +64,13 @@
       "when": 1789289448670,
       "tag": "0008_orange_masked_marvel",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1789292629719,
+      "tag": "0009_bitter_annihilus",
+      "breakpoints": true
     }
   ]
 }

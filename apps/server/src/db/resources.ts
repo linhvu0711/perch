@@ -152,7 +152,7 @@ export function createTweet(
     if (input.tags !== undefined) addResourceTags(tx, userId, inserted.id, input.tags);
     return inserted;
   });
-  return toResource(row, 0, tagsForResources(db, [row.id]).get(row.id) ?? []) as TweetResource;
+  return toResource(row, 0, tagsForResources(db, userId, [row.id]).get(row.id) ?? []) as TweetResource;
 }
 
 export function findTweetByXId(db: Db, userId: number, xId: string): TweetResource | null {
@@ -167,7 +167,7 @@ export function findTweetByXId(db: Db, userId: number, xId: string): TweetResour
     ? (toResource(
         row,
         row.usedBy,
-        tagsForResources(db, [row.id]).get(row.id) ?? [],
+        tagsForResources(db, userId, [row.id]).get(row.id) ?? [],
       ) as TweetResource)
     : null;
 }
@@ -243,7 +243,7 @@ export function createNote(db: Db | Tx, userId: number, input: NoteCreate, now: 
     return inserted;
   });
 
-  return toResource(row, 0, tagsForResources(db, [row.id]).get(row.id) ?? []);
+  return toResource(row, 0, tagsForResources(db, userId, [row.id]).get(row.id) ?? []);
 }
 
 export function createImage(
@@ -283,7 +283,7 @@ export function createImage(
     return inserted;
   });
 
-  return toResource(row, 0, tagsForResources(db, [row.id]).get(row.id) ?? []);
+  return toResource(row, 0, tagsForResources(db, userId, [row.id]).get(row.id) ?? []);
 }
 
 export function getResource(db: Db | Tx, userId: number, id: number): Resource | null {
@@ -293,7 +293,7 @@ export function getResource(db: Db | Tx, userId: number, id: number): Resource |
     .where(and(eq(resources.id, id), eq(resources.userId, userId)))
     .get();
 
-  return row ? toResource(row, row.usedBy, tagsForResources(db, [row.id]).get(row.id) ?? []) : null;
+  return row ? toResource(row, row.usedBy, tagsForResources(db, userId, [row.id]).get(row.id) ?? []) : null;
 }
 
 export function updateResource(
@@ -335,6 +335,7 @@ export function listAllResources(db: Db, userId: number): Resource[] {
 
   const tagsById = tagsForResources(
     db,
+    userId,
     rows.map((row) => row.id),
   );
   return rows.map((row) => toResource(row, row.usedBy, tagsById.get(row.id) ?? []));
@@ -420,6 +421,7 @@ export function listResources(db: Db, userId: number, query: ResourceListQuery):
 
   const tagsById = tagsForResources(
     db,
+    userId,
     pageRows.map((row) => row.id),
   );
 

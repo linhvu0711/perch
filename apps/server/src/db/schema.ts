@@ -95,6 +95,9 @@ export const tags = sqliteTable(
 export const resourceTags = sqliteTable(
   'resource_tags',
   {
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
     resourceId: integer('resource_id')
       .notNull()
       .references(() => resources.id, { onDelete: 'cascade' }),
@@ -108,6 +111,9 @@ export const resourceTags = sqliteTable(
 export const postTags = sqliteTable(
   'post_tags',
   {
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
     postId: integer('post_id')
       .notNull()
       .references(() => posts.id, { onDelete: 'cascade' }),

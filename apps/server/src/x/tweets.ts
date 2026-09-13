@@ -144,7 +144,15 @@ export function createTweetService(deps: {
             xAccountId: account.id,
             now,
           });
-          results.push({ url, ok: true, status: 'existing', resource: raced });
+          let resource = raced;
+          if (input.tags !== undefined && input.tags.length > 0) {
+            const tagNames = input.tags;
+            deps.db.transaction((tx) => {
+              addResourceTags(tx, userId, raced.id, tagNames);
+            });
+            resource = findTweetByXId(deps.db, userId, parsed.id) ?? raced;
+          }
+          results.push({ url, ok: true, status: 'existing', resource });
           continue;
         }
         results.push({

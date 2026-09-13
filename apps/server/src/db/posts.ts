@@ -208,7 +208,7 @@ export async function createPost(
     }
     addPostTags(tx, userId, inserted.id, [
       ...(input.tags ?? []),
-      ...[...tagsForResources(tx, input.from ?? []).values()].flat(),
+      ...[...tagsForResources(tx, userId, input.from ?? []).values()].flat(),
     ]);
     return inserted;
   });
@@ -260,7 +260,7 @@ export function getPost(db: Db, userId: number, id: number): Post | null {
     linksForPosts(db, [row.id]).get(row.id) ?? [],
     media,
     limit,
-    tagsForPosts(db, [row.id]).get(row.id) ?? [],
+    tagsForPosts(db, userId, [row.id]).get(row.id) ?? [],
     readyChecks({
       text: row.text,
       limit,
@@ -353,7 +353,7 @@ export function listPosts(
   const postIds = pageRows.map((row) => row.id);
   const links = linksForPosts(db, postIds);
   const media = mediaForPosts(db, postIds);
-  const postTagsMap = tagsForPosts(db, postIds);
+  const postTagsMap = tagsForPosts(db, userId, postIds);
   const items = pageRows.map((row) => {
     const postMedia = media.get(row.id) ?? [];
     const post = toPost(

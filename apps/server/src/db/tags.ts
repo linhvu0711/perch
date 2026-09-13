@@ -1,5 +1,5 @@
 import type { ItemTagsResponse, Tag, TagDeleteResponse, TagList } from '@perch/core';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, count, eq, inArray } from 'drizzle-orm';
 
 import type { Db } from './index';
 import { TagExistsError } from './posts';
@@ -8,27 +8,49 @@ import { posts, postTags, resources, resourceTags, tags } from './schema';
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 export function listTags(db: Db, userId: number): TagList {
-  const items = db
-    .select({
-      id: tags.id,
-      name: tags.name,
-      resource_count: sql<number>`(select count(*) from resource_tags where resource_tags.tag_id = ${tags.id})`,
-      post_count: sql<number>`(select count(*) from post_tags where post_tags.tag_id = ${tags.id})`,
-    })
+  const rows = db
+    .select({ id: tags.id, name: tags.name })
     .from(tags)
     .where(eq(tags.userId, userId))
-    .orderBy(sql`lower(${tags.name})`)
     .all();
+  const resourceCounts = new Map(
+    db
+      .select({ tagId: resourceTags.tagId, total: count() })
+      .from(resourceTags)
+      .where(eq(resourceTags.userId, userId))
+      .groupBy(resourceTags.tagId)
+      .all()
+      .map((row) => [row.tagId, row.total] as const),
+  );
+  const postCounts = new Map(
+    db
+      .select({ tagId: postTags.tagId, total: count() })
+      .from(postTags)
+      .where(eq(postTags.userId, userId))
+      .groupBy(postTags.tagId)
+      .all()
+      .map((row) => [row.tagId, row.total] as const),
+  );
+
+  const items = rows
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      resource_count: resourceCounts.get(row.id) ?? 0,
+      post_count: postCounts.get(row.id) ?? 0,
+    }))
+    .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
 
   return { items, total: items.length, next_cursor: null };
 }
 
 export function createTag(db: Db, userId: number, name: string): Tag {
   const existing = db
-    .select({ id: tags.id })
+    .select({ id: tags.id, name: tags.name })
     .from(tags)
-    .where(and(eq(tags.userId, userId), sql`lower(${tags.name}) = lower(${name})`))
-    .get();
+    .where(eq(tags.userId, userId))
+    .all()
+    .some((row) => row.name.toLowerCase() === name.toLowerCase());
   if (existing) throw new TagExistsError(name);
 
   const row = db.insert(tags).values({ userId, name }).returning().get();
@@ -36,7 +58,11 @@ export function createTag(db: Db, userId: number, name: string): Tag {
   return { id: row.id, name: row.name, resource_count: 0, post_count: 0 };
 }
 
-export function tagsForResources(db: Db | Tx, resourceIds: number[]): Map<number, string[]> {
+export function tagsForResources(
+  db: Db | Tx,
+  userId: number,
+  resourceIds: number[],
+): Map<number, string[]> {
   const result = new Map<number, string[]>();
   if (resourceIds.length === 0) return result;
 
@@ -44,14 +70,16 @@ export function tagsForResources(db: Db | Tx, resourceIds: number[]): Map<number
     .select({ resourceId: resourceTags.resourceId, name: tags.name })
     .from(resourceTags)
     .innerJoin(tags, eq(resourceTags.tagId, tags.id))
-    .where(inArray(resourceTags.resourceId, resourceIds))
-    .orderBy(sql`lower(${tags.name})`)
+    .where(and(eq(resourceTags.userId, userId), inArray(resourceTags.resourceId, resourceIds)))
     .all();
 
   for (const row of rows) {
     const list = result.get(row.resourceId) ?? [];
     list.push(row.name);
     result.set(row.resourceId, list);
+  }
+  for (const list of result.values()) {
+    list.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
   }
   return result;
 }
@@ -98,7 +126,7 @@ export function addResourceTags(
 ): void {
   const tagIds = ensureTags(tx, userId, names);
   for (const tagId of tagIds.values()) {
-    tx.insert(resourceTags).values({ resourceId, tagId }).onConflictDoNothing().run();
+    tx.insert(resourceTags).values({ userId, resourceId, tagId }).onConflictDoNothing().run();
   }
 }
 
@@ -111,7 +139,13 @@ export function removeResourceTags(
   const tagIds = tagIdsForNames(tx, userId, names);
   if (tagIds.length === 0) return;
   tx.delete(resourceTags)
-    .where(and(eq(resourceTags.resourceId, resourceId), inArray(resourceTags.tagId, tagIds)))
+    .where(
+      and(
+        eq(resourceTags.userId, userId),
+        eq(resourceTags.resourceId, resourceId),
+        inArray(resourceTags.tagId, tagIds),
+      ),
+    )
     .run();
 }
 
@@ -154,7 +188,7 @@ export function tagResources(
         };
       }
       addResourceTags(db, userId, id, names);
-      return { id, ok: true as const, tags: tagsForResources(db, [id]).get(id) ?? [] };
+      return { id, ok: true as const, tags: tagsForResources(db, userId, [id]).get(id) ?? [] };
     }),
   };
 }
@@ -175,12 +209,16 @@ export function untagResources(
         };
       }
       removeResourceTags(db, userId, id, names);
-      return { id, ok: true as const, tags: tagsForResources(db, [id]).get(id) ?? [] };
+      return { id, ok: true as const, tags: tagsForResources(db, userId, [id]).get(id) ?? [] };
     }),
   };
 }
 
-export function tagsForPosts(db: Db | Tx, postIds: number[]): Map<number, string[]> {
+export function tagsForPosts(
+  db: Db | Tx,
+  userId: number,
+  postIds: number[],
+): Map<number, string[]> {
   const result = new Map<number, string[]>();
   if (postIds.length === 0) return result;
 
@@ -188,8 +226,7 @@ export function tagsForPosts(db: Db | Tx, postIds: number[]): Map<number, string
     .select({ postId: postTags.postId, name: tags.name })
     .from(postTags)
     .innerJoin(tags, eq(postTags.tagId, tags.id))
-    .where(inArray(postTags.postId, postIds))
-    .orderBy(sql`lower(${tags.name})`)
+    .where(and(eq(postTags.userId, userId), inArray(postTags.postId, postIds)))
     .all();
 
   for (const row of rows) {
@@ -197,13 +234,16 @@ export function tagsForPosts(db: Db | Tx, postIds: number[]): Map<number, string
     list.push(row.name);
     result.set(row.postId, list);
   }
+  for (const list of result.values()) {
+    list.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  }
   return result;
 }
 
 export function addPostTags(tx: Db | Tx, userId: number, postId: number, names: string[]): void {
   const tagIds = ensureTags(tx, userId, names);
   for (const tagId of tagIds.values()) {
-    tx.insert(postTags).values({ postId, tagId }).onConflictDoNothing().run();
+    tx.insert(postTags).values({ userId, postId, tagId }).onConflictDoNothing().run();
   }
 }
 
@@ -211,7 +251,13 @@ export function removePostTags(tx: Db | Tx, userId: number, postId: number, name
   const tagIds = tagIdsForNames(tx, userId, names);
   if (tagIds.length === 0) return;
   tx.delete(postTags)
-    .where(and(eq(postTags.postId, postId), inArray(postTags.tagId, tagIds)))
+    .where(
+      and(
+        eq(postTags.userId, userId),
+        eq(postTags.postId, postId),
+        inArray(postTags.tagId, tagIds),
+      ),
+    )
     .run();
 }
 
@@ -243,7 +289,7 @@ export function tagPosts(db: Db, userId: number, ids: number[], names: string[])
         };
       }
       addPostTags(db, userId, id, names);
-      return { id, ok: true as const, tags: tagsForPosts(db, [id]).get(id) ?? [] };
+      return { id, ok: true as const, tags: tagsForPosts(db, userId, [id]).get(id) ?? [] };
     }),
   };
 }
@@ -272,7 +318,7 @@ export function untagPosts(
         };
       }
       removePostTags(db, userId, id, names);
-      return { id, ok: true as const, tags: tagsForPosts(db, [id]).get(id) ?? [] };
+      return { id, ok: true as const, tags: tagsForPosts(db, userId, [id]).get(id) ?? [] };
     }),
   };
 }
@@ -286,10 +332,11 @@ export function renameTag(db: Db, userId: number, id: number, name: string): Tag
   if (!row) return null;
 
   const conflict = db
-    .select({ id: tags.id })
+    .select({ id: tags.id, name: tags.name })
     .from(tags)
-    .where(and(eq(tags.userId, userId), sql`lower(${tags.name}) = lower(${name})`))
-    .get();
+    .where(eq(tags.userId, userId))
+    .all()
+    .find((entry) => entry.name.toLowerCase() === name.toLowerCase());
   if (conflict && conflict.id !== id) throw new TagExistsError(name);
 
   if (row.name !== name) db.update(tags).set({ name }).where(eq(tags.id, id)).run();

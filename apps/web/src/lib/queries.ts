@@ -170,6 +170,7 @@ export function useCreateNote() {
       queryClient.setQueryData(['resources', 'detail', data.id], data);
       void queryClient.invalidateQueries({ queryKey: ['resources', 'list'] });
       void queryClient.invalidateQueries({ queryKey: ['counts'] });
+      void queryClient.invalidateQueries({ queryKey: ['tags'] });
     },
   });
 }
@@ -192,6 +193,7 @@ export function useUploadImages() {
       void queryClient.invalidateQueries({ queryKey: ['resources'] });
       if (data.results.some((result) => result.ok)) {
         void queryClient.invalidateQueries({ queryKey: ['counts'] });
+        void queryClient.invalidateQueries({ queryKey: ['tags'] });
       }
     },
   });
@@ -292,6 +294,7 @@ export function useCreatePost() {
       queryClient.setQueryData(['posts', 'detail', data.id], data);
       void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
       void queryClient.invalidateQueries({ queryKey: ['counts'] });
+      void queryClient.invalidateQueries({ queryKey: ['tags'] });
       if (data.links.length > 0) {
         void queryClient.invalidateQueries({ queryKey: ['resources', 'list'] });
       }
@@ -331,6 +334,7 @@ export function useDeletePosts() {
       void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
       void queryClient.invalidateQueries({ queryKey: ['counts'] });
       void queryClient.invalidateQueries({ queryKey: ['resources', 'list'] });
+      void queryClient.invalidateQueries({ queryKey: ['tags'] });
     },
   });
 }

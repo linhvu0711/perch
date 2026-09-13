@@ -238,9 +238,7 @@ export function Settings() {
               </div>
             </div>
           </div>
-          <div className="col">
-            <TagSettings />
-          </div>
+          <div className="col" />
         </div>
       ) : (
         <div className="settings">

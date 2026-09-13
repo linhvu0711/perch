@@ -338,7 +338,7 @@ describe('tags', () => {
       .set({ status: 'published', publishedAt: new Date('2026-09-01T09:00:00Z') })
       .where(eq(posts.id, 2))
       .run();
-    db.insert(postTags).values({ postId: 2, tagId: 1 }).run();
+    db.insert(postTags).values({ userId: 1, postId: 2, tagId: 1 }).run();
     sqlite.close();
 
     const list = (await (await request('/api/tags')).json()) as TagList;
