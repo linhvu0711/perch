@@ -2,6 +2,7 @@ import {
   parseTweetUrl,
   type TweetCreate,
   type TweetCreateResponse,
+  type TweetResource,
   tweetRejection,
   tweetTitle,
   X_COSTS_USD,
@@ -80,40 +81,60 @@ export function createTweetService(deps: {
 
         const text = tweet.noteText ?? tweet.text;
         const canonicalUrl = `https://x.com/${tweet.authorUsername}/status/${tweet.id}`;
-        const resource = deps.db.transaction((tx) => {
-          const saved = existing
-            ? updateTweet(tx, userId, existing.id, {
-                url: canonicalUrl,
-                authorId: tweet.authorId,
-                authorUsername: tweet.authorUsername,
-                text,
-                title: tweetTitle(text),
-                postedAt: new Date(tweet.createdAt),
-              })
-            : createTweet(
-                tx,
-                userId,
-                {
+        let resource: TweetResource;
+        try {
+          resource = deps.db.transaction((tx) => {
+            const saved = existing
+              ? updateTweet(tx, userId, existing.id, {
                   url: canonicalUrl,
-                  xId: tweet.id,
                   authorId: tweet.authorId,
                   authorUsername: tweet.authorUsername,
                   text,
                   title: tweetTitle(text),
                   postedAt: new Date(tweet.createdAt),
-                },
-                now,
-              );
-          if (!saved) throw new Error('tweet resource update failed');
-          logApiCall(tx, userId, {
+                })
+              : createTweet(
+                  tx,
+                  userId,
+                  {
+                    url: canonicalUrl,
+                    xId: tweet.id,
+                    authorId: tweet.authorId,
+                    authorUsername: tweet.authorUsername,
+                    text,
+                    title: tweetTitle(text),
+                    postedAt: new Date(tweet.createdAt),
+                  },
+                  now,
+                );
+            if (!saved) throw new Error('tweet resource update failed');
+            logApiCall(tx, userId, {
+              endpoint: X_ENDPOINTS.getTweet,
+              costUsd: X_COSTS_USD.saveTweet,
+              resourceId: saved.id,
+              xAccountId: account.id,
+              now,
+            });
+            return saved;
+          });
+        } catch (error) {
+          const raced = !existing && findTweetByXId(deps.db, userId, parsed.id);
+          if (
+            !(error instanceof Error && error.message.includes('UNIQUE constraint failed')) ||
+            !raced
+          ) {
+            throw error;
+          }
+          logApiCall(deps.db, userId, {
             endpoint: X_ENDPOINTS.getTweet,
             costUsd: X_COSTS_USD.saveTweet,
-            resourceId: saved.id,
+            resourceId: raced.id,
             xAccountId: account.id,
             now,
           });
-          return saved;
-        });
+          results.push({ url, ok: true, status: 'existing', resource: raced });
+          continue;
+        }
         results.push({
           url,
           ok: true,

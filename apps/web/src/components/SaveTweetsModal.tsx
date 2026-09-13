@@ -18,7 +18,10 @@ export function SaveTweetsModal(): JSX.Element {
     .split(/\r?\n/)
     .map((url) => url.trim())
     .filter(Boolean);
-  const close = () => navigate('/resources');
+  const close = () => {
+    if (mutation.isPending) return;
+    navigate('/resources');
+  };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -67,7 +70,10 @@ export function SaveTweetsModal(): JSX.Element {
               aria-label="Tweet URLs"
               placeholder="https://x.com/user/status/123…"
               value={value}
-              onChange={(event) => setValue(event.target.value)}
+              onChange={(event) => {
+                setValue(event.target.value);
+                if (mutation.data) mutation.reset();
+              }}
             />
           </div>
           <div className="note">
