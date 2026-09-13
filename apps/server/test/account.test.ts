@@ -210,6 +210,93 @@ describe('account', () => {
     expect((await status.json()).month_cost_usd).toBe(0.03);
   });
 
+  test('refreshes a due token on tick and persists the rotated one', async () => {
+    await connect();
+
+    await server.tick(new Date('2026-09-04T11:49:00Z'));
+    expect(
+      server.xClient.calls.filter((c) => c.name === 'refreshToken'),
+    ).toHaveLength(0);
+
+    await server.tick(new Date('2026-09-04T11:51:00Z'));
+    let refreshes = server.xClient.calls.filter(
+      (c) => c.name === 'refreshToken',
+    );
+    expect(refreshes).toHaveLength(1);
+    expect(refreshes[0]!.args[0]).toBe('refresh-1');
+
+    server.xClient.refreshed = {
+      accessToken: 'access-3',
+      refreshToken: 'refresh-3',
+      expiresIn: 7200,
+      scope:
+        'tweet.read tweet.write users.read media.write offline.access',
+    };
+    await server.tick(new Date('2026-09-04T13:51:00Z'));
+    refreshes = server.xClient.calls.filter(
+      (c) => c.name === 'refreshToken',
+    );
+    expect(refreshes).toHaveLength(2);
+    expect(refreshes[1]!.args[0]).toBe('refresh-2');
+
+    const res = await request('/api/account');
+    expect((await res.json()).account.reconnect_required).toBe(false);
+  });
+
+  test('refreshes on demand before revoking', async () => {
+    await connect();
+    server.clock.set(new Date('2026-09-04T11:55:00Z'));
+
+    const res = await request('/api/account/disconnect', {
+      method: 'POST',
+    });
+    expect(res.status).toBe(200);
+
+    const calls = server.xClient.calls;
+    const afterGetMe = calls.slice(
+      calls.map((c) => c.name).lastIndexOf('getMe') + 1,
+    );
+    expect(afterGetMe.map((c) => c.name)).toEqual([
+      'refreshToken',
+      'revokeToken',
+      'revokeToken',
+    ]);
+    expect(afterGetMe.map((c) => c.args[0])).toEqual([
+      'refresh-1',
+      'refresh-2',
+      'access-2',
+    ]);
+  });
+
+  test('marks an invalid grant as reconnect required and stops retrying', async () => {
+    await connect();
+    server.xClient.refreshError = new XError(
+      'invalid_grant',
+      400,
+      'expired',
+    );
+
+    await server.tick(new Date('2026-09-04T11:51:00Z'));
+
+    const res = await request('/api/account');
+    const body = await res.json();
+    expect(body.account.reconnect_required).toBe(true);
+    expect(body.account.username).toBe('perchtester');
+
+    await server.tick(new Date('2026-09-04T11:52:00Z'));
+    expect(
+      server.xClient.calls.filter((c) => c.name === 'refreshToken'),
+    ).toHaveLength(1);
+
+    server.xClient.refreshError = null;
+    await connect();
+
+    const reconnected = await request('/api/account');
+    const reconnectedBody = await reconnected.json();
+    expect(reconnectedBody.account.reconnect_required).toBe(false);
+    expect(reconnectedBody.account.id).toBe(1);
+  });
+
   test('returns 503 when X OAuth is not configured', async () => {
     server.cleanup();
     server = await createTestServer({ xOAuthConfigured: false });
