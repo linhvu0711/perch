@@ -54,6 +54,7 @@ describe('resources', () => {
       type: 'md',
       body: '# Hello\n\ntext',
       used_by: 0,
+      tags: [],
     });
 
     expect((await create({ body: 'no heading' })).title).toBe('Untitled');
@@ -91,6 +92,14 @@ describe('resources', () => {
       code: 'validation',
       errors: [{ path: 'id' }],
     });
+  });
+
+  test('returns tags: [] on a fresh resource', async () => {
+    await create({ body: '# Hello' });
+
+    const response = await request('/api/resources/1');
+    expect(response.status).toBe(200);
+    expect((await response.json()).tags).toEqual([]);
   });
 
   test('patches title, notes, and body', async () => {

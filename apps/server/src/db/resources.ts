@@ -32,6 +32,7 @@ import { decodeCursor, encodeCursor } from './cursor';
 import type { Db } from './index';
 import { postLinks, resources } from './schema';
 import { getSettings } from './settings';
+import { tagsForResources } from './tags';
 
 export class InvalidCursorError extends Error {}
 
@@ -44,7 +45,7 @@ const resourceColumns = () => ({
   usedBy: usedByCount,
 });
 
-function toResource(row: ResourceRow, usedBy = 0): Resource {
+function toResource(row: ResourceRow, usedBy = 0, tags: string[] = []): Resource {
   if (row.type === 'image') {
     if (
       row.imagePath === null ||
@@ -67,6 +68,7 @@ function toResource(row: ResourceRow, usedBy = 0): Resource {
       width: row.imageWidth,
       height: row.imageHeight,
       ...(usedBy > 0 ? { used_by: usedBy } : {}),
+      tags,
     };
   }
   if (row.type === 'tweet') {
@@ -93,6 +95,7 @@ function toResource(row: ResourceRow, usedBy = 0): Resource {
       text: row.tweetText,
       posted_at: row.tweetPostedAt.toISOString(),
       ...(usedBy > 0 ? { used_by: usedBy } : {}),
+      tags,
     };
     return resource;
   }
@@ -106,6 +109,7 @@ function toResource(row: ResourceRow, usedBy = 0): Resource {
     created_at: row.createdAt.toISOString(),
     body: row.mdBody ?? '',
     used_by: usedBy,
+    tags,
   };
 }
 
@@ -152,7 +156,9 @@ export function findTweetByXId(db: Db, userId: number, xId: string): TweetResour
       and(eq(resources.userId, userId), eq(resources.type, 'tweet'), eq(resources.tweetXId, xId)),
     )
     .get();
-  return row ? (toResource(row, row.usedBy) as TweetResource) : null;
+  return row
+    ? (toResource(row, row.usedBy, tagsForResources(db, [row.id]).get(row.id) ?? []) as TweetResource)
+    : null;
 }
 
 export function updateTweet(
@@ -267,7 +273,9 @@ export function getResource(db: Db, userId: number, id: number): Resource | null
     .where(and(eq(resources.id, id), eq(resources.userId, userId)))
     .get();
 
-  return row ? toResource(row, row.usedBy) : null;
+  return row
+    ? toResource(row, row.usedBy, tagsForResources(db, [row.id]).get(row.id) ?? [])
+    : null;
 }
 
 export function updateResource(
@@ -307,7 +315,11 @@ export function listAllResources(db: Db, userId: number): Resource[] {
     .orderBy(asc(resources.createdAt), asc(resources.id))
     .all();
 
-  return rows.map((row) => toResource(row, row.usedBy));
+  const tags = tagsForResources(
+    db,
+    rows.map((row) => row.id),
+  );
+  return rows.map((row) => toResource(row, row.usedBy, tags.get(row.id) ?? []));
 }
 
 export function listResources(db: Db, userId: number, query: ResourceListQuery): ResourceList {
@@ -383,8 +395,13 @@ export function listResources(db: Db, userId: number, query: ResourceListQuery):
   const pageRows = hasNextPage ? rows.slice(0, query.limit) : rows;
   const last = pageRows.at(-1);
 
+  const tags = tagsForResources(
+    db,
+    pageRows.map((row) => row.id),
+  );
+
   return {
-    items: pageRows.map((row) => toResource(row, row.usedBy)),
+    items: pageRows.map((row) => toResource(row, row.usedBy, tags.get(row.id) ?? [])),
     total: totalRow?.value ?? 0,
     next_cursor:
       hasNextPage && last

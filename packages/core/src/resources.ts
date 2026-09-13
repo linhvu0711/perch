@@ -22,6 +22,7 @@ export const noteResourceSchema = z.object({
   created_at: z.string(),
   body: z.string(),
   used_by: z.number().int().nonnegative().optional(),
+  tags: z.array(z.string()),
 });
 export const IMAGE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const;
 export const IMAGE_BYTES_MAX = 5 * 1024 * 1024;
@@ -37,6 +38,7 @@ export const imageResourceSchema = z.object({
   width: z.number().int().positive(),
   height: z.number().int().positive(),
   used_by: z.number().int().nonnegative().optional(),
+  tags: z.array(z.string()),
 });
 export const tweetResourceSchema = z.object({
   id: z.number().int().positive(),
@@ -51,6 +53,7 @@ export const tweetResourceSchema = z.object({
   text: z.string(),
   posted_at: z.string(),
   used_by: z.number().int().nonnegative().optional(),
+  tags: z.array(z.string()),
 });
 export const resourceSchema = z.discriminatedUnion('type', [
   noteResourceSchema,

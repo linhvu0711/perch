@@ -39,6 +39,7 @@ describe('mirrorFile', () => {
       notes: 'why\nsaved',
       created_at: '2026-09-04T10:00:00.000Z',
       body: '# Hello',
+      tags: [],
     };
     expect(mirrorFile(resource)).toEqual({
       path: 'notes/2026-09-04-7-he-said-hi-1.md',
@@ -55,6 +56,7 @@ describe('mirrorFile', () => {
       notes: '',
       created_at: '2026-09-04T10:00:00.000Z',
       body: '# Hello',
+      tags: [],
     };
     const image: Resource = {
       id: 8,
@@ -67,6 +69,7 @@ describe('mirrorFile', () => {
       bytes: 73,
       width: 3,
       height: 2,
+      tags: [],
     };
 
     const file = mirrorFile(note);

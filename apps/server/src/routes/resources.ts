@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { zValidator } from '@hono/zod-validator';
 import {
+  itemTagsBodySchema,
   NOTE_TITLE_FALLBACK,
   noteCreateSchema,
   RESOURCE_BATCH_MAX,
@@ -27,6 +28,7 @@ import {
   listTweetAuthors,
   updateResource,
 } from '../db/resources';
+import { tagResources, untagResources } from '../db/tags';
 import { ApiError, validationHook } from '../errors';
 import { inspectImage, removeImage, storeImage } from '../images';
 
@@ -133,6 +135,14 @@ export function resourcesRoutes(deps: AppDeps) {
           await s.write(`${JSON.stringify(line)}\n`);
         }
       });
+    })
+    .post('/tags', zValidator('json', itemTagsBodySchema, validationHook), (c) => {
+      const body = c.req.valid('json');
+      return c.json(tagResources(deps.db, c.get('user').id, body.ids, body.tags), 200);
+    })
+    .delete('/tags', zValidator('json', itemTagsBodySchema, validationHook), (c) => {
+      const body = c.req.valid('json');
+      return c.json(untagResources(deps.db, c.get('user').id, body.ids, body.tags), 200);
     })
     .get('/:id', zValidator('param', idParamSchema, validationHook), (c) => {
       const { id } = c.req.valid('param');

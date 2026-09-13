@@ -82,6 +82,7 @@ describe('images', () => {
         bytes: 73,
         width: 3,
         height: 2,
+        tags: [],
       },
     });
     expect(rows[1]).toMatchObject({
