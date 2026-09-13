@@ -223,6 +223,36 @@ describe('images', () => {
     expect(await all.json()).toMatchObject({ total: 2 });
   });
 
+  test('serves the file by id and refuses notes', async () => {
+    await results(await upload([{ name: 'a.png', bytes: PNG_3X2 }]));
+    await request('/api/resources/notes', {
+      method: 'POST',
+      body: JSON.stringify({ body: '# N' }),
+    });
+
+    const file = await request('/api/resources/1/file');
+    expect(file.status).toBe(200);
+    expect(file.headers.get('content-type')).toBe('image/png');
+    expect((await file.arrayBuffer()).byteLength).toBe(73);
+
+    const note = await request('/api/resources/2/file');
+    expect(note.status).toBe(404);
+    expect(await note.json()).toEqual({
+      code: 'not_found',
+      message: 'Resource 2 has no file',
+    });
+
+    const missing = await request('/api/resources/99/file');
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({
+      code: 'not_found',
+      message: 'Resource 99 not found',
+    });
+
+    const anonymous = await server.app.request('/api/resources/1/file');
+    expect(anonymous.status).toBe(401);
+  });
+
   test('requires authentication', async () => {
     const form = new FormData();
     form.append('files', new File([PNG_3X2], 'a.png'));

@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import {
   NOTE_TITLE_FALLBACK,
   noteCreateSchema,
@@ -143,6 +145,27 @@ export function resourcesRoutes(deps: AppDeps) {
         const resource = getResource(deps.db, c.get('user').id, id);
         if (!resource) throw notFound(id);
         return c.json(resource, 200);
+      },
+    )
+    .get(
+      '/:id/file',
+      zValidator('param', idParamSchema, validationHook),
+      (c) => {
+        const { id } = c.req.valid('param');
+        const resource = getResource(deps.db, c.get('user').id, id);
+        if (!resource) throw notFound(id);
+        if (resource.type !== 'image') {
+          throw new ApiError(404, 'not_found', `Resource ${id} has no file`);
+        }
+        return new Response(
+          Bun.file(path.join(deps.uploadDir, resource.path)),
+          {
+            headers: {
+              'Content-Type': resource.mime,
+              'Cache-Control': 'private, max-age=31536000, immutable',
+            },
+          },
+        );
       },
     )
     .patch(
