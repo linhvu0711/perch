@@ -3,6 +3,9 @@ import path from 'node:path';
 
 import {
   firstMarkdownHeading,
+  RESOURCE_LIST_LIMIT_DEFAULT,
+  RESOURCE_LIST_LIMIT_MAX,
+  resourceListQuerySchema,
   resourceSchema,
   RESOURCE_TYPES,
   type Resource,
@@ -284,7 +287,7 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
     .option('--search <q>')
     .option('--sort <sort>', 'sort field', 'created')
     .option('--desc', 'newest first')
-    .option('--limit <n>', 'page size', '50')
+    .option('--limit <n>', 'page size', String(RESOURCE_LIST_LIMIT_DEFAULT))
     .option('--cursor <cursor>')
     .action(
       async (commandOptions: {
@@ -310,8 +313,15 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
             `Unknown sort: ${commandOptions.sort}. Use created or used`,
           );
         }
-        if (!/^\d+$/.test(commandOptions.limit) || Number(commandOptions.limit) <= 0) {
-          throw new CliError('bad_value', '--limit must be a positive integer');
+        const parsedLimit = resourceListQuerySchema.shape.limit.safeParse(
+          commandOptions.limit,
+        );
+        if (!parsedLimit.success) {
+          throw new CliError(
+            'usage',
+            `--limit must be a whole number from 1 to ${RESOURCE_LIST_LIMIT_MAX}`,
+            2,
+          );
         }
 
         const options = program.opts<GlobalOptions>();
@@ -327,7 +337,7 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
                 : {}),
               sort: commandOptions.sort as 'created' | 'used',
               order: commandOptions.desc ? 'desc' : 'asc',
-              limit: String(Number(commandOptions.limit)),
+              limit: String(parsedLimit.data),
               ...(commandOptions.cursor !== undefined
                 ? { cursor: commandOptions.cursor }
                 : {}),
