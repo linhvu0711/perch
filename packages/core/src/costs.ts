@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-/** Every X price Perch pays. Change a price here; nothing else holds one. */
+/** Every current X price Perch pays; api_calls.cost_usd keeps what was charged at call time. */
 export const X_COSTS_USD = {
   getMe: 0.01,
   getTweet: 0.005,

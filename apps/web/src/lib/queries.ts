@@ -340,6 +340,7 @@ export function useCostMonths(cursor: string | undefined) {
     queryKey: ['costs', 'months', cursor ?? null],
     queryFn: () => unwrap(api.api.costs.$get({ query: cursor !== undefined ? { cursor } : {} })),
     placeholderData: keepPreviousData,
+    refetchInterval: cursor === undefined ? 30_000 : false,
     enabled: me.data != null,
   });
 }
