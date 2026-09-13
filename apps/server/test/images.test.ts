@@ -253,6 +253,53 @@ describe('images', () => {
     expect(anonymous.status).toBe(401);
   });
 
+  test('patches title and notes on an image and refuses a body', async () => {
+    await results(await upload([{ name: 'a.png', bytes: PNG_3X2 }]));
+
+    const patched = await request('/api/resources/1', {
+      method: 'PATCH',
+      body: JSON.stringify({ title: 'Beach', notes: 'why' }),
+    });
+    expect(patched.status).toBe(200);
+    expect(await patched.json()).toMatchObject({
+      id: 1,
+      type: 'image',
+      title: 'Beach',
+      notes: 'why',
+      width: 3,
+    });
+
+    const withBody = await request('/api/resources/1', {
+      method: 'PATCH',
+      body: JSON.stringify({ body: 'x' }),
+    });
+    expect(withBody.status).toBe(400);
+    expect(await withBody.json()).toMatchObject({
+      code: 'validation',
+      errors: [{ path: 'body', message: 'Only notes have a body' }],
+    });
+  });
+
+  test('deletes an image and removes its file', async () => {
+    const rows = await results(await upload([{ name: 'a.png', bytes: PNG_3X2 }]));
+    if (!rows[0]!.ok) throw new Error('upload failed');
+    const full = path.join(server.dir, 'uploads', rows[0]!.resource.path);
+    expect(fs.existsSync(full)).toBe(true);
+
+    const deleted = await request('/api/resources', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids: [1] }),
+    });
+    expect(deleted.status).toBe(200);
+    expect(await deleted.json()).toEqual({
+      results: [{ id: 1, ok: true, unlinked_post_ids: [] }],
+    });
+    expect(fs.existsSync(full)).toBe(false);
+
+    const get = await request('/api/resources/1');
+    expect(get.status).toBe(404);
+  });
+
   test('requires authentication', async () => {
     const form = new FormData();
     form.append('files', new File([PNG_3X2], 'a.png'));

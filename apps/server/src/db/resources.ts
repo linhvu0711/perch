@@ -223,14 +223,23 @@ export function deleteResources(
   db: Db,
   userId: number,
   ids: number[],
+  removeFile: (rel: string) => void = () => {},
 ): ResourceDeleteResponse {
   return {
     results: ids.map((id) => {
+      const row = db
+        .select({ imagePath: resources.imagePath })
+        .from(resources)
+        .where(and(eq(resources.id, id), eq(resources.userId, userId)))
+        .get();
+
       const deleted = db
         .delete(resources)
         .where(and(eq(resources.id, id), eq(resources.userId, userId)))
         .returning({ id: resources.id })
         .get();
+
+      if (deleted && row?.imagePath) removeFile(row.imagePath);
 
       return deleted
         ? { id, ok: true as const, unlinked_post_ids: [] }

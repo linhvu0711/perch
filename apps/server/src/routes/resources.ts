@@ -24,7 +24,7 @@ import {
   updateResource,
 } from '../db/resources';
 import { ApiError, validationHook } from '../errors';
-import { inspectImage, storeImage } from '../images';
+import { inspectImage, removeImage, storeImage } from '../images';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -174,12 +174,15 @@ export function resourcesRoutes(deps: AppDeps) {
       zValidator('json', resourcePatchSchema, validationHook),
       (c) => {
         const { id } = c.req.valid('param');
-        const resource = updateResource(
-          deps.db,
-          c.get('user').id,
-          id,
-          c.req.valid('json'),
-        );
+        const patch = c.req.valid('json');
+        const stored = getResource(deps.db, c.get('user').id, id);
+        if (!stored) throw notFound(id);
+        if (stored.type === 'image' && patch.body !== undefined) {
+          throw new ApiError(400, 'validation', 'Invalid request', [
+            { path: 'body', message: 'Only notes have a body' },
+          ]);
+        }
+        const resource = updateResource(deps.db, c.get('user').id, id, patch);
         if (!resource) throw notFound(id);
         return c.json(resource, 200);
       },
@@ -189,7 +192,12 @@ export function resourcesRoutes(deps: AppDeps) {
       zValidator('json', resourceDeleteBodySchema, validationHook),
       (c) =>
         c.json(
-          deleteResources(deps.db, c.get('user').id, c.req.valid('json').ids),
+          deleteResources(
+            deps.db,
+            c.get('user').id,
+            c.req.valid('json').ids,
+            (rel) => removeImage(deps.uploadDir, rel),
+          ),
           200,
         ),
     );
