@@ -256,6 +256,7 @@ export function ResourcesDrawer(props: {
                 onChange={(event) => setSearch(event.target.value)}
               />
             </div>
+            {/* biome-ignore lint/a11y/useSemanticElements: icon-only segmented control */}
             <div className="seg icons" role="group" aria-label="Type">
               <button
                 type="button"

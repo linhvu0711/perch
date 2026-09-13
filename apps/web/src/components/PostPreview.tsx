@@ -4,17 +4,20 @@ import { useState } from 'react';
 
 function Segments({ text }: { text: string }) {
   const segments = previewSegments(text);
+  let start = 0;
   return (
     <>
-      {segments.map((segment, index) =>
-        segment.kind === 'text' ? (
-          <span key={index}>{segment.text}</span>
+      {segments.map((segment) => {
+        const key = start;
+        start += segment.text.length + 1;
+        return segment.kind === 'text' ? (
+          <span key={key}>{segment.text}</span>
         ) : (
-          <span key={index} className="xc blue">
+          <span key={key} className="xc blue">
             {segment.text}
           </span>
-        ),
-      )}
+        );
+      })}
     </>
   );
 }
@@ -38,12 +41,19 @@ export function PostPreview({ post }: { post: Post }) {
             <span className="faint">Nothing yet.</span>
           ) : (
             <>
-              {paragraphs.map((paragraph, index) => (
-                <p key={index}>
-                  <Segments text={paragraph} />
-                  {!expanded && fold.folded && index === paragraphs.length - 1 ? '…' : ''}
-                </p>
-              ))}
+              {(() => {
+                let start = 0;
+                return paragraphs.map((paragraph, index) => {
+                  const key = start;
+                  start += paragraph.length + 2;
+                  return (
+                    <p key={key}>
+                      <Segments text={paragraph} />
+                      {!expanded && fold.folded && index === paragraphs.length - 1 ? '…' : ''}
+                    </p>
+                  );
+                });
+              })()}
               {fold.folded && (
                 <button
                   type="button"

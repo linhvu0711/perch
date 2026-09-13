@@ -84,6 +84,7 @@ export function PostModal(): JSX.Element | null {
   const readOnly = post?.status === 'published';
   const currentId = post?.id;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset when the post changes
   useEffect(() => {
     setDrafts(null);
     savedRef.current = false;
@@ -100,6 +101,7 @@ export function PostModal(): JSX.Element | null {
     }
   }, [navigate, postQuery.error]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: focus when the post changes
   useEffect(() => {
     const modal = modalRef.current;
     if (modal && !modal.contains(document.activeElement)) modal.focus();
@@ -191,11 +193,15 @@ export function PostModal(): JSX.Element | null {
         setConfirm(null);
         return;
       }
+      if (confirmDetach !== null) {
+        setConfirmDetach(null);
+        return;
+      }
       requestClose();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [confirm, requestClose]);
+  }, [confirm, confirmDetach, requestClose]);
 
   const linkTitle = useCallback(
     (resourceId: number): string =>
@@ -284,6 +290,7 @@ export function PostModal(): JSX.Element | null {
   }
 
   const loadingShell = (body: JSX.Element) => (
+    // biome-ignore lint/a11y/noStaticElementInteractions: scrim click-to-close
     <div
       className="scrim"
       onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
@@ -330,6 +337,7 @@ export function PostModal(): JSX.Element | null {
 
   return (
     <>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: scrim click-to-close */}
       <div
         className="scrim"
         onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
@@ -394,6 +402,7 @@ export function PostModal(): JSX.Element | null {
                 />
               </div>
               <div className="field">
+                {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the slot grid */}
                 <label>
                   Images <span className="faint">{viewPost.media.length} of 4</span>
                 </label>
@@ -420,6 +429,7 @@ export function PostModal(): JSX.Element | null {
                     }
                     const caption = mediaCaption(media);
                     return (
+                      // biome-ignore lint/a11y/useSemanticElements: holds a nested remove button
                       <div
                         key={media.id}
                         className="slot filled"
@@ -459,6 +469,7 @@ export function PostModal(): JSX.Element | null {
                 </div>
               </div>
               <div className="field">
+                {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the links list */}
                 <label>
                   Linked resources <span className="faint">{viewPost.links.length}</span>
                   {!readOnly && (
