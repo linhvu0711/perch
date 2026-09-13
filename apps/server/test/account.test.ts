@@ -297,6 +297,66 @@ describe('account', () => {
     expect(reconnectedBody.account.id).toBe(1);
   });
 
+  test('disconnect revokes at X and keeps the row', async () => {
+    await connect();
+    server.clock.set(new Date('2026-09-04T10:30:00Z'));
+
+    const res = await request('/api/account/disconnect', {
+      method: 'POST',
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      account: null,
+      char_limit: 280,
+    });
+
+    const account = await request('/api/account');
+    expect(await account.json()).toEqual({
+      account: null,
+      char_limit: 280,
+    });
+
+    const revokeArgs = server.xClient.calls
+      .filter((c) => c.name === 'revokeToken')
+      .map((c) => c.args[0]);
+    expect(revokeArgs).toEqual(['refresh-1', 'access-1']);
+
+    const again = await request('/api/account/disconnect', {
+      method: 'POST',
+    });
+    expect(again.status).toBe(404);
+    expect(await again.json()).toEqual({
+      code: 'not_found',
+      message: 'No X account connected',
+    });
+
+    server.clock.set(new Date('2026-09-04T10:40:00Z'));
+    await connect();
+
+    const reconnected = await request('/api/account');
+    const body = await reconnected.json();
+    expect(body.account.id).toBe(1);
+    expect(body.account.connected_at).toBe('2026-09-04T10:40:00.000Z');
+  });
+
+  test('override beats the plan limit', async () => {
+    await connect();
+
+    await request('/api/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ char_limit_override: 500 }),
+    });
+    let res = await request('/api/account');
+    expect((await res.json()).char_limit).toBe(500);
+
+    await request('/api/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ char_limit_override: null }),
+    });
+    res = await request('/api/account');
+    expect((await res.json()).char_limit).toBe(25000);
+  });
+
   test('returns 503 when X OAuth is not configured', async () => {
     server.cleanup();
     server = await createTestServer({ xOAuthConfigured: false });
