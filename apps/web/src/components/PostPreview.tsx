@@ -56,6 +56,13 @@ export function PostPreview({ post }: { post: Post }) {
             </>
           )}
         </div>
+        {post.media.length > 0 && (
+          <div className={`imgs n${post.media.length}`}>
+            {post.media.map((media) => (
+              <img key={media.id} src={`/api/posts/${post.id}/media/${media.id}/file`} alt="" />
+            ))}
+          </div>
+        )}
         <div className="meta">
           {post.scheduled_at
             ? new Date(post.scheduled_at).toLocaleString('en-US', {

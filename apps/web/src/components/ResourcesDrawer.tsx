@@ -3,18 +3,29 @@ import {
   ArrowLeft,
   ExternalLink,
   FileText,
+  Image,
   LayoutGrid,
   Link2,
   Link2Off,
+  Paperclip,
   Search,
   Type,
+  Upload,
   X,
 } from 'lucide-react';
 import { type JSX, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 
 import { errorMessage } from '@/lib/api';
-import { useLinkResources, useResource, useResources, useUnlinkResources } from '@/lib/queries';
+import { formatBytes } from '@/lib/format';
+import {
+  useAttachFiles,
+  useAttachMedia,
+  useLinkResources,
+  useResource,
+  useResources,
+  useUnlinkResources,
+} from '@/lib/queries';
 
 import { IconButton } from './IconButton';
 import { Markdown } from './Markdown';
@@ -33,6 +44,7 @@ function insertableText(resource: Resource): string {
 export function ResourcesDrawer(props: {
   post: Post | null;
   open: boolean;
+  initialType?: 'all' | 'image';
   onClose(): void;
   onInsertText(text: string): void;
   ensurePostId?(): Promise<number | null>;
@@ -41,20 +53,23 @@ export function ResourcesDrawer(props: {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [type, setType] = useState<'all' | 'md'>('all');
+  const [type, setType] = useState<'all' | 'md' | 'image'>(props.initialType ?? 'all');
   const [viewId, setViewId] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const linkResources = useLinkResources();
   const unlinkResources = useUnlinkResources();
+  const attachMedia = useAttachMedia();
+  const attachFiles = useAttachFiles();
 
   useEffect(() => {
     if (props.open) {
       setViewId(null);
       setSearch('');
       setDebouncedSearch('');
-      setType('all');
+      setType(props.initialType ?? 'all');
     }
-  }, [props.open]);
+  }, [props.open, props.initialType]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedSearch(search), 250);
@@ -64,7 +79,7 @@ export function ResourcesDrawer(props: {
   const filters = useMemo(
     () => ({
       ...(debouncedSearch !== '' ? { search: debouncedSearch } : {}),
-      ...(type === 'md' ? { type: 'md' as const } : {}),
+      ...(type !== 'all' ? { type } : {}),
       order: 'desc' as const,
     }),
     [debouncedSearch, type],
@@ -74,6 +89,7 @@ export function ResourcesDrawer(props: {
   const detail = useResource(viewId);
 
   const linkedIds = new Set(props.post?.links.map((link) => link.resource_id) ?? []);
+  const mediaCount = props.post?.media.length ?? 0;
 
   const act = (fn: () => Promise<unknown>, message: string) => {
     void fn()
@@ -100,6 +116,31 @@ export function ResourcesDrawer(props: {
     })();
   };
 
+  const attach = (resource: Resource) => {
+    void (async () => {
+      if (mediaCount >= 4) {
+        toast('4 images max', 'warn');
+        return;
+      }
+      const postId = props.post?.id ?? (await props.ensurePostId?.());
+      if (postId === undefined || postId === null) return;
+      act(() => attachMedia.mutateAsync({ id: postId, resource_ids: [resource.id] }), 'Attached');
+    })();
+  };
+
+  const uploadToPost = (files: FileList | null) => {
+    void (async () => {
+      if (!files || files.length === 0) return;
+      if (mediaCount + files.length > 4) {
+        toast('4 images max', 'warn');
+        return;
+      }
+      const postId = props.post?.id ?? (await props.ensurePostId?.());
+      if (postId === undefined || postId === null) return;
+      act(() => attachFiles.mutateAsync({ id: postId, files: [...files] }), 'Image uploaded');
+    })();
+  };
+
   const insertText = (resource: Resource) => {
     const text = insertableText(resource);
     if (text === '') return;
@@ -117,7 +158,20 @@ export function ResourcesDrawer(props: {
 
   const actions = (resource: Resource) => (
     <div className="acts">
-      <IconButton label="Insert text into post" icon={Type} onClick={() => insertText(resource)} />
+      {resource.type === 'image' ? (
+        <IconButton
+          label="Attach to post"
+          icon={Paperclip}
+          disabled={mediaCount >= 4}
+          onClick={() => attach(resource)}
+        />
+      ) : (
+        <IconButton
+          label="Insert text into post"
+          icon={Type}
+          onClick={() => insertText(resource)}
+        />
+      )}
       {linkedIds.has(resource.id) ? (
         <IconButton label="Unlink from post" icon={Link2Off} onClick={() => toggleLink(resource)} />
       ) : (
@@ -165,7 +219,15 @@ export function ResourcesDrawer(props: {
             {viewed && (
               <>
                 <div className="body">
-                  <Markdown body={viewed.type === 'md' ? viewed.body : ''} />
+                  {viewed.type === 'image' ? (
+                    <img
+                      src={`/api/resources/${viewed.id}/file`}
+                      alt={viewed.title}
+                      style={{ width: '100%', borderRadius: 8 }}
+                    />
+                  ) : (
+                    <Markdown body={viewed.type === 'md' ? viewed.body : ''} />
+                  )}
                   {viewed.notes !== '' && (
                     <div className="note" style={{ marginTop: 10 }}>
                       <b>Your note.</b> {viewed.notes}
@@ -206,6 +268,15 @@ export function ResourcesDrawer(props: {
               </button>
               <button
                 type="button"
+                aria-label="Images"
+                title="Images"
+                aria-pressed={type === 'image'}
+                onClick={() => setType('image')}
+              >
+                <Image size={16} strokeWidth={1.75} />
+              </button>
+              <button
+                type="button"
                 aria-label="Notes"
                 title="Notes"
                 aria-pressed={type === 'md'}
@@ -217,6 +288,27 @@ export function ResourcesDrawer(props: {
             <IconButton label="Close" icon={X} variant="ghost" onClick={props.onClose} />
           </div>
           <div className="dlist">
+            {(type === 'image' || type === 'all') && (
+              <div className="ditem">
+                <span className="ic">
+                  <Upload size={16} strokeWidth={1.75} />
+                </span>
+                <div className="dmeta">
+                  <div className="tt">Upload from computer</div>
+                  <div className="sub">
+                    PNG, JPG, WebP, GIF · 5 MB max · attaches without making a resource
+                  </div>
+                </div>
+                <div className="acts">
+                  <IconButton
+                    label="Upload and attach"
+                    icon={Upload}
+                    disabled={mediaCount >= 4}
+                    onClick={() => fileInputRef.current?.click()}
+                  />
+                </div>
+              </div>
+            )}
             {items.map((resource) => (
               <div key={resource.id} className="ditem">
                 <button
@@ -225,14 +317,22 @@ export function ResourcesDrawer(props: {
                   title="View"
                   onClick={() => setViewId(resource.id)}
                 >
-                  <FileText size={16} strokeWidth={1.75} />
+                  {resource.type === 'image' ? (
+                    <img src={`/api/resources/${resource.id}/file`} alt="" />
+                  ) : (
+                    <FileText size={16} strokeWidth={1.75} />
+                  )}
                 </button>
                 <div className="dmeta">
                   <button type="button" className="tt" onClick={() => setViewId(resource.id)}>
                     {resource.title}
                     {linkedIds.has(resource.id) && <span className="faint"> · linked</span>}
                   </button>
-                  <div className="sub">{insertableText(resource).slice(0, 80)}</div>
+                  <div className="sub">
+                    {resource.type === 'image'
+                      ? `${formatBytes(resource.bytes)} · ${resource.width} × ${resource.height}`
+                      : insertableText(resource).slice(0, 80)}
+                  </div>
                 </div>
                 {actions(resource)}
               </div>
@@ -265,6 +365,17 @@ export function ResourcesDrawer(props: {
           </div>
         </>
       )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        multiple
+        hidden
+        onChange={(event) => {
+          uploadToPost(event.target.files);
+          event.target.value = '';
+        }}
+      />
     </div>
   );
 }

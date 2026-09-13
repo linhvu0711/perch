@@ -3,6 +3,8 @@ import type {
   ImageCreateResponse,
   NoteCreate,
   PostCreate,
+  PostMediaDetachBody,
+  PostMediaFilesResponse,
   PostPatch,
   PostStatus,
   ResourcePatch,
@@ -357,6 +359,62 @@ export function useUnlinkResources() {
       void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', id] });
       void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
       void queryClient.invalidateQueries({ queryKey: ['resources', 'list'] });
+    },
+  });
+}
+
+export function useAttachMedia() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, resource_ids }: { id: number; resource_ids: number[] }) =>
+      unwrap(
+        api.api.posts[':id'].media.$post({
+          param: { id: String(id) },
+          json: { resource_ids },
+        }),
+      ),
+    onSuccess: (_data, { id }) => {
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', id] });
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
+      void queryClient.invalidateQueries({ queryKey: ['resources', 'list'] });
+    },
+  });
+}
+
+export function useAttachFiles() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, files }: { id: number; files: File[] }) => {
+      const form = new FormData();
+      for (const file of files) form.append('files', file);
+      return unwrap(
+        fetch(`/api/posts/${id}/media/files`, {
+          method: 'POST',
+          body: form,
+          credentials: 'same-origin',
+        }) as Promise<JsonResponse<PostMediaFilesResponse>>,
+      );
+    },
+    onSuccess: (_data, { id }) => {
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', id] });
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
+    },
+  });
+}
+
+export function useDetachMedia() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number } & PostMediaDetachBody) =>
+      unwrap(
+        api.api.posts[':id'].media.$delete({
+          param: { id: String(id) },
+          json: body,
+        }),
+      ),
+    onSuccess: (_data, { id }) => {
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', id] });
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
     },
   });
 }

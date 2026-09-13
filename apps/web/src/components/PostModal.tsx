@@ -1,4 +1,4 @@
-import type { Post } from '@perch/core';
+import type { Post, PostMedia } from '@perch/core';
 import {
   CHAR_LIMIT_DEFAULT,
   COST_POST_USD,
@@ -7,7 +7,7 @@ import {
   formatCost,
   weightedLength,
 } from '@perch/core';
-import { FileText, FolderOpen, Trash2, X } from 'lucide-react';
+import { FileText, FolderOpen, Plus, Trash2, X } from 'lucide-react';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 
@@ -16,6 +16,7 @@ import {
   useAccount,
   useCreatePost,
   useDeletePosts,
+  useDetachMedia,
   usePost,
   useUnlinkResources,
   useUpdatePost,
@@ -23,6 +24,7 @@ import {
 
 import { ConfirmDialog } from './ConfirmDialog';
 import { IconButton } from './IconButton';
+import { Lightbox } from './Lightbox';
 import { PostPreview } from './PostPreview';
 import { ResourcesDrawer } from './ResourcesDrawer';
 import { StatusPill } from './StatusPill';
@@ -64,6 +66,7 @@ export function PostModal(): JSX.Element | null {
   const updatePost = useUpdatePost();
   const deletePosts = useDeletePosts();
   const unlinkResources = useUnlinkResources();
+  const detachMedia = useDetachMedia();
   const modalRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const timerRef = useRef<number>(undefined);
@@ -71,7 +74,10 @@ export function PostModal(): JSX.Element | null {
   const savedRef = useRef(false);
   const pendingRef = useRef<{ title?: string; text?: string }>({});
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerType, setDrawerType] = useState<'all' | 'image'>('all');
   const [confirm, setConfirm] = useState<'delete' | null>(null);
+  const [confirmDetach, setConfirmDetach] = useState<PostMedia | null>(null);
+  const [lightbox, setLightbox] = useState<PostMedia | null>(null);
   const [drafts, setDrafts] = useState<{ title: string; text: string } | null>(null);
 
   const post = postQuery.data;
@@ -190,6 +196,38 @@ export function PostModal(): JSX.Element | null {
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [confirm, requestClose]);
+
+  const linkTitle = useCallback(
+    (resourceId: number): string =>
+      post?.links.find((link) => link.resource_id === resourceId)?.title ??
+      `Resource ${resourceId}`,
+    [post],
+  );
+
+  const detachOne = useCallback(
+    (media: PostMedia) => {
+      if (currentId === undefined) return;
+      void detachMedia
+        .mutateAsync({ id: currentId, positions: [media.position] })
+        .then(() =>
+          toast(
+            media.from_resource_id !== null
+              ? 'Image removed. The resource is still linked.'
+              : 'Image removed',
+          ),
+        )
+        .catch((error: unknown) => toast(errorMessage(error), 'warn'));
+    },
+    [currentId, detachMedia],
+  );
+
+  const mediaCaption = useCallback(
+    (media: PostMedia): string =>
+      media.from_resource_id !== null
+        ? `From ${linkTitle(media.from_resource_id)}`
+        : 'Uploaded file',
+    [linkTitle],
+  );
 
   const scheduleSave = useCallback(
     (patch: { title?: string; text?: string }) => {
@@ -357,13 +395,81 @@ export function PostModal(): JSX.Element | null {
               </div>
               <div className="field">
                 <label>
+                  Images <span className="faint">{viewPost.media.length} of 4</span>
+                </label>
+                <div className="slots">
+                  {[0, 1, 2, 3].map((index) => {
+                    const media = viewPost.media[index];
+                    if (media === undefined) {
+                      return (
+                        <button
+                          key={index}
+                          type="button"
+                          className="slot"
+                          title="Add image"
+                          aria-label="Add image"
+                          disabled={readOnly}
+                          onClick={() => {
+                            setDrawerType('image');
+                            setDrawerOpen(true);
+                          }}
+                        >
+                          {index === viewPost.media.length && <Plus size={18} strokeWidth={1.75} />}
+                        </button>
+                      );
+                    }
+                    const caption = mediaCaption(media);
+                    return (
+                      <div
+                        key={media.id}
+                        className="slot filled"
+                        role="button"
+                        tabIndex={0}
+                        title={`${caption}. Click to view.`}
+                        onClick={() => setLightbox(media)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') setLightbox(media);
+                        }}
+                      >
+                        <img
+                          src={`/api/posts/${viewPost.id}/media/${media.id}/file`}
+                          alt={caption}
+                        />
+                        {!readOnly && (
+                          <button
+                            type="button"
+                            className="x"
+                            title="Remove"
+                            aria-label="Remove image"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (media.from_resource_id !== null) {
+                                detachOne(media);
+                              } else {
+                                setConfirmDetach(media);
+                              }
+                            }}
+                          >
+                            <X size={11} strokeWidth={2.5} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="field">
+                <label>
                   Linked resources <span className="faint">{viewPost.links.length}</span>
                   {!readOnly && (
                     <span className="right">
                       <IconButton
                         label="Browse resources"
                         icon={FolderOpen}
-                        onClick={() => setDrawerOpen(true)}
+                        onClick={() => {
+                          setDrawerType('all');
+                          setDrawerOpen(true);
+                        }}
                       />
                     </span>
                   )}
@@ -443,6 +549,7 @@ export function PostModal(): JSX.Element | null {
             <ResourcesDrawer
               post={post ?? null}
               open={drawerOpen}
+              initialType={drawerType}
               ensurePostId={ensurePostId}
               onClose={() => setDrawerOpen(false)}
               onNavigate={openResource}
@@ -460,6 +567,33 @@ export function PostModal(): JSX.Element | null {
           </div>
         </div>
       </div>
+      {lightbox !== null && (
+        <Lightbox
+          src={`/api/posts/${viewPost.id}/media/${lightbox.id}/file`}
+          caption={mediaCaption(lightbox)}
+          onClose={() => setLightbox(null)}
+        />
+      )}
+      {confirmDetach !== null && currentId !== undefined && (
+        <ConfirmDialog
+          title="Remove this image?"
+          body={
+            <p>
+              It was uploaded straight to the post and is <b>not a resource</b>. Removing it deletes
+              the file. You would have to upload it again.
+            </p>
+          }
+          ok="Remove"
+          danger
+          busy={detachMedia.isPending}
+          onOk={() => {
+            const media = confirmDetach;
+            setConfirmDetach(null);
+            detachOne(media);
+          }}
+          onCancel={() => setConfirmDetach(null)}
+        />
+      )}
       {confirm === 'delete' && post && (
         <ConfirmDialog
           title={`Delete post #${post.id}?`}
