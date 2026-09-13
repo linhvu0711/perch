@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { POST_LIST_LIMIT_DEFAULT } from '@perch/core';
 import type { TestServer } from '@perch/server/testing';
-import { createTestServer, PNG_3X2 } from '@perch/server/testing';
+import { connectTestAccount, createTestServer, PNG_3X2 } from '@perch/server/testing';
 
 import { runCli } from '../src/cli';
 import { makeCtx } from './helpers';
@@ -569,5 +569,93 @@ describe('post status and schedule', () => {
       message: 'Invalid request',
       errors: [{ path: 'text', message: 'Text is empty' }],
     });
+  });
+});
+
+describe('post publish and retry', () => {
+  test('publishes a draft and prints the post with the X url', async () => {
+    connectTestAccount(server);
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--text', 'Hello', '--json'], setup.ctx);
+
+    const publish = makeCtx(server);
+    expect(await runCli(['post', 'publish', '1', '--json'], publish.ctx)).toBe(0);
+    expect(JSON.parse(publish.out())).toMatchObject({
+      status: 'published',
+      x_post_url: 'https://x.com/perchtester/status/2',
+      scheduled_at: null,
+    });
+    expect(publish.err()).toBe('');
+  });
+
+  test('publish exits 1 with the promote checks on an empty draft', async () => {
+    connectTestAccount(server);
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--json'], setup.ctx);
+
+    const publish = makeCtx(server);
+    expect(await runCli(['post', 'publish', '1', '--json'], publish.ctx)).toBe(1);
+    expect(JSON.parse(publish.err())).toEqual({
+      code: 'validation',
+      message: 'Invalid request',
+      errors: [{ path: 'text', message: 'Text is empty' }],
+    });
+  });
+
+  test('publish exits 1 with publish_failed and retry then succeeds', async () => {
+    connectTestAccount(server);
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--text', 'Hello', '--json'], setup.ctx);
+    server.xClient.createPostError = new Error('Service Unavailable');
+
+    const publish = makeCtx(server);
+    expect(await runCli(['post', 'publish', '1', '--json'], publish.ctx)).toBe(1);
+    expect(JSON.parse(publish.err())).toEqual({
+      code: 'publish_failed',
+      message: 'Service Unavailable',
+    });
+
+    server.xClient.createPostError = null;
+    const retry = makeCtx(server);
+    expect(await runCli(['post', 'retry', '1', '--json'], retry.ctx)).toBe(0);
+    expect(JSON.parse(retry.out())).toMatchObject({
+      status: 'published',
+      retry_count: 1,
+    });
+  });
+
+  test('publish without an account exits 1', async () => {
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--text', 'Hello', '--json'], setup.ctx);
+
+    const publish = makeCtx(server);
+    expect(await runCli(['post', 'publish', '1', '--json'], publish.ctx)).toBe(1);
+    expect(JSON.parse(publish.err())).toEqual({
+      code: 'not_found',
+      message: 'No X account connected',
+    });
+  });
+
+  test('lists missed posts and shows the flag in the table', async () => {
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--text', 'Hello', '--json'], setup.ctx);
+    await runCli(
+      ['post', 'schedule', '1', '--at', '2026-09-01 09:00', '--force', '--json'],
+      setup.ctx,
+    );
+    await runCli(['post', 'create', '--text', 'Later', '--json'], setup.ctx);
+    await runCli(['post', 'schedule', '2', '--at', '2026-09-10 09:00', '--json'], setup.ctx);
+
+    const json = makeCtx(server);
+    expect(await runCli(['post', 'list', '--missed', '--json'], json.ctx)).toBe(0);
+    const result = JSON.parse(json.out());
+    expect(result.items.map((i: { id: number }) => i.id)).toEqual([1]);
+    expect(result.items[0].missed).toBe(true);
+
+    const table = makeCtx(server, { isTTY: true });
+    expect(await runCli(['post', 'list', '--missed', '--table'], table.ctx)).toBe(0);
+    const lines = table.out().split('\n');
+    expect(lines.some((line) => line.includes('missed'))).toBe(true);
+    expect(lines).toContain('1 shown · 1 total');
   });
 });

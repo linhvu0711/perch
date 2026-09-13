@@ -63,7 +63,9 @@ function printPost(ctx: CliContext, options: GlobalOptions, post: Post): void {
       characters: `${post.character_count} / ${post.limit}`,
       cost: formatCost(post.estimated_cost),
       scheduled: post.scheduled_at ?? '',
+      missed: post.missed ? 'yes' : '',
       published: post.published_at ?? '',
+      x_url: post.x_post_url ?? '',
       links: post.links.map((link) => link.resource_id).join(', '),
       tags: post.tags.join(', '),
       media: post.media.map((item) => item.position).join(', '),
@@ -185,6 +187,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
     .option('--cursor <cursor>')
     .option('--scheduled')
     .option('--unscheduled')
+    .option('--missed')
     .action(
       async (commandOptions: {
         status?: string;
@@ -196,6 +199,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
         cursor?: string;
         scheduled?: boolean;
         unscheduled?: boolean;
+        missed?: boolean;
       }) => {
         if (commandOptions.scheduled === true && commandOptions.unscheduled === true) {
           throw new CliError('bad_args', 'Use one of --scheduled or --unscheduled');
@@ -235,6 +239,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
               ...(commandOptions.tag !== undefined ? { tag: commandOptions.tag } : {}),
               ...(commandOptions.scheduled === true ? { scheduled: 'true' as const } : {}),
               ...(commandOptions.unscheduled === true ? { scheduled: 'false' as const } : {}),
+              ...(commandOptions.missed === true ? { missed: 'true' as const } : {}),
               limit: String(Number(commandOptions.limit)),
               ...(commandOptions.cursor !== undefined ? { cursor: commandOptions.cursor } : {}),
             },
@@ -248,7 +253,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
 
         const rows = result.items.map((item) => ({
           id: item.id,
-          status: item.status,
+          status: item.missed ? 'missed' : item.status,
           when: item.scheduled_at ?? item.published_at ?? '',
           title: item.title,
           chars: `${item.character_count} / ${item.limit}`,
@@ -620,6 +625,30 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
           param: { id: String(id) },
           json: { at: commandOptions.at, ...(commandOptions.force ? { force: true } : {}) },
         }),
+      );
+      printPost(ctx, program.opts<GlobalOptions>(), post);
+    });
+
+  post
+    .command('publish <id>')
+    .description('Publish a post now')
+    .action(async (idValue: string) => {
+      const id = positiveId(idValue);
+      const api = apiFor(program, ctx);
+      const post = await api.call(
+        api.client.api.posts[':id'].publish.$post({ param: { id: String(id) } }),
+      );
+      printPost(ctx, program.opts<GlobalOptions>(), post);
+    });
+
+  post
+    .command('retry <id>')
+    .description('Retry a failed post now')
+    .action(async (idValue: string) => {
+      const id = positiveId(idValue);
+      const api = apiFor(program, ctx);
+      const post = await api.call(
+        api.client.api.posts[':id'].retry.$post({ param: { id: String(id) } }),
       );
       printPost(ctx, program.opts<GlobalOptions>(), post);
     });
