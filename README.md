@@ -2,47 +2,52 @@
 
 Perch is a single-user workspace for preparing and managing X content. This initial scaffold provides one Bun process with a SQLite database, authenticated HTTP API, built React web shell, and Commander CLI.
 
-## Prerequisites
+## Quick start (server)
 
-- Bun 1.4 or newer
-
-## Install
+Prerequisite: Bun 1.4 or newer.
 
 ```sh
 bun install
 cp .env.example .env
 ```
 
-Set `PERCH_TOKEN` in `.env` to a private shared secret before starting the server. To enable Connect X, also set `PERCH_X_CLIENT_ID`, `PERCH_X_CLIENT_SECRET`, and `PERCH_PUBLIC_URL`.
-
-## Run
-
-Build the web app, then start the server on port 3000:
+Set `PERCH_TOKEN` in `.env` to a private shared secret, then build the web app and start the server in one command:
 
 ```sh
-bun run build
-bun run dev
+bun run start:local
 ```
 
-The server serves `apps/web/dist` at `/` and the API at `/api/*`. For web development with hot reload, run Vite on port 5173; it proxies `/api` to the Bun server:
+Open http://127.0.0.1:3000.
+
+## Web login
+
+The login card has one field, "Access token". Type the `PERCH_TOKEN` value and click "Sign in". The session is stored in the `perch_session` cookie.
+
+## X app setup
+
+To enable Connect X, create a "Web App" client at console.x.com with callback `<PERCH_PUBLIC_URL>/auth/x/callback`, then set `PERCH_X_CLIENT_ID`, `PERCH_X_CLIENT_SECRET`, and `PERCH_PUBLIC_URL`. After signing in, connect the account under Settings → Connect X.
+
+## CLI install
+
+Build the single-file binary and install it on your PATH:
 
 ```sh
-bun run dev:web
+bun run cli:build
+install -m 755 apps/cli/dist/perch /usr/local/bin/perch
 ```
 
-Both `bun run dev` and `bun run start` run from the repository root. Relative paths in `.env` are resolved from that root.
-
-## Check and build
+(`sudo` the `install` line if the folder is not writable.) Then:
 
 ```sh
-bun run build
-bun test
-bun run typecheck
+perch --help
+perch config set server-url <url>
+perch config set token <value>
+perch auth status
 ```
 
-## CLI
+`PERCH_TOKEN` works in place of `perch config set token`.
 
-Link the source CLI globally:
+For development you can link the source CLI instead:
 
 ```sh
 cd apps/cli
@@ -50,20 +55,48 @@ bun link
 perch auth status
 ```
 
-Alternatively, build the standalone executable from the repository root:
+The CLI stores local configuration at `~/.perch/config.json` unless `PERCH_CONFIG_PATH` overrides it.
+
+## Development
 
 ```sh
-bun run cli:build
-apps/cli/dist/perch auth status
+bun run dev        # server with --watch on port 3000
+bun run dev:web    # Vite on port 5173, proxies /api to the Bun server
+bun run build      # build the web app into apps/web/dist
+bun test
+bun run typecheck
 ```
 
-The CLI stores local configuration at `~/.perch/config.json` unless `PERCH_CONFIG_PATH` overrides it. Use `perch config set token <value>` or set `PERCH_TOKEN`, then use `perch auth status` to verify authentication.
+Both `bun run dev` and `bun run start` run from the repository root. Relative paths in `.env` are resolved from that root. `bun run start` alone 503s when the web app is not built; `bun run start:local` builds first.
 
 ## For agents
 
 - Run `perch resource pull` first. It copies every resource into a local folder of Markdown files.
 - Read the Mirror at `~/.perch/resources/` with your file tools. `perch status` prints the Mirror path and the last pull time.
 - Write through the CLI (`perch resource add`, `edit`, `delete`), never into the Mirror. Pull again to pick up changes.
+
+## Docker
+
+```sh
+docker build -t perch .
+docker run -d --name perch -p 3000:3000 -e PERCH_TOKEN=perch-dev -e PERCH_SECURE_COOKIES=false perch
+```
+
+The image holds Bun, the built web app, and the Litestream binary. `docker/start.sh` runs `litestream replicate -exec` around the server when `PERCH_R2_BUCKET` is set, and plain `bun` when it is not; `PERCH_RESTORE_FROM_R2=true` restores the database and uploads from R2 before boot.
+
+## Railway settings
+
+Railway builds the repo `Dockerfile` on push. In the service settings:
+
+- Volume mount path: `/data`
+- Health check path: `/health` (needs no login; the check runs once per deploy on the injected `PORT`)
+- Start command: none — the Dockerfile `CMD` starts the server
+
+Set the variables from the Environment table below; `PERCH_PUBLIC_URL` is `https://<RAILWAY_PUBLIC_DOMAIN>`.
+
+## Backups and restore
+
+When the four `PERCH_R2_*` variables are set, Litestream streams the database to `PERCH_R2_BUCKET` under `litestream/`, and every upload is copied under `uploads/` after its local write (a failed copy is logged, never fatal). To restore onto a new or wiped volume, follow `docs/runbooks/restore.md`.
 
 ## Environment
 
