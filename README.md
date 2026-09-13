@@ -78,3 +78,9 @@ The CLI stores local configuration at `~/.perch/config.json` unless `PERCH_CONFI
 | `PERCH_X_CLIENT_ID` | No | — | X OAuth "Web App" client id; enables Connect X |
 | `PERCH_X_CLIENT_SECRET` | No | — | X OAuth "Web App" client secret |
 | `PERCH_PUBLIC_URL` | No | `http://127.0.0.1:3000` | Public base URL; must match the callback URL registered at X, so open the app at this URL |
+| `PERCH_TIMEZONE` | No | `UTC` | Time zone seeded into Settings on the first boot; Settings wins after that |
+| `PERCH_R2_ACCOUNT_ID` | No | — | Cloudflare account id; the R2 endpoint is `https://<id>.r2.cloudflarestorage.com`; set all four or none |
+| `PERCH_R2_BUCKET` | No | — | R2 bucket that holds the Litestream replica under `litestream/` and upload copies under `uploads/`; set all four or none |
+| `PERCH_R2_ACCESS_KEY_ID` | No | — | R2 API token key id; set all four or none |
+| `PERCH_R2_SECRET_ACCESS_KEY` | No | — | R2 API token secret; set all four or none |
+| `PERCH_RESTORE_FROM_R2` | No | `false` | Set to `true` for one deploy to restore the database and uploads from R2; read by `docker/start.sh`, not by the server |
