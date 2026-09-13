@@ -1,15 +1,27 @@
+import path from 'node:path';
+
 import { zValidator } from '@hono/zod-validator';
 import {
   postCreateSchema,
   postDeleteBodySchema,
   postLinksBodySchema,
   postListQuerySchema,
+  postMediaAttachBodySchema,
+  postMediaDetachBodySchema,
   postPatchSchema,
 } from '@perch/core';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppDeps, AppEnv } from '../app';
+import {
+  attachFromFiles,
+  attachFromResources,
+  detachMedia,
+  type MediaFiles,
+  MissingMediaPositionError,
+} from '../db/postMedia';
 import {
   createPost,
   deletePosts,
@@ -17,14 +29,17 @@ import {
   InvalidPostCursorError,
   linkResources,
   listPosts,
+  MediaLimitError,
   MissingResourceError,
   PostImmutableError,
   previewPost,
   unlinkResources,
   updatePost,
 } from '../db/posts';
+import { postMedia, posts } from '../db/schema';
 import { getSettings } from '../db/settings';
 import { ApiError, validationHook } from '../errors';
+import { inspectImage, readMedia, removeMedia, removeMediaDir, storeMedia } from '../images';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -40,6 +55,21 @@ function immutable(error: unknown): ApiError {
   }
   throw error;
 }
+
+function mediaLimit(error: unknown): ApiError {
+  if (error instanceof MediaLimitError) {
+    return new ApiError(400, 'validation', 'Invalid request', [
+      { path: error.path, message: 'At most 4 media per post' },
+    ]);
+  }
+  throw error;
+}
+
+const mediaFiles = (deps: AppDeps, userId: number): MediaFiles => ({
+  read: (rel) => readMedia(deps.uploadDir, rel),
+  store: (postId, bytes, ext) => storeMedia(deps.uploadDir, userId, postId, bytes, ext),
+  remove: (rel) => removeMedia(deps.uploadDir, rel),
+});
 
 export function postsRoutes(deps: AppDeps) {
   return new Hono<AppEnv>()
@@ -59,13 +89,21 @@ export function postsRoutes(deps: AppDeps) {
         throw error;
       }
     })
-    .post('/', zValidator('json', postCreateSchema, validationHook), (c) => {
+    .post('/', zValidator('json', postCreateSchema, validationHook), async (c) => {
+      const userId = c.get('user').id;
       try {
         return c.json(
-          createPost(deps.db, c.get('user').id, c.req.valid('json'), deps.clock.now()),
+          await createPost(
+            deps.db,
+            userId,
+            c.req.valid('json'),
+            deps.clock.now(),
+            mediaFiles(deps, userId),
+          ),
           201,
         );
       } catch (error) {
+        if (error instanceof MediaLimitError) throw mediaLimit(error);
         if (error instanceof MissingResourceError) {
           throw new ApiError(400, 'validation', 'Invalid request', [
             { path: 'from', message: `Resource ${error.resourceId} not found` },
@@ -103,6 +141,134 @@ export function postsRoutes(deps: AppDeps) {
           if (!post) throw notFound(id);
           return c.json(post, 200);
         } catch (error) {
+          throw immutable(error);
+        }
+      },
+    )
+    .post(
+      '/:id/media',
+      zValidator('param', idParamSchema, validationHook),
+      zValidator('json', postMediaAttachBodySchema, validationHook),
+      async (c) => {
+        const { id } = c.req.valid('param');
+        const userId = c.get('user').id;
+        try {
+          const result = await attachFromResources(
+            deps.db,
+            userId,
+            id,
+            c.req.valid('json').resource_ids,
+            mediaFiles(deps, userId),
+          );
+          if (!result) throw notFound(id);
+          return c.json(result, 200);
+        } catch (error) {
+          if (error instanceof MediaLimitError) throw mediaLimit(error);
+          throw immutable(error);
+        }
+      },
+    )
+    .post('/:id/media/files', zValidator('param', idParamSchema, validationHook), async (c) => {
+      const { id } = c.req.valid('param');
+      const userId = c.get('user').id;
+      const form = await c.req.formData();
+      const files = form.getAll('files').filter((v): v is File => v instanceof File);
+      if (files.length === 0) {
+        throw new ApiError(400, 'validation', 'Invalid request', [
+          { path: 'files', message: 'At least one file is required' },
+        ]);
+      }
+
+      const inputs = [];
+      const results: Array<
+        | { name: string; ok: true }
+        | { name: string; ok: false; error: { code: string; message: string } }
+      > = [];
+      for (const file of files) {
+        const bytes = await file.bytes();
+        const inspected = await inspectImage(bytes);
+        if (!inspected.ok) {
+          results.push({ name: file.name, ok: false, error: inspected.error });
+          continue;
+        }
+        inputs.push({ name: file.name, bytes, mime: inspected.mime, ext: inspected.ext });
+        results.push({ name: file.name, ok: true });
+      }
+
+      try {
+        const response = await attachFromFiles(
+          deps.db,
+          userId,
+          id,
+          inputs,
+          mediaFiles(deps, userId),
+        );
+        if (!response) throw notFound(id);
+        let index = 0;
+        return c.json(
+          {
+            results: results.map((result) =>
+              result.ok ? { ...response.results[index++]! } : result,
+            ),
+          },
+          200,
+        );
+      } catch (error) {
+        if (error instanceof MediaLimitError) throw mediaLimit(error);
+        throw immutable(error);
+      }
+    })
+    .get(
+      '/:id/media/:mediaId/file',
+      zValidator(
+        'param',
+        z.object({ id: z.coerce.number().int().positive(), mediaId: z.coerce.number().int() }),
+        validationHook,
+      ),
+      (c) => {
+        const { id, mediaId } = c.req.valid('param');
+        const row = deps.db
+          .select({ media: postMedia })
+          .from(postMedia)
+          .innerJoin(posts, eq(postMedia.postId, posts.id))
+          .where(
+            and(
+              eq(postMedia.postId, id),
+              eq(postMedia.id, mediaId),
+              eq(posts.userId, c.get('user').id),
+            ),
+          )
+          .get();
+        if (!row) throw notFound(id);
+        const mediaRow = row.media;
+        return new Response(Bun.file(path.join(deps.uploadDir, mediaRow.path)), {
+          headers: {
+            'Content-Type': mediaRow.mime,
+            'Cache-Control': 'private, max-age=31536000, immutable',
+          },
+        });
+      },
+    )
+    .delete(
+      '/:id/media',
+      zValidator('param', idParamSchema, validationHook),
+      zValidator('json', postMediaDetachBodySchema, validationHook),
+      (c) => {
+        const { id } = c.req.valid('param');
+        const userId = c.get('user').id;
+        try {
+          const media = detachMedia(deps.db, userId, id, c.req.valid('json'), (rel) =>
+            removeMedia(deps.uploadDir, rel),
+          );
+          if (!media) throw notFound(id);
+          return c.json({ media }, 200);
+        } catch (error) {
+          if (error instanceof MediaLimitError) throw mediaLimit(error);
+          if (error instanceof MissingMediaPositionError) {
+            throw new ApiError(400, 'validation', 'Invalid request', [
+              { path: 'positions', message: `No media at position ${error.position}` },
+            ]);
+          }
           throw immutable(error);
         }
       },
@@ -147,7 +313,13 @@ export function postsRoutes(deps: AppDeps) {
         }
       },
     )
-    .delete('/', zValidator('json', postDeleteBodySchema, validationHook), (c) =>
-      c.json(deletePosts(deps.db, c.get('user').id, c.req.valid('json').ids), 200),
-    );
+    .delete('/', zValidator('json', postDeleteBodySchema, validationHook), (c) => {
+      const userId = c.get('user').id;
+      return c.json(
+        deletePosts(deps.db, userId, c.req.valid('json').ids, (postId) =>
+          removeMediaDir(deps.uploadDir, userId, postId),
+        ),
+        200,
+      );
+    });
 }

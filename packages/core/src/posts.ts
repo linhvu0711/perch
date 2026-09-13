@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { batchErrorSchema, resourceTypeSchema } from './resources';
+import { batchErrorSchema, IMAGE_MIME_TYPES, resourceTypeSchema } from './resources';
 
 export const POST_STATUSES = ['draft', 'official', 'published', 'failed'] as const;
 export const postStatusSchema = z.enum(POST_STATUSES);
@@ -19,6 +19,17 @@ export const postLinkSchema = z.object({
 });
 export type PostLink = z.infer<typeof postLinkSchema>;
 
+export const POST_MEDIA_MAX = 4;
+
+export const postMediaSchema = z.object({
+  id: z.number().int(),
+  position: z.number().int().min(1).max(POST_MEDIA_MAX),
+  mime: z.enum(IMAGE_MIME_TYPES),
+  bytes: z.number().int(),
+  from_resource_id: z.number().int().nullable(),
+});
+export type PostMedia = z.infer<typeof postMediaSchema>;
+
 export const postSchema = z.object({
   id: z.number().int(),
   status: postStatusSchema,
@@ -36,7 +47,7 @@ export const postSchema = z.object({
   limit: z.number().int(),
   estimated_cost: z.number(),
   links: z.array(postLinkSchema),
-  media: z.array(z.never()),
+  media: z.array(postMediaSchema),
 });
 export type Post = z.infer<typeof postSchema>;
 
@@ -109,6 +120,47 @@ export const postLinksResponseSchema = z.object({
 });
 export type PostLinkResult = z.infer<typeof postLinkResultSchema>;
 export type PostLinksResponse = z.infer<typeof postLinksResponseSchema>;
+
+export const postMediaAttachBodySchema = z
+  .object({
+    resource_ids: z.array(z.number().int().positive()).min(1).max(POST_MEDIA_MAX),
+  })
+  .strict();
+export type PostMediaAttachBody = z.infer<typeof postMediaAttachBodySchema>;
+
+export const postMediaAttachResultSchema = z.discriminatedUnion('ok', [
+  z.object({ id: z.number().int(), ok: z.literal(true), media: postMediaSchema }),
+  z.object({
+    id: z.number().int(),
+    ok: z.literal(false),
+    error: batchErrorSchema,
+  }),
+]);
+export const postMediaAttachResponseSchema = z.object({
+  results: z.array(postMediaAttachResultSchema),
+});
+export type PostMediaAttachResult = z.infer<typeof postMediaAttachResultSchema>;
+export type PostMediaAttachResponse = z.infer<typeof postMediaAttachResponseSchema>;
+
+export const postMediaFileResultSchema = z.discriminatedUnion('ok', [
+  z.object({ name: z.string(), ok: z.literal(true), media: postMediaSchema }),
+  z.object({ name: z.string(), ok: z.literal(false), error: batchErrorSchema }),
+]);
+export const postMediaFilesResponseSchema = z.object({
+  results: z.array(postMediaFileResultSchema),
+});
+export type PostMediaFileResult = z.infer<typeof postMediaFileResultSchema>;
+export type PostMediaFilesResponse = z.infer<typeof postMediaFilesResponseSchema>;
+
+export const postMediaDetachBodySchema = z.union([
+  z
+    .object({
+      positions: z.array(z.number().int().min(1).max(POST_MEDIA_MAX)).min(1),
+    })
+    .strict(),
+  z.object({ all: z.literal(true) }).strict(),
+]);
+export type PostMediaDetachBody = z.infer<typeof postMediaDetachBodySchema>;
 
 export const postDeleteBodySchema = z.object({
   ids: z.array(z.number().int().positive()).min(1).max(POST_BATCH_MAX),

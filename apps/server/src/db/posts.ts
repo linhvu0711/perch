@@ -2,6 +2,7 @@ import {
   dayBoundsUtc,
   effectiveCharLimit,
   estimateCost,
+  POST_MEDIA_MAX,
   type Post,
   type PostCreate,
   type PostDeleteResponse,
@@ -9,6 +10,7 @@ import {
   type PostLinksResponse,
   type PostList,
   type PostListQuery,
+  type PostMedia,
   type PostPatch,
   type PostPreview,
   postListTitle,
@@ -19,7 +21,8 @@ import { and, asc, count, desc, eq, inArray, or, type SQL, sql } from 'drizzle-o
 
 import { decodePostCursor, encodePostCursor } from './cursor';
 import type { Db } from './index';
-import { postLinks, posts, resources } from './schema';
+import { type MediaFiles, mediaForPosts } from './postMedia';
+import { postLinks, postMedia, posts, resources } from './schema';
 import { getSettings } from './settings';
 import { getConnectedAccount } from './xAccounts';
 
@@ -31,6 +34,12 @@ export class PostImmutableError extends Error {
   }
 }
 
+export class MediaLimitError extends Error {
+  constructor(public path: 'resource_ids' | 'files' | 'from') {
+    super('At most 4 media per post');
+  }
+}
+
 export class MissingResourceError extends Error {
   constructor(public resourceId: number) {
     super(`Resource ${resourceId} not found`);
@@ -39,7 +48,7 @@ export class MissingResourceError extends Error {
 
 type PostRow = typeof posts.$inferSelect;
 
-function toPost(row: PostRow, links: PostLink[], limit: number): Post {
+function toPost(row: PostRow, links: PostLink[], media: PostMedia[], limit: number): Post {
   return {
     id: row.id,
     status: row.status,
@@ -57,7 +66,7 @@ function toPost(row: PostRow, links: PostLink[], limit: number): Post {
     limit,
     estimated_cost: estimateCost(row.text),
     links,
-    media: [],
+    media,
   };
 }
 
@@ -93,15 +102,27 @@ function linksForPosts(db: Db, postIds: number[]): Map<number, PostLink[]> {
   return result;
 }
 
-export function createPost(db: Db, userId: number, input: PostCreate, now: Date): Post {
-  for (const resourceId of input.from ?? []) {
+export async function createPost(
+  db: Db,
+  userId: number,
+  input: PostCreate,
+  now: Date,
+  files?: MediaFiles,
+): Promise<Post> {
+  const fromResources = (input.from ?? []).map((resourceId) => {
     const resource = db
-      .select({ id: resources.id })
+      .select()
       .from(resources)
       .where(and(eq(resources.id, resourceId), eq(resources.userId, userId)))
       .get();
     if (!resource) throw new MissingResourceError(resourceId);
-  }
+    return resource;
+  });
+
+  const imageSources = fromResources.filter(
+    (resource) => resource.type === 'image' && resource.imagePath,
+  );
+  if (imageSources.length > POST_MEDIA_MAX) throw new MediaLimitError('from');
 
   const row = db.transaction((tx) => {
     const inserted = tx
@@ -124,6 +145,26 @@ export function createPost(db: Db, userId: number, input: PostCreate, now: Date)
     return inserted;
   });
 
+  if (files) {
+    let position = 1;
+    for (const resource of imageSources) {
+      const bytes = await files.read(resource.imagePath!);
+      if (!bytes) continue;
+      const ext = resource.imagePath!.split('.').pop() ?? 'png';
+      const rel = await files.store(row.id, bytes, ext);
+      db.insert(postMedia)
+        .values({
+          postId: row.id,
+          position: position++,
+          path: rel,
+          mime: resource.imageMime ?? 'image/png',
+          bytes: bytes.length,
+          fromResourceId: resource.id,
+        })
+        .run();
+    }
+  }
+
   const post = getPost(db, userId, row.id);
   if (!post) throw new Error('post insert failed');
   return post;
@@ -137,7 +178,12 @@ export function getPost(db: Db, userId: number, id: number): Post | null {
     .get();
   if (!row) return null;
 
-  return toPost(row, linksForPosts(db, [row.id]).get(row.id) ?? [], postLimit(db, userId));
+  return toPost(
+    row,
+    linksForPosts(db, [row.id]).get(row.id) ?? [],
+    mediaForPosts(db, [row.id]).get(row.id) ?? [],
+    postLimit(db, userId),
+  );
 }
 
 export function listPosts(
@@ -209,12 +255,11 @@ export function listPosts(
   const last = pageRows.at(-1);
 
   const limit = postLimit(db, userId);
-  const links = linksForPosts(
-    db,
-    pageRows.map((row) => row.id),
-  );
+  const postIds = pageRows.map((row) => row.id);
+  const links = linksForPosts(db, postIds);
+  const media = mediaForPosts(db, postIds);
   const items = pageRows.map((row) => {
-    const post = toPost(row, links.get(row.id) ?? [], limit);
+    const post = toPost(row, links.get(row.id) ?? [], media.get(row.id) ?? [], limit);
     return { ...post, title: postListTitle(post.title, post.text) };
   });
 
@@ -324,7 +369,12 @@ export function unlinkResources(
   };
 }
 
-export function deletePosts(db: Db, userId: number, ids: number[]): PostDeleteResponse {
+export function deletePosts(
+  db: Db,
+  userId: number,
+  ids: number[],
+  removeMediaDir?: (postId: number) => void,
+): PostDeleteResponse {
   return {
     results: ids.map((id) => {
       const deleted = db
@@ -333,13 +383,15 @@ export function deletePosts(db: Db, userId: number, ids: number[]): PostDeleteRe
         .returning({ id: posts.id })
         .get();
 
-      return deleted
-        ? { id, ok: true as const }
-        : {
-            id,
-            ok: false as const,
-            error: { code: 'not_found', message: `Post ${id} not found` },
-          };
+      if (!deleted) {
+        return {
+          id,
+          ok: false as const,
+          error: { code: 'not_found', message: `Post ${id} not found` },
+        };
+      }
+      removeMediaDir?.(id);
+      return { id, ok: true as const };
     }),
   };
 }

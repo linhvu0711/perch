@@ -92,6 +92,24 @@ export const postLinks = sqliteTable(
   (t) => [primaryKey({ columns: [t.postId, t.resourceId] })],
 );
 
+export const postMedia = sqliteTable(
+  'post_media',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    postId: integer('post_id')
+      .notNull()
+      .references(() => posts.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    path: text('path').notNull(),
+    mime: text('mime').notNull(),
+    bytes: integer('bytes').notNull(),
+    fromResourceId: integer('from_resource_id').references(() => resources.id, {
+      onDelete: 'set null',
+    }),
+  },
+  (t) => [uniqueIndex('post_media_post_position_idx').on(t.postId, t.position)],
+);
+
 export const xAccounts = sqliteTable(
   'x_accounts',
   {
