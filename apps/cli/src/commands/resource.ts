@@ -5,12 +5,12 @@ import {
   firstMarkdownHeading,
   RESOURCE_LIST_LIMIT_DEFAULT,
   RESOURCE_LIST_LIMIT_MAX,
-  resourceListQuerySchema,
-  resourceSchema,
   RESOURCE_TYPES,
   type Resource,
   type ResourcePatch,
   type ResourceType,
+  resourceListQuerySchema,
+  resourceSchema,
 } from '@perch/core';
 import type { Command } from 'commander';
 
