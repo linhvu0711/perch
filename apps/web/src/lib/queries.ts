@@ -286,6 +286,8 @@ export function usePost(id: number | null) {
   return useQuery({
     queryKey: ['posts', 'detail', id],
     queryFn: () => unwrap(api.api.posts[':id'].$get({ param: { id: String(id) } })),
+    // same cadence as the list poll so an open modal sees scheduler transitions
+    refetchInterval: 30_000,
     enabled: id !== null,
   });
 }
