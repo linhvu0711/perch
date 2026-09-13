@@ -641,7 +641,13 @@ export function demotePosts(db: Db, userId: number, ids: number[], now: Date): P
         return statusResultError(id, 'invalid_status', `Post ${id} is ${row.status}`);
       }
       db.update(posts)
-        .set({ status: 'draft', lastError: null, retryCount: 0, updatedAt: now })
+        .set({
+          status: 'draft',
+          lastError: null,
+          retryCount: 0,
+          nextAttemptAt: null,
+          updatedAt: now,
+        })
         .where(and(eq(posts.id, id), eq(posts.userId, userId)))
         .run();
       return { id, ok: true as const };
@@ -669,7 +675,13 @@ export function schedulePost(
     throw new ScheduleTimeError('Time is in the past');
   }
   db.update(posts)
-    .set({ scheduledAt: at, updatedAt: now })
+    .set({
+      scheduledAt: at,
+      nextAttemptAt: null,
+      lastError: null,
+      retryCount: 0,
+      updatedAt: now,
+    })
     .where(and(eq(posts.id, id), eq(posts.userId, userId)))
     .run();
   return getPost(db, userId, id, now);
@@ -691,7 +703,13 @@ export function unschedulePosts(
         return statusResultError(id, 'invalid_status', `Post ${id} is ${row.status}`);
       }
       db.update(posts)
-        .set({ scheduledAt: null, updatedAt: now })
+        .set({
+          scheduledAt: null,
+          nextAttemptAt: null,
+          lastError: null,
+          retryCount: 0,
+          updatedAt: now,
+        })
         .where(and(eq(posts.id, id), eq(posts.userId, userId)))
         .run();
       return { id, ok: true as const };

@@ -18,7 +18,8 @@ export class ApiError extends Error {
       | 'internal'
       | 'not_configured'
       | 'publish_failed'
-      | 'in_flight',
+      | 'in_flight'
+      | 'token_refresh_failed',
     message: string,
     public errors?: Array<{ path: string; message: string }>,
   ) {

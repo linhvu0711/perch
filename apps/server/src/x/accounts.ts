@@ -153,6 +153,9 @@ export function createXAccountService(deps: {
         if (!fresh || fresh.reconnectRequired) {
           throw new ApiError(409, 'reconnect_required', 'X account needs to be reconnected');
         }
+        if (fresh.expiresAt.getTime() <= deps.clock.now().getTime() + REFRESH_MARGIN_MS) {
+          throw new ApiError(503, 'token_refresh_failed', 'X token refresh failed');
+        }
         row = fresh;
       }
       return { account: row, accessToken: row.accessToken };
@@ -166,9 +169,15 @@ export function createXAccountService(deps: {
       let refreshToken = row.refreshToken;
       let accessToken = row.accessToken;
       if (!row.reconnectRequired) {
-        const fresh = await this.accessTokenFor(userId);
-        refreshToken = fresh.account.refreshToken;
-        accessToken = fresh.accessToken;
+        try {
+          const fresh = await this.accessTokenFor(userId);
+          refreshToken = fresh.account.refreshToken;
+          accessToken = fresh.accessToken;
+        } catch (error) {
+          if (!(error instanceof ApiError && error.code === 'token_refresh_failed')) {
+            throw error;
+          }
+        }
       }
       try {
         await deps.xClient.revokeToken(refreshToken);

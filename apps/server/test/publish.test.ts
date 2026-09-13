@@ -4,7 +4,7 @@ import type { Post } from '@perch/core';
 import { eq } from 'drizzle-orm';
 
 import { openDb } from '../src/db';
-import { posts } from '../src/db/schema';
+import { posts, xAccounts } from '../src/db/schema';
 import {
   connectTestAccount,
   createTestServer,
@@ -262,6 +262,23 @@ describe('publish', () => {
     expect(server.xClient.calls.map((call) => call.name)).toEqual(['createPost']);
   });
 
+  test('returns the promote checks for an invalid draft even with no account', async () => {
+    // Given: no account and an empty draft
+    await createPost({});
+
+    // When: publishing it now
+    const response = await request('/api/posts/1/publish', { method: 'POST' });
+
+    // Then: promote's checks come back instead of the account error
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      code: 'validation',
+      message: 'Invalid request',
+      errors: [{ path: 'text', message: 'Text is empty' }],
+    });
+    expect((await getPost(1)).status).toBe('draft');
+  });
+
   test('does not send a post that is already being sent', async () => {
     // Given: a connected account, an official post, and a send that waits on a gate
     connectTestAccount(server);
@@ -440,6 +457,65 @@ describe('scheduler tick', () => {
       retry_count: 4,
       last_error: 'old',
     });
+    expect((await getPost(1)).status).toBe('published');
+  });
+
+  test('a reschedule clears the pending retry', async () => {
+    // Given: a due official post whose first send failed, so a +1 minute retry is stored
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    setPost(1, { scheduledAt: new Date('2026-09-04T10:30:00Z') });
+    server.xClient.createPostError = new XError('http', 503, 'Service Unavailable');
+    await server.tick(new Date('2026-09-04T10:30:00Z'));
+    server.xClient.createPostError = null;
+
+    // When: the post is rescheduled for the afternoon
+    const schedule = await request('/api/posts/1/schedule', {
+      method: 'POST',
+      body: JSON.stringify({ at: '2026-09-04 15:00' }),
+    });
+    expect(schedule.status).toBe(200);
+
+    // Then: the stale retry deadline does not fire, and the new time sends once
+    const createPostCalls = () =>
+      server.xClient.calls.filter((call) => call.name === 'createPost').length;
+    await server.tick(new Date('2026-09-04T10:31:00Z'));
+    expect(createPostCalls()).toBe(1);
+    await server.tick(new Date('2026-09-04T15:00:00Z'));
+    expect(createPostCalls()).toBe(2);
+    expect((await getPost(1)).status).toBe('published');
+  });
+
+  test('a due post waits when the access token cannot be refreshed', async () => {
+    // Given: a connected account with an expired token and a refresh endpoint that is down
+    connectTestAccount(server);
+    const { db, sqlite } = openDb(path.join(server.dir, 'perch.db'));
+    db.update(xAccounts)
+      .set({ expiresAt: new Date('2026-09-04T10:01:00Z') })
+      .where(eq(xAccounts.id, 1))
+      .run();
+    sqlite.close();
+    server.xClient.refreshError = new XError('http', 500, 'Internal Server Error');
+    await createPost({ text: 'Hello', official: true });
+    setPost(1, { scheduledAt: new Date('2026-09-04T10:30:00Z') });
+
+    // When: the tick runs after the time
+    await server.tick(new Date('2026-09-04T10:31:00Z'));
+
+    // Then: nothing was sent and no retry was consumed
+    expect(server.xClient.calls.filter((call) => call.name === 'createPost')).toHaveLength(0);
+    expect(await getPost(1)).toMatchObject({
+      status: 'official',
+      retry_count: 0,
+      last_error: null,
+      scheduled_at: '2026-09-04T10:30:00.000Z',
+    });
+
+    // When: refresh recovers and a later tick runs
+    server.xClient.refreshError = null;
+    await server.tick(new Date('2026-09-04T10:32:00Z'));
+
+    // Then: the post sends
     expect((await getPost(1)).status).toBe('published');
   });
 

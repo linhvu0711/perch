@@ -110,7 +110,6 @@ export function createPublishService(deps: {
       }
       inFlight.add(id);
       try {
-        const { account, accessToken } = await deps.accounts.accessTokenFor(userId);
         const now = deps.clock.now();
         if (row.status === 'draft') {
           const { results } = promotePosts(deps.db, userId, [id], fileExists, now);
@@ -124,6 +123,7 @@ export function createPublishService(deps: {
             );
           }
         }
+        const { account, accessToken } = await deps.accounts.accessTokenFor(userId);
         const sent = await send(row, account, accessToken, now);
         if (!sent.ok) {
           deps.db
