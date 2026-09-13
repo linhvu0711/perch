@@ -57,6 +57,11 @@ export const connectStartSchema = z.object({
   authorize_url: z.string(),
 });
 
+export const countsSchema = z.object({
+  posts: z.number().int().nonnegative(),
+  resources: z.number().int().nonnegative(),
+});
+
 export const apiErrorSchema = z.object({
   code: z.string(),
   message: z.string(),
@@ -78,4 +83,5 @@ export type Status = z.infer<typeof statusSchema>;
 export type XAccount = z.infer<typeof xAccountSchema>;
 export type AccountStatus = z.infer<typeof accountStatusSchema>;
 export type ConnectStart = z.infer<typeof connectStartSchema>;
+export type Counts = z.infer<typeof countsSchema>;
 export type ApiError = z.infer<typeof apiErrorSchema>;

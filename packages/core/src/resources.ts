@@ -19,6 +19,7 @@ export const noteResourceSchema = z.object({
   notes: z.string(),
   created_at: z.string(),
   body: z.string(),
+  used_by: z.number().int().nonnegative(),
 });
 export const IMAGE_MIME_TYPES = [
   'image/png',
@@ -78,7 +79,7 @@ export type ResourcePatch = z.infer<typeof resourcePatchSchema>;
 export const resourceListQuerySchema = z.object({
   type: resourceTypeSchema.optional(),
   search: z.string().trim().max(200).optional(),
-  sort: z.enum(['created']).default('created'),
+  sort: z.enum(['created', 'used']).default('created'),
   order: z.enum(['asc', 'desc']).default('desc'),
   limit: z.coerce
     .number()
