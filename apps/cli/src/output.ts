@@ -11,6 +11,12 @@ export class CliError extends Error {
   }
 }
 
+export class BatchFailure extends CliError {
+  constructor(failed: number, total: number) {
+    super('batch_failed', `${failed} of ${total} items failed`, 1);
+  }
+}
+
 export type OutputMode = 'json' | 'table';
 
 export function resolveMode(

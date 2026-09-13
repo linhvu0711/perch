@@ -150,7 +150,8 @@ export function resourcesRoutes(deps: AppDeps) {
       c.header('Content-Type', 'application/x-ndjson');
       return stream(c, async (s) => {
         for (const r of listAllResources(deps.db, c.get('user').id)) {
-          await s.write(JSON.stringify(r) + '\n');
+          const { used_by: _usedBy, ...line } = r;
+          await s.write(JSON.stringify(line) + '\n');
         }
       });
     })

@@ -1,0 +1,372 @@
+import {
+  dayBoundsUtc,
+  effectiveCharLimit,
+  estimateCost,
+  postListTitle,
+  previewSegments,
+  weightedLength,
+  type Post,
+  type PostCreate,
+  type PostLink,
+  type PostDeleteResponse,
+  type PostLinksResponse,
+  type PostList,
+  type PostListQuery,
+  type PostPatch,
+  type PostPreview,
+} from '@perch/core';
+import { and, asc, count, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
+
+import { decodePostCursor, encodePostCursor } from './cursor';
+import type { Db } from './index';
+import { getSettings } from './settings';
+import { getConnectedAccount } from './xAccounts';
+import { postLinks, posts, resources } from './schema';
+
+export class InvalidPostCursorError extends Error {}
+
+export class PostImmutableError extends Error {
+  constructor(public postId: number) {
+    super(`Post ${postId} is published`);
+  }
+}
+
+export class MissingResourceError extends Error {
+  constructor(public resourceId: number) {
+    super(`Resource ${resourceId} not found`);
+  }
+}
+
+type PostRow = typeof posts.$inferSelect;
+
+function toPost(row: PostRow, links: PostLink[], limit: number): Post {
+  return {
+    id: row.id,
+    status: row.status,
+    title: row.title,
+    text: row.text,
+    scheduled_at: row.scheduledAt?.toISOString() ?? null,
+    published_at: row.publishedAt?.toISOString() ?? null,
+    x_account_id: row.xAccountId,
+    x_post_id: row.xPostId,
+    last_error: row.lastError,
+    retry_count: row.retryCount,
+    created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt.toISOString(),
+    character_count: weightedLength(row.text),
+    limit,
+    estimated_cost: estimateCost(row.text),
+    links,
+    media: [],
+  };
+}
+
+function postLimit(db: Db, userId: number): number {
+  return effectiveCharLimit(
+    getSettings(db, userId).char_limit_override,
+    getConnectedAccount(db, userId)?.subscriptionType ?? null,
+  );
+}
+
+function linksForPosts(db: Db, postIds: number[]): Map<number, PostLink[]> {
+  const result = new Map<number, PostLink[]>();
+  if (postIds.length === 0) return result;
+
+  const rows = db
+    .select({
+      postId: postLinks.postId,
+      resourceId: postLinks.resourceId,
+      type: resources.type,
+      title: resources.title,
+    })
+    .from(postLinks)
+    .innerJoin(resources, eq(postLinks.resourceId, resources.id))
+    .where(inArray(postLinks.postId, postIds))
+    .orderBy(asc(postLinks.resourceId))
+    .all();
+
+  for (const row of rows) {
+    const list = result.get(row.postId) ?? [];
+    list.push({ resource_id: row.resourceId, type: row.type, title: row.title });
+    result.set(row.postId, list);
+  }
+  return result;
+}
+
+export function createPost(
+  db: Db,
+  userId: number,
+  input: PostCreate,
+  now: Date,
+): Post {
+  for (const resourceId of input.from ?? []) {
+    const resource = db
+      .select({ id: resources.id })
+      .from(resources)
+      .where(and(eq(resources.id, resourceId), eq(resources.userId, userId)))
+      .get();
+    if (!resource) throw new MissingResourceError(resourceId);
+  }
+
+  const row = db.transaction((tx) => {
+    const inserted = tx
+      .insert(posts)
+      .values({
+        userId,
+        status: 'draft',
+        title: input.title ?? '',
+        text: input.text ?? '',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning()
+      .get();
+    if (!inserted) throw new Error('post insert failed');
+
+    for (const resourceId of input.from ?? []) {
+      tx.insert(postLinks)
+        .values({ postId: inserted.id, resourceId })
+        .onConflictDoNothing()
+        .run();
+    }
+    return inserted;
+  });
+
+  const post = getPost(db, userId, row.id);
+  if (!post) throw new Error('post insert failed');
+  return post;
+}
+
+export function getPost(db: Db, userId: number, id: number): Post | null {
+  const row = db
+    .select()
+    .from(posts)
+    .where(and(eq(posts.id, id), eq(posts.userId, userId)))
+    .get();
+  if (!row) return null;
+
+  return toPost(row, linksForPosts(db, [row.id]).get(row.id) ?? [], postLimit(db, userId));
+}
+
+export function listPosts(
+  db: Db,
+  userId: number,
+  query: PostListQuery,
+  timeZone: string,
+): PostList {
+  const sortTime = sql`CASE WHEN ${posts.status} = 'published' THEN ${posts.publishedAt} ELSE ${posts.scheduledAt} END`;
+
+  const filterConditions: SQL[] = [eq(posts.userId, userId)];
+  if (query.status !== undefined) filterConditions.push(eq(posts.status, query.status));
+  if (query.search) {
+    const escaped = query.search.replace(/[\\%_]/g, '\\$&');
+    const pattern = `%${escaped}%`;
+    filterConditions.push(
+      or(
+        sql`${posts.title} LIKE ${pattern} ESCAPE '\\'`,
+        sql`${posts.text} LIKE ${pattern} ESCAPE '\\'`,
+      )!,
+    );
+  }
+  if (query.from !== undefined) {
+    filterConditions.push(
+      sql`${sortTime} >= ${dayBoundsUtc(query.from, timeZone).start.getTime()}`,
+    );
+  }
+  if (query.to !== undefined) {
+    filterConditions.push(
+      sql`${sortTime} <= ${dayBoundsUtc(query.to, timeZone).end.getTime()}`,
+    );
+  }
+  if (query.resource_id !== undefined) {
+    filterConditions.push(
+      sql`EXISTS (select 1 from post_links where post_links.post_id = ${posts.id} and post_links.resource_id = ${query.resource_id})`,
+    );
+  }
+
+  const totalRow = db
+    .select({ value: count() })
+    .from(posts)
+    .where(and(...filterConditions))
+    .get();
+  const pageConditions = [...filterConditions];
+
+  if (query.cursor !== undefined) {
+    const key = decodePostCursor(query.cursor);
+    if (!key) throw new InvalidPostCursorError();
+
+    pageConditions.push(
+      key.time === null
+        ? sql`${sortTime} IS NULL AND ${posts.id} < ${key.id}`
+        : or(
+            sql`${sortTime} < ${key.time}`,
+            sql`${sortTime} = ${key.time} AND ${posts.id} < ${key.id}`,
+            sql`${sortTime} IS NULL`,
+          )!,
+    );
+  }
+
+  const rows = db
+    .select()
+    .from(posts)
+    .where(and(...pageConditions))
+    .orderBy(sql`${sortTime} IS NULL`, desc(sortTime), desc(posts.id))
+    .limit(query.limit + 1)
+    .all();
+
+  const hasNextPage = rows.length > query.limit;
+  const pageRows = hasNextPage ? rows.slice(0, query.limit) : rows;
+  const last = pageRows.at(-1);
+
+  const limit = postLimit(db, userId);
+  const links = linksForPosts(
+    db,
+    pageRows.map((row) => row.id),
+  );
+  const items = pageRows.map((row) => {
+    const post = toPost(row, links.get(row.id) ?? [], limit);
+    return { ...post, title: postListTitle(post.title, post.text) };
+  });
+
+  const sortTimeOf = (row: PostRow): number | null => {
+    const value = row.status === 'published' ? row.publishedAt : row.scheduledAt;
+    return value === null ? null : value.getTime();
+  };
+
+  return {
+    items,
+    total: totalRow?.value ?? 0,
+    next_cursor:
+      hasNextPage && last
+        ? encodePostCursor({ time: sortTimeOf(last), id: last.id })
+        : null,
+  };
+}
+
+export function updatePost(
+  db: Db,
+  userId: number,
+  id: number,
+  patch: PostPatch,
+  now: Date,
+): Post | null {
+  const current = getPostRow(db, userId, id);
+  if (!current) return null;
+  if (current.status === 'published') throw new PostImmutableError(id);
+
+  db.update(posts)
+    .set({
+      ...(patch.title !== undefined ? { title: patch.title } : {}),
+      ...(patch.text !== undefined ? { text: patch.text } : {}),
+      updatedAt: now,
+    })
+    .where(and(eq(posts.id, id), eq(posts.userId, userId)))
+    .run();
+
+  return getPost(db, userId, id);
+}
+
+function getPostRow(db: Db, userId: number, id: number): PostRow | undefined {
+  return db
+    .select()
+    .from(posts)
+    .where(and(eq(posts.id, id), eq(posts.userId, userId)))
+    .get();
+}
+
+function resourceExists(db: Db, userId: number, resourceId: number): boolean {
+  return (
+    db
+      .select({ id: resources.id })
+      .from(resources)
+      .where(and(eq(resources.id, resourceId), eq(resources.userId, userId)))
+      .get() !== undefined
+  );
+}
+
+export function linkResources(
+  db: Db,
+  userId: number,
+  postId: number,
+  ids: number[],
+): PostLinksResponse | null {
+  const postRow = getPostRow(db, userId, postId);
+  if (!postRow) return null;
+  if (postRow.status === 'published') throw new PostImmutableError(postId);
+
+  return {
+    results: ids.map((id) => {
+      if (!resourceExists(db, userId, id)) {
+        return {
+          id,
+          ok: false as const,
+          error: { code: 'not_found', message: `Resource ${id} not found` },
+        };
+      }
+      db.insert(postLinks)
+        .values({ postId, resourceId: id })
+        .onConflictDoNothing()
+        .run();
+      return { id, ok: true as const };
+    }),
+  };
+}
+
+export function unlinkResources(
+  db: Db,
+  userId: number,
+  postId: number,
+  ids: number[],
+): PostLinksResponse | null {
+  const postRow = getPostRow(db, userId, postId);
+  if (!postRow) return null;
+  if (postRow.status === 'published') throw new PostImmutableError(postId);
+
+  return {
+    results: ids.map((id) => {
+      if (!resourceExists(db, userId, id)) {
+        return {
+          id,
+          ok: false as const,
+          error: { code: 'not_found', message: `Resource ${id} not found` },
+        };
+      }
+      db.delete(postLinks)
+        .where(and(eq(postLinks.postId, postId), eq(postLinks.resourceId, id)))
+        .run();
+      return { id, ok: true as const };
+    }),
+  };
+}
+
+export function deletePosts(db: Db, userId: number, ids: number[]): PostDeleteResponse {
+  return {
+    results: ids.map((id) => {
+      const deleted = db
+        .delete(posts)
+        .where(and(eq(posts.id, id), eq(posts.userId, userId)))
+        .returning({ id: posts.id })
+        .get();
+
+      return deleted
+        ? { id, ok: true as const }
+        : {
+            id,
+            ok: false as const,
+            error: { code: 'not_found', message: `Post ${id} not found` },
+          };
+    }),
+  };
+}
+
+export function previewPost(db: Db, userId: number, id: number): PostPreview | null {
+  const row = getPostRow(db, userId, id);
+  if (!row) return null;
+
+  return {
+    segments: previewSegments(row.text),
+    character_count: weightedLength(row.text),
+    limit: postLimit(db, userId),
+    estimated_cost: estimateCost(row.text),
+  };
+}

@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import path from 'node:path';
 import type { Resource, ResourceList } from '@perch/core';
+import { eq } from 'drizzle-orm';
 
+import { openDb } from '../src/db';
+import { posts } from '../src/db/schema';
 import { createTestServer, type TestServer } from '../src/testing';
 
 let server: TestServer;
@@ -49,6 +53,7 @@ describe('resources', () => {
       created_at: '2026-09-04T10:00:00.000Z',
       type: 'md',
       body: '# Hello\n\ntext',
+      used_by: 0,
     });
 
     expect((await create({ body: 'no heading' })).title).toBe('Untitled');
@@ -221,6 +226,64 @@ describe('resources', () => {
       body: JSON.stringify({ ids: [] }),
     });
     expect(empty.status).toBe(400);
+  });
+
+  test('counts posts using a resource and sorts by use', async () => {
+    await create({ body: '# One' });
+    await create({ body: '# Two' });
+    await create({ body: '# Three' });
+
+    const post = async (from: number[]) =>
+      request('/api/posts', { method: 'POST', body: JSON.stringify({ from }) });
+    await post([1, 2]);
+    await post([2]);
+
+    const detail = await request('/api/resources/2');
+    expect((await detail.json()).used_by).toBe(2);
+
+    const desc = await list('?sort=used&order=desc');
+    expect(desc.items.map((i) => i.id)).toEqual([2, 1, 3]);
+    const asc = await list('?sort=used&order=asc');
+    expect(asc.items.map((i) => i.id)).toEqual([3, 1, 2]);
+
+    const page1 = await list('?sort=used&order=desc&limit=1');
+    expect(page1.items.map((i) => i.id)).toEqual([2]);
+    const page2 = await list(
+      `?sort=used&order=desc&limit=1&cursor=${page1.next_cursor}`,
+    );
+    expect(page2.items.map((i) => i.id)).toEqual([1]);
+  });
+
+  test('deleting a resource unlinks every post, published included, and lists them', async () => {
+    await create({ body: '# One' });
+    await request('/api/posts', {
+      method: 'POST',
+      body: JSON.stringify({ from: [1] }),
+    });
+    await request('/api/posts', {
+      method: 'POST',
+      body: JSON.stringify({ from: [1] }),
+    });
+
+    const { db, sqlite } = openDb(path.join(server.dir, 'perch.db'));
+    db.update(posts)
+      .set({ status: 'published', publishedAt: new Date('2026-09-01T09:00:00Z') })
+      .where(eq(posts.id, 2))
+      .run();
+    sqlite.close();
+
+    const deleted = await request('/api/resources', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids: [1] }),
+    });
+    expect(deleted.status).toBe(200);
+    expect(await deleted.json()).toEqual({
+      results: [{ id: 1, ok: true, unlinked_post_ids: [1, 2] }],
+    });
+
+    const post = await request('/api/posts/2');
+    expect(post.status).toBe(200);
+    expect((await post.json()).links).toEqual([]);
   });
 
   test('requires authentication', async () => {

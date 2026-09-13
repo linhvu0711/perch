@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { firstMarkdownHeading, noteTitle } from '@perch/core';
-import { Check, FileText, Image, Pencil, Trash2, Undo2, X } from 'lucide-react';
-import { useBlocker, useNavigate, useParams } from 'react-router';
+import { Check, CopyPlus, FileText, Image, Pencil, PenLine, Trash2, Undo2, X } from 'lucide-react';
+import { Link, useBlocker, useNavigate, useParams } from 'react-router';
 
 import { ApiError, errorMessage } from '@/lib/api';
 import { formatBytes, formatDateTime, wordCount } from '@/lib/format';
 import {
   useCreateNote,
+  useCreatePost,
   useDeleteResources,
+  usePosts,
   useResource,
   useUpdateResource,
 } from '@/lib/queries';
+
+import { StatusPill } from './StatusPill';
 
 import { ConfirmDialog } from './ConfirmDialog';
 import { IconButton } from './IconButton';
@@ -36,6 +40,16 @@ export function ResourceModal(): JSX.Element | null {
   const invalidId = !isNew && parsedId === null;
   const resourceQuery = useResource(isNew || invalidId ? null : parsedId);
   const createNote = useCreateNote();
+  const createPost = useCreatePost();
+  const usedBy = usePosts(
+    parsedId === null ? { resource_id: -1 } : { resource_id: parsedId },
+  );
+  const usedByPosts =
+    parsedId === null
+      ? []
+      : (usedBy.data?.pages.flatMap((page) => page.items) ?? []);
+  const usedByTotal =
+    parsedId === null ? 0 : (usedBy.data?.pages[0]?.total ?? usedByPosts.length);
   const updateResource = useUpdateResource();
   const deleteResources = useDeleteResources();
   const modalRef = useRef<HTMLDivElement>(null);
@@ -244,9 +258,13 @@ export function ResourceModal(): JSX.Element | null {
       const response = await deleteResources.mutateAsync([parsedId]);
       const result = response.results[0];
       if (result?.ok) {
-        toast('Deleted');
         allowNavigationRef.current = true;
         navigate('/resources');
+        toast(
+          result.unlinked_post_ids.length > 0
+            ? `Deleted. Unlinked from ${result.unlinked_post_ids.map((id) => `#${id}`).join(', ')}`
+            : 'Deleted',
+        );
       } else if (result && !result.ok) {
         toast(result.error.message, 'warn');
         setConfirm(null);
@@ -370,6 +388,26 @@ export function ResourceModal(): JSX.Element | null {
                     size="sm"
                     onClick={startEditing}
                   />
+                  {!isNew && (
+                    <IconButton
+                      label="New draft from this"
+                      icon={CopyPlus}
+                      variant="primary"
+                      size="sm"
+                      onClick={() => {
+                        if (parsedId === null) return;
+                        void createPost
+                          .mutateAsync({ from: [parsedId] })
+                          .then((created) => {
+                            toast('Draft created');
+                            navigate(`/posts/${created.id}`);
+                          })
+                          .catch((error: unknown) =>
+                            toast(errorMessage(error), 'warn'),
+                          );
+                      }}
+                    />
+                  )}
                   <IconButton
                     label="Delete resource"
                     icon={Trash2}
@@ -423,9 +461,41 @@ export function ResourceModal(): JSX.Element | null {
                   )}
                   {!isImage && <span>{wordCount(displayedBody)}</span>}
                   <b>Saved</b><span>{isNew ? '—' : formatDateTime(resource!.created_at)}</span>
-                  <b>Used in</b><span>0 posts</span>
                 </div>
               </div>
+              {!isNew && (
+                <div className="field">
+                  <label>
+                    Used by {usedByTotal} post{usedByTotal === 1 ? '' : 's'}
+                  </label>
+                  <div className="linked">
+                    {usedByPosts.length === 0 ? (
+                      <span className="note">Not linked to any post yet.</span>
+                    ) : (
+                      usedByPosts.map((post) => (
+                        <Link
+                          key={post.id}
+                          to={`/posts/${post.id}`}
+                          className="link"
+                        >
+                          <span className="k">
+                            <PenLine size={14} strokeWidth={1.75} />
+                          </span>
+                          <span className="ltitle">
+                            #{post.id} · {post.title || 'Empty post'}
+                          </span>
+                          <StatusPill status={post.status} />
+                        </Link>
+                      ))
+                    )}
+                    {usedByTotal > usedByPosts.length && (
+                      <span className="note">
+                        …and {usedByTotal - usedByPosts.length} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="field">
                 <label>Private notes</label>
                 <textarea
@@ -455,7 +525,18 @@ export function ResourceModal(): JSX.Element | null {
       {confirm === 'delete' && resource && (
         <ConfirmDialog
           title={`Delete ${resource.title}?`}
-          body={<p>It is not used by any post.</p>}
+          body={
+            usedByTotal > 0 ? (
+              <p>
+                It is unlinked from {usedByTotal} post
+                {usedByTotal === 1 ? '' : 's'} (
+                {usedByPosts.map((post) => `#${post.id}`).join(', ')}
+                {usedByTotal > usedByPosts.length ? ', …' : ''}).
+              </p>
+            ) : (
+              <p>It is not used by any post.</p>
+            )
+          }
           ok="Delete"
           danger
           busy={deleteResources.isPending}

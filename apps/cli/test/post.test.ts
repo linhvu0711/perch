@@ -1,0 +1,320 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import fs from 'node:fs';
+import path from 'node:path';
+import type { TestServer } from '@perch/server/testing';
+import { createTestServer } from '@perch/server/testing';
+
+import { runCli } from '../src/cli';
+import { makeCtx } from './helpers';
+
+let server: TestServer;
+
+beforeEach(async () => {
+  server = await createTestServer();
+});
+
+afterEach(() => {
+  server.cleanup();
+});
+
+async function createNote(body: string): Promise<number> {
+  const response = await server.app.request('/api/resources/notes', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${server.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ body }),
+  });
+  expect(response.status).toBe(201);
+  return ((await response.json()) as { id: number }).id;
+}
+
+async function getPost(id: number): Promise<Response> {
+  return server.app.request(`/api/posts/${id}`, {
+    headers: { Authorization: `Bearer ${server.token}` },
+  });
+}
+
+describe('post create', () => {
+  test('creates a draft from --text, --file, stdin, and --from', async () => {
+    const noteId = await createNote('# Idea');
+    const filePath = path.join(server.dir, 'hello.txt');
+    fs.writeFileSync(filePath, 'from file');
+
+    const text = makeCtx(server);
+    expect(
+      await runCli(['post', 'create', '--text', 'Hello world', '--json'], text.ctx),
+    ).toBe(0);
+    expect(JSON.parse(text.out())).toMatchObject({
+      status: 'draft',
+      text: 'Hello world',
+      character_count: 11,
+    });
+
+    const file = makeCtx(server);
+    expect(
+      await runCli(
+        ['post', 'create', '--file', filePath, '--from', String(noteId), '--json'],
+        file.ctx,
+      ),
+    ).toBe(0);
+    expect(JSON.parse(file.out())).toMatchObject({
+      text: 'from file',
+      links: [{ resource_id: noteId }],
+    });
+
+    const stdin = makeCtx(server, { stdin: 'from stdin' });
+    expect(await runCli(['post', 'create', '-', '--json'], stdin.ctx)).toBe(0);
+    expect(JSON.parse(stdin.out())).toMatchObject({ text: 'from stdin' });
+
+    const both = makeCtx(server);
+    expect(
+      await runCli(
+        ['post', 'create', '--text', 'a', '--file', filePath, '--json'],
+        both.ctx,
+      ),
+    ).toBe(1);
+    expect(JSON.parse(both.err()).code).toBe('bad_args');
+
+    const empty = makeCtx(server);
+    expect(await runCli(['post', 'create', '--json'], empty.ctx)).toBe(0);
+    expect(JSON.parse(empty.out())).toMatchObject({ text: '' });
+  });
+});
+
+describe('post edit', () => {
+  test('edits text from --text, --file, stdin, and the injected editor', async () => {
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--text', 'old', '--json'], setup.ctx);
+
+    const filePath = path.join(server.dir, 'new.txt');
+    fs.writeFileSync(filePath, 'from file');
+
+    const text = makeCtx(server);
+    expect(
+      await runCli(
+        ['post', 'edit', '1', '--text', 'new', '--title', 'T', '--json'],
+        text.ctx,
+      ),
+    ).toBe(0);
+    expect(JSON.parse(text.out())).toMatchObject({ text: 'new', title: 'T' });
+
+    const file = makeCtx(server);
+    expect(
+      await runCli(['post', 'edit', '1', '--file', filePath, '--json'], file.ctx),
+    ).toBe(0);
+    expect(JSON.parse(file.out())).toMatchObject({ text: 'from file' });
+
+    const stdin = makeCtx(server, { stdin: 'from stdin' });
+    expect(await runCli(['post', 'edit', '1', '-', '--json'], stdin.ctx)).toBe(0);
+    expect(JSON.parse(stdin.out())).toMatchObject({ text: 'from stdin' });
+
+    const editor = makeCtx(server, {
+      isTTY: true,
+      stdinIsTTY: true,
+      editorResult: 'edited',
+    });
+    expect(await runCli(['post', 'edit', '1', '-e', '--json'], editor.ctx)).toBe(0);
+    expect(JSON.parse(editor.out())).toMatchObject({ text: 'edited' });
+    expect(editor.edits[0]).toBe('from stdin');
+
+    const noTty = makeCtx(server);
+    expect(await runCli(['post', 'edit', '1', '-e', '--json'], noTty.ctx)).toBe(1);
+    expect(JSON.parse(noTty.err()).code).toBe('no_tty');
+
+    const nothing = makeCtx(server);
+    expect(await runCli(['post', 'edit', '1', '--json'], nothing.ctx)).toBe(1);
+    expect(JSON.parse(nothing.err()).code).toBe('bad_args');
+  });
+});
+
+describe('post list and show', () => {
+  test('lists and shows posts in JSON and table modes', async () => {
+    const one = makeCtx(server);
+    await runCli(['post', 'create', '--text', 'banana split', '--json'], one.ctx);
+    const two = makeCtx(server);
+    await runCli(
+      ['post', 'create', '--title', 'Named', '--text', 'body', '--json'],
+      two.ctx,
+    );
+
+    const all = makeCtx(server);
+    expect(await runCli(['post', 'list', '--json'], all.ctx)).toBe(0);
+    const allResult = JSON.parse(all.out());
+    expect(allResult.items.map((i: { id: number }) => i.id)).toEqual([2, 1]);
+    expect(allResult.total).toBe(2);
+    expect(allResult.next_cursor).toBeNull();
+
+    const search = makeCtx(server);
+    await runCli(['post', 'list', '--search', 'banana', '--json'], search.ctx);
+    expect(JSON.parse(search.out()).items.map((i: { id: number }) => i.id)).toEqual(
+      [1],
+    );
+
+    const status = makeCtx(server);
+    await runCli(
+      ['post', 'list', '--status', 'published', '--json'],
+      status.ctx,
+    );
+    expect(JSON.parse(status.out()).items).toEqual([]);
+
+    const page1 = makeCtx(server);
+    await runCli(['post', 'list', '--limit', '1', '--json'], page1.ctx);
+    const first = JSON.parse(page1.out());
+    expect(first.items.map((i: { id: number }) => i.id)).toEqual([2]);
+    const page2 = makeCtx(server);
+    await runCli(
+      ['post', 'list', '--limit', '1', '--cursor', first.next_cursor, '--json'],
+      page2.ctx,
+    );
+    expect(JSON.parse(page2.out()).items.map((i: { id: number }) => i.id)).toEqual(
+      [1],
+    );
+
+    const badStatus = makeCtx(server);
+    expect(
+      await runCli(['post', 'list', '--status', 'nope', '--json'], badStatus.ctx),
+    ).toBe(1);
+    expect(JSON.parse(badStatus.err()).code).toBe('bad_value');
+
+    const table = makeCtx(server, { isTTY: true });
+    expect(await runCli(['post', 'list'], table.ctx)).toBe(0);
+    expect(table.out()).toContain('banana split');
+    expect(table.out()).toContain('2 shown · 2 total');
+
+    const show = makeCtx(server, { isTTY: true });
+    expect(await runCli(['post', 'show', '1'], show.ctx)).toBe(0);
+    expect(show.out()).toContain('12 / 280');
+    expect(show.out()).toContain('$0.015');
+    expect(show.out()).toContain('banana split');
+
+    const badId = makeCtx(server);
+    expect(await runCli(['post', 'show', 'abc', '--json'], badId.ctx)).toBe(1);
+    expect(JSON.parse(badId.err()).code).toBe('bad_args');
+  });
+});
+
+describe('post preview', () => {
+  test('previews as an ASCII card with character and Cost lines', async () => {
+    const one = makeCtx(server);
+    await runCli(['post', 'create', '--text', 'Hello world', '--json'], one.ctx);
+    const two = makeCtx(server);
+    await runCli(['post', 'create', '--text', '', '--json'], two.ctx);
+
+    const card = makeCtx(server, { isTTY: true });
+    expect(await runCli(['post', 'preview', '1'], card.ctx)).toBe(0);
+    expect(card.out()).toBe(
+      '+----------------------------------------------------------+\n' +
+        '| Hello world                                              |\n' +
+        '+----------------------------------------------------------+\n' +
+        'Characters: 11 / 280\n' +
+        'Cost: $0.015\n',
+    );
+
+    const json = makeCtx(server);
+    expect(await runCli(['post', 'preview', '1', '--json'], json.ctx)).toBe(0);
+    const preview = JSON.parse(json.out());
+    expect(preview.segments).toEqual([{ kind: 'text', text: 'Hello world' }]);
+    expect(preview.character_count).toBe(11);
+
+    const empty = makeCtx(server, { isTTY: true });
+    expect(await runCli(['post', 'preview', '2'], empty.ctx)).toBe(0);
+    expect(empty.out()).toContain('| Nothing yet.');
+    expect(empty.out()).toContain('Characters: 0 / 280');
+  });
+});
+
+describe('post link and unlink', () => {
+  test('links and unlinks with per-item results and exit codes', async () => {
+    await createNote('# One');
+    await createNote('# Two');
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--json'], setup.ctx);
+
+    const link = makeCtx(server);
+    expect(
+      await runCli(
+        ['post', 'link', '1', '--resource', '1', '999', '--json'],
+        link.ctx,
+      ),
+    ).toBe(1);
+    expect(JSON.parse(link.out())).toEqual([
+      { id: 1, ok: true },
+      {
+        id: 999,
+        ok: false,
+        error: { code: 'not_found', message: 'Resource 999 not found' },
+      },
+    ]);
+    expect(link.err()).toBe('');
+
+    const link2 = makeCtx(server);
+    expect(
+      await runCli(['post', 'link', '1', '--resource', '2', '--json'], link2.ctx),
+    ).toBe(0);
+
+    const unlink = makeCtx(server);
+    expect(
+      await runCli(
+        ['post', 'unlink', '1', '--resource', '1', '--json'],
+        unlink.ctx,
+      ),
+    ).toBe(0);
+
+    const bad = makeCtx(server);
+    expect(
+      await runCli(['post', 'link', '1', '--resource', 'abc', '--json'], bad.ctx),
+    ).toBe(1);
+    expect(JSON.parse(bad.err()).code).toBe('bad_args');
+  });
+});
+
+describe('post delete', () => {
+  test('requires confirmation outside a TTY and deletes with --yes', async () => {
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--json'], setup.ctx);
+    await runCli(['post', 'create', '--json'], setup.ctx);
+
+    const noTty = makeCtx(server);
+    expect(await runCli(['post', 'delete', '1', '--json'], noTty.ctx)).toBe(1);
+    expect(JSON.parse(noTty.err()).code).toBe('confirm_required');
+    expect((await getPost(1)).status).toBe(200);
+
+    const yes = makeCtx(server);
+    expect(
+      await runCli(['post', 'delete', '1', '999', '--yes', '--json'], yes.ctx),
+    ).toBe(1);
+    expect(JSON.parse(yes.out())).toEqual([
+      { id: 1, ok: true },
+      {
+        id: 999,
+        ok: false,
+        error: { code: 'not_found', message: 'Post 999 not found' },
+      },
+    ]);
+    expect(yes.err()).toBe('');
+    expect((await getPost(1)).status).toBe(404);
+
+    const confirm = makeCtx(server, {
+      isTTY: true,
+      stdinIsTTY: true,
+      confirmAnswer: true,
+    });
+    expect(await runCli(['post', 'delete', '2', '--json'], confirm.ctx)).toBe(0);
+    expect(confirm.confirms[0]).toContain('2');
+
+    const recreate = makeCtx(server);
+    await runCli(['post', 'create', '--json'], recreate.ctx);
+    const cancel = makeCtx(server, {
+      isTTY: true,
+      stdinIsTTY: true,
+      confirmAnswer: false,
+    });
+    expect(await runCli(['post', 'delete', '3', '--json'], cancel.ctx)).toBe(0);
+    expect(cancel.err()).toContain('Cancelled');
+    expect((await getPost(3)).status).toBe(200);
+
+    expect(server.xClient.calls).toEqual([]);
+  });
+});

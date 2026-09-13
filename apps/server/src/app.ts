@@ -6,6 +6,8 @@ import type { Db } from './db';
 import { errorHandler, notFoundHandler } from './errors';
 import { accountRoutes } from './routes/account';
 import { authRoutes } from './routes/auth';
+import { countsRoutes } from './routes/counts';
+import { postsRoutes } from './routes/posts';
 import { resourcesRoutes } from './routes/resources';
 import { settingsRoutes } from './routes/settings';
 import { statusRoutes } from './routes/status';
@@ -34,6 +36,8 @@ function createRoutes(deps: AppDeps) {
     .route('/status', statusRoutes(deps))
     .route('/account', accountRoutes(deps))
     .route('/resources', resourcesRoutes(deps))
+    .route('/posts', postsRoutes(deps))
+    .route('/counts', countsRoutes(deps))
     .all('*', notFoundHandler);
 }
 

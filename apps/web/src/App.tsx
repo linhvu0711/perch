@@ -8,6 +8,7 @@ import {
 } from 'react-router';
 
 import { Sidebar } from '@/components/Sidebar';
+import { PostModal } from '@/components/PostModal';
 import { ResourceModal } from '@/components/ResourceModal';
 import { Toaster } from '@/components/Toast';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -53,7 +54,9 @@ function AuthGate() {
       <Sidebar />
       <main><div className="wrap"><Routes>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/posts" element={<Posts />} />
+        <Route path="/posts" element={<Posts />}>
+          <Route path=":id" element={<PostModal />} />
+        </Route>
         <Route path="/resources" element={<Resources />}>
           <Route path=":id" element={<ResourceModal />} />
         </Route>

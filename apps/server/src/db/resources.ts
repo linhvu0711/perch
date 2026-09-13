@@ -8,17 +8,36 @@ import {
   type ResourceListQuery,
   type ResourcePatch,
 } from '@perch/core';
-import { and, asc, count, desc, eq, gt, lt, or, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  lt,
+  or,
+  sql,
+  getTableColumns,
+  type SQL,
+} from 'drizzle-orm';
 
 import { decodeCursor, encodeCursor } from './cursor';
 import type { Db } from './index';
-import { resources } from './schema';
+import { postLinks, resources } from './schema';
 
 export class InvalidCursorError extends Error {}
 
 type ResourceRow = typeof resources.$inferSelect;
 
-function toResource(row: ResourceRow): Resource {
+const usedByCount = sql<number>`(select count(*) from post_links where post_links.resource_id = ${resources.id})`;
+
+const resourceColumns = () => ({
+  ...getTableColumns(resources),
+  usedBy: usedByCount,
+});
+
+function toResource(row: ResourceRow, usedBy = 0): Resource {
   if (row.type === 'image') {
     if (
       row.imagePath === null ||
@@ -40,6 +59,7 @@ function toResource(row: ResourceRow): Resource {
       bytes: row.imageBytes,
       width: row.imageWidth,
       height: row.imageHeight,
+      ...(usedBy > 0 ? { used_by: usedBy } : {}),
     };
   }
   if (row.type !== 'md') throw new Error('unsupported resource type');
@@ -51,6 +71,7 @@ function toResource(row: ResourceRow): Resource {
     notes: row.notes,
     created_at: row.createdAt.toISOString(),
     body: row.mdBody ?? '',
+    used_by: usedBy,
   };
 }
 
@@ -69,7 +90,7 @@ export function createNote(db: Db, userId: number, input: NoteCreate, now: Date)
     .get();
 
   if (!row) throw new Error('resource insert failed');
-  return toResource(row);
+  return toResource(row, 0);
 }
 
 export function createImage(
@@ -109,12 +130,12 @@ export function createImage(
 
 export function getResource(db: Db, userId: number, id: number): Resource | null {
   const row = db
-    .select()
+    .select(resourceColumns())
     .from(resources)
     .where(and(eq(resources.id, id), eq(resources.userId, userId)))
     .get();
 
-  return row ? toResource(row) : null;
+  return row ? toResource(row, row.usedBy) : null;
 }
 
 export function updateResource(
@@ -134,30 +155,27 @@ export function updateResource(
     throw new Error('body is only valid for notes');
   }
 
-  const row = db
-    .update(resources)
+  db.update(resources)
     .set({
       ...(patch.title !== undefined ? { title: patch.title } : {}),
       ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
       ...(patch.body !== undefined ? { mdBody: patch.body } : {}),
     })
     .where(and(eq(resources.id, id), eq(resources.userId, userId)))
-    .returning()
-    .get();
+    .run();
 
-  if (!row) throw new Error('resource update failed');
-  return toResource(row);
+  return getResource(db, userId, id);
 }
 
 export function listAllResources(db: Db, userId: number): Resource[] {
   const rows = db
-    .select()
+    .select(resourceColumns())
     .from(resources)
     .where(eq(resources.userId, userId))
     .orderBy(asc(resources.createdAt), asc(resources.id))
     .all();
 
-  return rows.map(toResource);
+  return rows.map((row) => toResource(row, row.usedBy));
 }
 
 export function listResources(
@@ -186,32 +204,41 @@ export function listResources(
     .get();
   const pageConditions = [...filterConditions];
 
+  const sortByUsed = query.sort === 'used';
+  const sortValue = sortByUsed ? usedByCount : sql`${resources.createdAt}`;
+
   if (query.cursor !== undefined) {
     const key = decodeCursor(query.cursor);
     if (!key) throw new InvalidCursorError();
 
-    const createdAt = new Date(key.createdAt);
     pageConditions.push(
       query.order === 'desc'
         ? or(
-            lt(resources.createdAt, createdAt),
-            and(eq(resources.createdAt, createdAt), lt(resources.id, key.id)),
+            lt(sortValue, key.createdAt),
+            and(
+              eq(sortValue, key.createdAt),
+              sortByUsed
+                ? gt(resources.id, key.id)
+                : lt(resources.id, key.id),
+            ),
           )!
         : or(
-            gt(resources.createdAt, createdAt),
-            and(eq(resources.createdAt, createdAt), gt(resources.id, key.id)),
+            gt(sortValue, key.createdAt),
+            and(eq(sortValue, key.createdAt), gt(resources.id, key.id)),
           )!,
     );
   }
 
   const rows = db
-    .select()
+    .select(resourceColumns())
     .from(resources)
     .where(and(...pageConditions))
     .orderBy(
       ...(query.order === 'desc'
-        ? [desc(resources.createdAt), desc(resources.id)]
-        : [asc(resources.createdAt), asc(resources.id)]),
+        ? sortByUsed
+          ? [desc(sortValue), asc(resources.id)]
+          : [desc(sortValue), desc(resources.id)]
+        : [asc(sortValue), asc(resources.id)]),
     )
     .limit(query.limit + 1)
     .all();
@@ -221,11 +248,14 @@ export function listResources(
   const last = pageRows.at(-1);
 
   return {
-    items: pageRows.map(toResource),
+    items: pageRows.map((row) => toResource(row, row.usedBy)),
     total: totalRow?.value ?? 0,
     next_cursor:
       hasNextPage && last
-        ? encodeCursor({ createdAt: last.createdAt.getTime(), id: last.id })
+        ? encodeCursor({
+            createdAt: sortByUsed ? last.usedBy : last.createdAt.getTime(),
+            id: last.id,
+          })
         : null,
   };
 }
@@ -244,6 +274,14 @@ export function deleteResources(
         .where(and(eq(resources.id, id), eq(resources.userId, userId)))
         .get();
 
+      const linkedPostIds = db
+        .select({ postId: postLinks.postId })
+        .from(postLinks)
+        .where(eq(postLinks.resourceId, id))
+        .orderBy(asc(postLinks.postId))
+        .all()
+        .map((row) => row.postId);
+
       const deleted = db
         .delete(resources)
         .where(and(eq(resources.id, id), eq(resources.userId, userId)))
@@ -253,7 +291,7 @@ export function deleteResources(
       if (deleted && row?.imagePath) removeFile(row.imagePath);
 
       return deleted
-        ? { id, ok: true as const, unlinked_post_ids: [] }
+        ? { id, ok: true as const, unlinked_post_ids: linkedPostIds }
         : {
             id,
             ok: false as const,

@@ -165,7 +165,7 @@ describe('resource list and show', () => {
     expect(JSON.parse(type.err()).code).toBe('bad_value');
 
     const sort = makeCtx(server);
-    expect(await runCli(['resource', 'list', '--sort', 'used', '--json'], sort.ctx)).toBe(1);
+    expect(await runCli(['resource', 'list', '--sort', 'nope', '--json'], sort.ctx)).toBe(1);
     expect(JSON.parse(sort.err()).code).toBe('bad_value');
 
     const table = makeCtx(server, { isTTY: true });
