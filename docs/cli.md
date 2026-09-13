@@ -52,7 +52,7 @@ perch resource pull [--dir <path>]               copy every Resource into the Mi
 - `edit --content` and `-e` apply to md only; `--title` / `--notes` apply to every type.
 - `list --author` applies to tweets only. `--from` / `--to` filter on the date saved.
 - `delete` removes links from all posts (published too) and prints which posts were unlinked.
-- `pull` writes `notes/<yyyy-mm-dd>-<id>-<slug>.md` with YAML front matter and a `manifest.json`; only changed files are rewritten; only Manifest paths are deleted; nothing is written when the download fails.
+- `pull` writes one `<yyyy-mm-dd>-<id>-<slug>.md` per Resource with YAML front matter, under `notes/`, `tweets/`, or `images/` by type; each image `.md` gets the image file next to it, named in its `file` field; a `manifest.json` lists every path; only changed files are rewritten, and an image file is fetched only when its size differs from the server's; only Manifest paths are deleted; nothing is written when a download fails.
 
 ### Posts
 
@@ -81,8 +81,8 @@ perch post delete <id>... [--yes]
 - `--title` is a short internal label shown in lists and on the calendar. It is never sent to X. Optional; lists fall back to the first line of text.
 - `promote` checks: text not empty, weighted chars ≤ limit, ≤ 4 media, media files present. Errors list every failure.
 - `schedule` on a published post errors. Scheduling in the past errors unless `--force`.
-- `attach`: total media ≤ 4. From a resource: copies the file and links the resource. From a file: uploads it. Media has no alt text.
-- `detach --media <n>`: n is the 1-based position shown by `post show`.
+- `attach`: total media ≤ 4. From a resource: copies the file and links the resource. From a file: uploads it. Media has no alt text. `--json` prints per-item results: `[{ id, ok, media }]` for resources, `[{ name, ok, media }]` for files, with `error` on failures — including `read_failed` for files the CLI cannot read.
+- `detach --media <n>`: n is the 1-based position shown by `post show`. Prints the remaining media array (`--json`: `[{ id, position, mime, bytes, from_resource_id }]`).
 - `publish`: on a draft, runs the promote checks and promotes first; clears the schedule time; on success status becomes published and `x_account_id` is set. `post list --from/--to` filter on schedule time, or published time for published posts.
 - `retry`: only for failed posts; sends now.
 - `delete`: local only. Never deletes on X.

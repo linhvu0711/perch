@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { Resource } from '@perch/core';
-import { createTestServer, type TestServer } from '@perch/server/testing';
+import { createTestServer, PNG_3X2, type TestServer } from '@perch/server/testing';
 
 import { runCli } from '../src/cli';
 import { makeCtx } from './helpers';
@@ -34,6 +34,39 @@ async function create(body: string, notes?: string): Promise<Resource> {
   });
   expect(response.status).toBe(201);
   return (await response.json()) as Resource;
+}
+
+async function connect(): Promise<void> {
+  const start = await server.app.request('/api/account/connect', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${server.token}` },
+  });
+  const { authorize_url } = (await start.json()) as { authorize_url: string };
+  const state = new URL(authorize_url).searchParams.get('state');
+  await server.app.request(`/auth/x/callback?code=abc&state=${state}`);
+}
+
+async function saveTweet(url: string): Promise<void> {
+  const response = await server.app.request('/api/resources/tweets', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${server.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ urls: [url] }),
+  });
+  expect(response.status).toBe(200);
+}
+
+async function upload(name: string, bytes: Uint8Array): Promise<void> {
+  const form = new FormData();
+  form.append('files', new File([bytes.slice().buffer as ArrayBuffer], name));
+  const response = await server.app.request('/api/resources/images', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${server.token}` },
+    body: form,
+  });
+  expect(response.status).toBe(200);
 }
 
 describe('resource pull', () => {
@@ -174,6 +207,129 @@ describe('resource pull', () => {
       pulled_at: null,
       paths: ['notes/2026-09-04-1-hello.md', 'notes/2026-09-04-2-second.md'],
     });
+  });
+
+  test('writes a tweet with its fields in the front matter and the text as the body', async () => {
+    const { ctx, out } = makeCtx(server);
+    await connect();
+    await saveTweet('https://x.com/perchtester/status/1');
+
+    const code = await runCli(['resource', 'pull', '--dir', dir, '--json'], ctx);
+    expect(code).toBe(0);
+    expect(JSON.parse(out())).toEqual({
+      dir,
+      added: 1,
+      updated: 0,
+      removed: 0,
+      pulled_at: '2026-09-04T10:00:00.000Z',
+    });
+    expect(fs.readFileSync(path.join(dir, 'tweets/2026-09-04-1-hello.md'), 'utf8')).toBe(
+      '---\nid: 1\ntype: "tweet"\ntitle: "hello"\ncreated_at: "2026-09-04T10:00:00.000Z"\ntags: []\nnotes: ""\nurl: "https://x.com/perchtester/status/1"\nauthor: "perchtester"\nauthor_id: "1000"\nposted_at: "2026-09-01T12:00:00.000Z"\n---\nhello\n',
+    );
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'))).toEqual({
+      pulled_at: '2026-09-04T10:00:00.000Z',
+      paths: ['tweets/2026-09-04-1-hello.md'],
+    });
+    expect(fs.readdirSync(dir).sort()).toEqual(['manifest.json', 'tweets']);
+  });
+
+  test('writes an image meta file and copies the image file under images/', async () => {
+    const { ctx, out } = makeCtx(server);
+    await upload('a.png', PNG_3X2);
+
+    const code = await runCli(['resource', 'pull', '--dir', dir, '--json'], ctx);
+    expect(code).toBe(0);
+    expect(JSON.parse(out())).toEqual({
+      dir,
+      added: 2,
+      updated: 0,
+      removed: 0,
+      pulled_at: '2026-09-04T10:00:00.000Z',
+    });
+    expect(fs.readFileSync(path.join(dir, 'images/2026-09-04-1-a-png.md'), 'utf8')).toBe(
+      '---\nid: 1\ntype: "image"\ntitle: "a.png"\ncreated_at: "2026-09-04T10:00:00.000Z"\ntags: []\nnotes: ""\nfile: "images/2026-09-04-1-a-png.png"\nmime: "image/png"\nbytes: 73\nwidth: 3\nheight: 2\n---\n',
+    );
+    expect(fs.readFileSync(path.join(dir, 'images/2026-09-04-1-a-png.png'))).toEqual(
+      Buffer.from(PNG_3X2),
+    );
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8')).paths).toEqual([
+      'images/2026-09-04-1-a-png.md',
+      'images/2026-09-04-1-a-png.png',
+    ]);
+    expect(fs.readdirSync(dir).sort()).toEqual(['images', 'manifest.json']);
+  });
+
+  test('does not download an unchanged image file again', async () => {
+    let fileRequests = 0;
+    const { ctx, out } = makeCtx(server, {
+      fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        if (/\/api\/resources\/\d+\/file$/.test(request.url)) fileRequests += 1;
+        return server.app.request(request);
+      }) as typeof fetch,
+    });
+    await upload('a.png', PNG_3X2);
+    await runCli(['resource', 'pull', '--dir', dir, '--json'], ctx);
+    const file = path.join(dir, 'images/2026-09-04-1-a-png.png');
+    const mtime = fs.statSync(file).mtimeMs;
+
+    const mark = out().length;
+    const code = await runCli(['resource', 'pull', '--dir', dir, '--json'], ctx);
+    expect(code).toBe(0);
+    expect(fileRequests).toBe(1);
+    expect(JSON.parse(out().slice(mark))).toEqual({
+      dir,
+      added: 0,
+      updated: 0,
+      removed: 0,
+      pulled_at: '2026-09-04T10:00:00.000Z',
+    });
+    expect(fs.statSync(file).mtimeMs).toBe(mtime);
+  });
+
+  test('removes the image file when the Image Resource is deleted', async () => {
+    const { ctx, out } = makeCtx(server);
+    await upload('a.png', PNG_3X2);
+    await runCli(['resource', 'pull', '--dir', dir, '--json'], ctx);
+    const del = await server.app.request('/api/resources', {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${server.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ids: [1] }),
+    });
+    expect(del.status).toBe(200);
+
+    const mark = out().length;
+    const code = await runCli(['resource', 'pull', '--dir', dir, '--json'], ctx);
+    expect(code).toBe(0);
+    expect(JSON.parse(out().slice(mark))).toEqual({
+      dir,
+      added: 0,
+      updated: 0,
+      removed: 2,
+      pulled_at: '2026-09-04T10:00:00.000Z',
+    });
+    expect(fs.existsSync(path.join(dir, 'images/2026-09-04-1-a-png.md'))).toBe(false);
+    expect(fs.existsSync(path.join(dir, 'images/2026-09-04-1-a-png.png'))).toBe(false);
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8')).paths).toEqual([]);
+  });
+
+  test('leaves the mirror untouched when an image download fails', async () => {
+    const { ctx, err } = makeCtx(server, {
+      fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        if (/\/file$/.test(request.url)) throw new Error('ECONNREFUSED');
+        return server.app.request(request);
+      }) as typeof fetch,
+    });
+    await upload('a.png', PNG_3X2);
+
+    const code = await runCli(['resource', 'pull', '--dir', dir], ctx);
+    expect(code).toBe(1);
+    expect(JSON.parse(err())).toMatchObject({ code: 'unreachable' });
+    expect(fs.existsSync(dir)).toBe(false);
   });
 
   test('prints a table summary on a TTY', async () => {

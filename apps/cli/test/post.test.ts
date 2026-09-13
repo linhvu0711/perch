@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { POST_LIST_LIMIT_DEFAULT } from '@perch/core';
 import type { TestServer } from '@perch/server/testing';
-import { createTestServer } from '@perch/server/testing';
+import { createTestServer, PNG_3X2 } from '@perch/server/testing';
 
 import { runCli } from '../src/cli';
 import { makeCtx } from './helpers';
@@ -254,6 +254,114 @@ describe('post link and unlink', () => {
   });
 });
 
+describe('post attach and detach', () => {
+  async function attachFixtures(): Promise<{ resourceId: number; png: string }> {
+    const png = path.join(server.dir, 'pic.png');
+    fs.writeFileSync(png, Buffer.from(PNG_3X2));
+    const upload = makeCtx(server);
+    expect(await runCli(['resource', 'add', 'image', png, '--json'], upload.ctx)).toBe(0);
+    const resourceId = (
+      JSON.parse(upload.out()) as Array<{ ok: boolean; resource: { id: number } }>
+    )[0]!.resource.id;
+
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--text', 'hi', '--json'], setup.ctx);
+    return { resourceId, png };
+  }
+
+  test('attaches from resources and files with per-item results', async () => {
+    const { resourceId, png } = await attachFixtures();
+
+    const attach = makeCtx(server);
+    expect(
+      await runCli(['post', 'attach', '1', '--resource', String(resourceId), '--json'], attach.ctx),
+    ).toBe(0);
+    expect(JSON.parse(attach.out())).toEqual([
+      {
+        id: resourceId,
+        ok: true,
+        media: { id: 1, position: 1, mime: 'image/png', bytes: 73, from_resource_id: resourceId },
+      },
+    ]);
+
+    const attachFile = makeCtx(server);
+    expect(await runCli(['post', 'attach', '1', '--file', png, '--json'], attachFile.ctx)).toBe(0);
+    expect(JSON.parse(attachFile.out())).toEqual([
+      {
+        name: 'pic.png',
+        ok: true,
+        media: { id: 2, position: 2, mime: 'image/png', bytes: 73, from_resource_id: null },
+      },
+    ]);
+
+    const show = makeCtx(server, { isTTY: true });
+    await runCli(['post', 'show', '1'], show.ctx);
+    expect(show.out()).toContain('1, 2');
+  });
+
+  test('detaches by media position and all', async () => {
+    const { resourceId, png } = await attachFixtures();
+    const attach = makeCtx(server);
+    await runCli(['post', 'attach', '1', '--resource', String(resourceId), '--json'], attach.ctx);
+    const attachFile = makeCtx(server);
+    await runCli(['post', 'attach', '1', '--file', png, '--json'], attachFile.ctx);
+
+    const detach = makeCtx(server);
+    expect(await runCli(['post', 'detach', '1', '--media', '1', '--json'], detach.ctx)).toBe(0);
+    expect(JSON.parse(detach.out())).toEqual([
+      { id: 2, position: 1, mime: 'image/png', bytes: 73, from_resource_id: null },
+    ]);
+
+    const detachAll = makeCtx(server);
+    expect(await runCli(['post', 'detach', '1', '--all', '--json'], detachAll.ctx)).toBe(0);
+    expect(JSON.parse(detachAll.out())).toEqual([]);
+  });
+
+  test('reports a read_failed result for an unreadable file', async () => {
+    const { png } = await attachFixtures();
+
+    const attach = makeCtx(server);
+    expect(
+      await runCli(
+        ['post', 'attach', '1', '--file', png, path.join(server.dir, 'missing.png'), '--json'],
+        attach.ctx,
+      ),
+    ).toBe(1);
+    const results = JSON.parse(attach.out()) as Array<{
+      name: string;
+      ok: boolean;
+      media?: { position: number };
+      error?: { code: string };
+    }>;
+    expect(results[0]?.name).toBe('missing.png');
+    expect(results[0]?.ok).toBe(false);
+    expect(results[0]?.error?.code).toBe('read_failed');
+    expect(results[1]?.ok).toBe(true);
+    expect(results[1]?.media?.position).toBe(1);
+  });
+
+  test('rejects bad attach and detach flags', async () => {
+    await attachFixtures();
+
+    const neither = makeCtx(server);
+    expect(await runCli(['post', 'attach', '1', '--json'], neither.ctx)).toBe(1);
+    expect(JSON.parse(neither.err()).code).toBe('bad_args');
+
+    const detachNeither = makeCtx(server);
+    expect(await runCli(['post', 'detach', '1', '--json'], detachNeither.ctx)).toBe(1);
+    expect(JSON.parse(detachNeither.err())).toEqual({
+      code: 'bad_args',
+      message: 'Use one of --media or --all',
+    });
+
+    const detachBoth = makeCtx(server);
+    expect(
+      await runCli(['post', 'detach', '1', '--media', '1', '--all', '--json'], detachBoth.ctx),
+    ).toBe(1);
+    expect(JSON.parse(detachBoth.err()).code).toBe('bad_args');
+  });
+});
+
 describe('post delete', () => {
   test('requires confirmation outside a TTY and deletes with --yes', async () => {
     const setup = makeCtx(server);
@@ -337,5 +445,120 @@ describe('post tag', () => {
     const capture = makeCtx(server);
     expect(await runCli(['post', 'list', '--tag', 'a', '--json'], capture.ctx)).toBe(0);
     expect(JSON.parse(capture.out()).items.map((i: { id: number }) => i.id)).toEqual([1]);
+  });
+});
+
+describe('post status and schedule', () => {
+  test('promotes and demotes with per-item results', async () => {
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--text', 'Hello', '--json'], setup.ctx);
+    await runCli(['post', 'create', '--json'], setup.ctx);
+
+    const promote = makeCtx(server);
+    expect(await runCli(['post', 'promote', '1', '2', '--json'], promote.ctx)).toBe(1);
+    expect(JSON.parse(promote.out())).toEqual([
+      { id: 1, ok: true },
+      {
+        id: 2,
+        ok: false,
+        error: {
+          code: 'validation',
+          message: 'Post 2 is not ready',
+          errors: [{ path: 'text', message: 'Text is empty' }],
+        },
+      },
+    ]);
+    expect(promote.err()).toBe('');
+
+    const demote = makeCtx(server);
+    expect(await runCli(['post', 'demote', '1', '--json'], demote.ctx)).toBe(0);
+    expect(JSON.parse(demote.out())).toEqual([{ id: 1, ok: true }]);
+  });
+
+  test('schedules with --at and --force', async () => {
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--text', 'Hello', '--json'], setup.ctx);
+
+    const future = makeCtx(server);
+    expect(
+      await runCli(['post', 'schedule', '1', '--at', '2026-09-10 09:00', '--json'], future.ctx),
+    ).toBe(0);
+    expect(JSON.parse(future.out()).scheduled_at).toBe('2026-09-10T09:00:00.000Z');
+
+    const past = makeCtx(server);
+    expect(
+      await runCli(['post', 'schedule', '1', '--at', '2026-09-01 09:00', '--json'], past.ctx),
+    ).toBe(1);
+    expect(JSON.parse(past.err())).toEqual({
+      code: 'validation',
+      message: 'Invalid request',
+      errors: [{ path: 'at', message: 'Time is in the past' }],
+    });
+
+    const forced = makeCtx(server);
+    expect(
+      await runCli(
+        ['post', 'schedule', '1', '--at', '2026-09-01 09:00', '--force', '--json'],
+        forced.ctx,
+      ),
+    ).toBe(0);
+    expect(JSON.parse(forced.out()).scheduled_at).toBe('2026-09-01T09:00:00.000Z');
+  });
+
+  test('unschedules in a batch', async () => {
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--text', 'Hello', '--json'], setup.ctx);
+    await runCli(['post', 'schedule', '1', '--at', '2026-09-10 09:00', '--json'], setup.ctx);
+
+    const unschedule = makeCtx(server);
+    expect(await runCli(['post', 'unschedule', '1', '999', '--json'], unschedule.ctx)).toBe(1);
+    expect(JSON.parse(unschedule.out())).toEqual([
+      { id: 1, ok: true },
+      { id: 999, ok: false, error: { code: 'not_found', message: 'Post 999 not found' } },
+    ]);
+  });
+
+  test('lists scheduled and unscheduled', async () => {
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--json'], setup.ctx);
+    await runCli(['post', 'create', '--json'], setup.ctx);
+    await runCli(['post', 'schedule', '1', '--at', '+2h', '--json'], setup.ctx);
+
+    const scheduled = makeCtx(server);
+    expect(await runCli(['post', 'list', '--scheduled', '--json'], scheduled.ctx)).toBe(0);
+    expect(
+      (JSON.parse(scheduled.out()) as { items: Array<{ id: number }> }).items.map((p) => p.id),
+    ).toEqual([1]);
+
+    const unscheduled = makeCtx(server);
+    expect(await runCli(['post', 'list', '--unscheduled', '--json'], unscheduled.ctx)).toBe(0);
+    expect(
+      (JSON.parse(unscheduled.out()) as { items: Array<{ id: number }> }).items.map((p) => p.id),
+    ).toEqual([2]);
+
+    const both = makeCtx(server);
+    expect(await runCli(['post', 'list', '--scheduled', '--unscheduled', '--json'], both.ctx)).toBe(
+      1,
+    );
+    expect(JSON.parse(both.err())).toEqual({
+      code: 'bad_args',
+      message: 'Use one of --scheduled or --unscheduled',
+    });
+  });
+
+  test('creates an official post', async () => {
+    const ok = makeCtx(server);
+    expect(
+      await runCli(['post', 'create', '--text', 'Hello', '--official', '--json'], ok.ctx),
+    ).toBe(0);
+    expect(JSON.parse(ok.out()).status).toBe('official');
+
+    const empty = makeCtx(server);
+    expect(await runCli(['post', 'create', '--official', '--json'], empty.ctx)).toBe(1);
+    expect(JSON.parse(empty.err())).toEqual({
+      code: 'validation',
+      message: 'Invalid request',
+      errors: [{ path: 'text', message: 'Text is empty' }],
+    });
   });
 });

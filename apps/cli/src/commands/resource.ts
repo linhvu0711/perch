@@ -638,7 +638,9 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
           throw new CliError('bad_response', `Server at ${serverUrl} sent an invalid export line`);
         }
       }
-      const result = applyMirror(dir, resources, ctx.now());
+      const result = await applyMirror(dir, resources, ctx.now(), (id) =>
+        api.callBytes(api.client.api.resources[':id'].file.$get({ param: { id: String(id) } })),
+      );
       printResult(ctx, mode, {
         dir,
         added: result.added,
