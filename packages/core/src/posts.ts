@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { resourceTypeSchema } from './resources';
+import { batchErrorSchema, resourceTypeSchema } from './resources';
 
 export const POST_STATUSES = ['draft', 'official', 'published', 'failed'] as const;
 export const postStatusSchema = z.enum(POST_STATUSES);
@@ -71,6 +71,53 @@ export const postListSchema = z.object({
   next_cursor: z.string().nullable(),
 });
 export type PostList = z.infer<typeof postListSchema>;
+
+export const postPatchSchema = z
+  .object({
+    title: z.string().trim().max(POST_TITLE_MAX).optional(),
+    text: z.string().max(POST_TEXT_MAX).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'Nothing to update',
+  });
+export type PostPatch = z.infer<typeof postPatchSchema>;
+
+export const postLinksBodySchema = z.object({
+  resource_ids: z.array(z.number().int().positive()).min(1).max(POST_BATCH_MAX),
+});
+export type PostLinksBody = z.infer<typeof postLinksBodySchema>;
+
+export const postLinkResultSchema = z.discriminatedUnion('ok', [
+  z.object({ id: z.number().int(), ok: z.literal(true) }),
+  z.object({
+    id: z.number().int(),
+    ok: z.literal(false),
+    error: batchErrorSchema,
+  }),
+]);
+export const postLinksResponseSchema = z.object({
+  results: z.array(postLinkResultSchema),
+});
+export type PostLinkResult = z.infer<typeof postLinkResultSchema>;
+export type PostLinksResponse = z.infer<typeof postLinksResponseSchema>;
+
+export const postDeleteBodySchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(POST_BATCH_MAX),
+});
+export type PostDeleteBody = z.infer<typeof postDeleteBodySchema>;
+
+export const postDeleteResultSchema = z.discriminatedUnion('ok', [
+  z.object({ id: z.number().int(), ok: z.literal(true) }),
+  z.object({
+    id: z.number().int(),
+    ok: z.literal(false),
+    error: batchErrorSchema,
+  }),
+]);
+export const postDeleteResponseSchema = z.object({
+  results: z.array(postDeleteResultSchema),
+});
+export type PostDeleteResponse = z.infer<typeof postDeleteResponseSchema>;
 
 /** Title shown in lists: the stored title, else the first line of the text. */
 export function postListTitle(title: string, text: string): string {

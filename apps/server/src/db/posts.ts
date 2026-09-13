@@ -7,8 +7,11 @@ import {
   type Post,
   type PostCreate,
   type PostLink,
+  type PostDeleteResponse,
+  type PostLinksResponse,
   type PostList,
   type PostListQuery,
+  type PostPatch,
 } from '@perch/core';
 import { and, asc, count, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 
@@ -222,5 +225,120 @@ export function listPosts(
       hasNextPage && last
         ? encodePostCursor({ time: sortTimeOf(last), id: last.id })
         : null,
+  };
+}
+
+export function updatePost(
+  db: Db,
+  userId: number,
+  id: number,
+  patch: PostPatch,
+  now: Date,
+): Post | null {
+  const current = db
+    .select({ id: posts.id })
+    .from(posts)
+    .where(and(eq(posts.id, id), eq(posts.userId, userId)))
+    .get();
+  if (!current) return null;
+
+  db.update(posts)
+    .set({
+      ...(patch.title !== undefined ? { title: patch.title } : {}),
+      ...(patch.text !== undefined ? { text: patch.text } : {}),
+      updatedAt: now,
+    })
+    .where(and(eq(posts.id, id), eq(posts.userId, userId)))
+    .run();
+
+  return getPost(db, userId, id);
+}
+
+function getPostRow(db: Db, userId: number, id: number): PostRow | undefined {
+  return db
+    .select()
+    .from(posts)
+    .where(and(eq(posts.id, id), eq(posts.userId, userId)))
+    .get();
+}
+
+function resourceExists(db: Db, userId: number, resourceId: number): boolean {
+  return (
+    db
+      .select({ id: resources.id })
+      .from(resources)
+      .where(and(eq(resources.id, resourceId), eq(resources.userId, userId)))
+      .get() !== undefined
+  );
+}
+
+export function linkResources(
+  db: Db,
+  userId: number,
+  postId: number,
+  ids: number[],
+): PostLinksResponse | null {
+  if (!getPostRow(db, userId, postId)) return null;
+
+  return {
+    results: ids.map((id) => {
+      if (!resourceExists(db, userId, id)) {
+        return {
+          id,
+          ok: false as const,
+          error: { code: 'not_found', message: `Resource ${id} not found` },
+        };
+      }
+      db.insert(postLinks)
+        .values({ postId, resourceId: id })
+        .onConflictDoNothing()
+        .run();
+      return { id, ok: true as const };
+    }),
+  };
+}
+
+export function unlinkResources(
+  db: Db,
+  userId: number,
+  postId: number,
+  ids: number[],
+): PostLinksResponse | null {
+  if (!getPostRow(db, userId, postId)) return null;
+
+  return {
+    results: ids.map((id) => {
+      if (!resourceExists(db, userId, id)) {
+        return {
+          id,
+          ok: false as const,
+          error: { code: 'not_found', message: `Resource ${id} not found` },
+        };
+      }
+      db.delete(postLinks)
+        .where(and(eq(postLinks.postId, postId), eq(postLinks.resourceId, id)))
+        .run();
+      return { id, ok: true as const };
+    }),
+  };
+}
+
+export function deletePosts(db: Db, userId: number, ids: number[]): PostDeleteResponse {
+  return {
+    results: ids.map((id) => {
+      const deleted = db
+        .delete(posts)
+        .where(and(eq(posts.id, id), eq(posts.userId, userId)))
+        .returning({ id: posts.id })
+        .get();
+
+      return deleted
+        ? { id, ok: true as const }
+        : {
+            id,
+            ok: false as const,
+            error: { code: 'not_found', message: `Post ${id} not found` },
+          };
+    }),
   };
 }

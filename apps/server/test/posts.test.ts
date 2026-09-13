@@ -220,4 +220,146 @@ describe('posts', () => {
     expect(got.status).toBe(200);
     expect((await got.json()).title).toBe('');
   });
+
+  test('patches title and text', async () => {
+    await createPost({ text: 'old' });
+    server.clock.set(new Date('2026-09-04T11:00:00Z'));
+
+    const patched = await request('/api/posts/1', {
+      method: 'PATCH',
+      body: JSON.stringify({ text: 'new', title: 'T' }),
+    });
+    expect(patched.status).toBe(200);
+    expect(await patched.json()).toMatchObject({
+      text: 'new',
+      title: 'T',
+      created_at: '2026-09-04T10:00:00.000Z',
+      updated_at: '2026-09-04T11:00:00.000Z',
+      character_count: 3,
+    });
+
+    const empty = await request('/api/posts/1', {
+      method: 'PATCH',
+      body: '{}',
+    });
+    expect(empty.status).toBe(400);
+    expect(await empty.json()).toMatchObject({ code: 'validation' });
+
+    const missing = await request('/api/posts/999', {
+      method: 'PATCH',
+      body: JSON.stringify({ text: 'x' }),
+    });
+    expect(missing.status).toBe(404);
+  });
+
+  test('links and unlinks in batches with one bad id', async () => {
+    await createNote('# One');
+    await createNote('# Two');
+    await createPost({});
+
+    const link = () =>
+      request('/api/posts/1/links', {
+        method: 'POST',
+        body: JSON.stringify({ resource_ids: [1, 999, 2] }),
+      });
+    const linked = await link();
+    expect(linked.status).toBe(200);
+    const expectedResults = {
+      results: [
+        { id: 1, ok: true },
+        {
+          id: 999,
+          ok: false,
+          error: { code: 'not_found', message: 'Resource 999 not found' },
+        },
+        { id: 2, ok: true },
+      ],
+    };
+    expect(await linked.json()).toEqual(expectedResults);
+    expect(await (await link()).json()).toEqual(expectedResults);
+
+    const got = await request('/api/posts/1');
+    expect((await got.json()).links).toEqual([
+      { resource_id: 1, type: 'md', title: 'One' },
+      { resource_id: 2, type: 'md', title: 'Two' },
+    ]);
+
+    const unlinked = await request('/api/posts/1/links', {
+      method: 'DELETE',
+      body: JSON.stringify({ resource_ids: [2, 999] }),
+    });
+    expect(unlinked.status).toBe(200);
+    expect(await unlinked.json()).toEqual({
+      results: [
+        { id: 2, ok: true },
+        {
+          id: 999,
+          ok: false,
+          error: { code: 'not_found', message: 'Resource 999 not found' },
+        },
+      ],
+    });
+    expect((await (await request('/api/posts/1')).json()).links).toEqual([
+      { resource_id: 1, type: 'md', title: 'One' },
+    ]);
+
+    const unlinkedAgain = await request('/api/posts/1/links', {
+      method: 'DELETE',
+      body: JSON.stringify({ resource_ids: [2] }),
+    });
+    expect(await unlinkedAgain.json()).toEqual({
+      results: [{ id: 2, ok: true }],
+    });
+
+    const missingPost = await request('/api/posts/999/links', {
+      method: 'POST',
+      body: JSON.stringify({ resource_ids: [1] }),
+    });
+    expect(missingPost.status).toBe(404);
+
+    const emptyIds = await request('/api/posts/1/links', {
+      method: 'POST',
+      body: JSON.stringify({ resource_ids: [] }),
+    });
+    expect(emptyIds.status).toBe(400);
+  });
+
+  test('deletes in batches and never calls X', async () => {
+    await createNote('# One');
+    await createPost({});
+    await createPost({});
+    await request('/api/posts/1/links', {
+      method: 'POST',
+      body: JSON.stringify({ resource_ids: [1] }),
+    });
+
+    const deleted = await request('/api/posts', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids: [1, 999, 2] }),
+    });
+    expect(deleted.status).toBe(200);
+    expect(await deleted.json()).toEqual({
+      results: [
+        { id: 1, ok: true },
+        {
+          id: 999,
+          ok: false,
+          error: { code: 'not_found', message: 'Post 999 not found' },
+        },
+        { id: 2, ok: true },
+      ],
+    });
+
+    expect((await request('/api/posts/1')).status).toBe(404);
+    const resource = await request('/api/resources/1');
+    expect(resource.status).toBe(200);
+
+    const empty = await request('/api/posts', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids: [] }),
+    });
+    expect(empty.status).toBe(400);
+
+    expect(server.xClient.calls).toEqual([]);
+  });
 });
