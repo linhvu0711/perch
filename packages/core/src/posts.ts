@@ -65,7 +65,7 @@ export const postCreateSchema = z.object({
 });
 export type PostCreate = z.infer<typeof postCreateSchema>;
 
-const listDateSchema = z
+export const listDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
   .refine(

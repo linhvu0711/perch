@@ -101,6 +101,8 @@ perch calendar   [--week|--month] [--from <date>] [--tag t]...
 perch cost       [--month YYYY-MM]    default: this month. Total and split by kind.
 ```
 
+- `calendar --from` picks the month or the Monday-first week that holds that date; default is the month that holds today in the configured `timezone`. JSON is `{ from, to, days: [{ date, posts }] }`, each post the `post list` shape plus `missed`; the table has `day time id status mark title`, `mark` is `MISSED` or `FAILED`.
+
 ### Server
 
 ```

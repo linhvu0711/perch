@@ -8,6 +8,26 @@ export function formatDayMonth(iso: string, timeZone = DEFAULT_TIMEZONE): string
   });
 }
 
+/** `"September 2026"` for a `YYYY-MM-DD` grid cell (calendar date, not an instant). */
+export function formatMonthTitle(ymd: string): string {
+  return new Date(`${ymd}T00:00:00Z`).toLocaleDateString('en-GB', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+/** `"7 Sep – 13 Sep 2026"` for the Monday-first week `[from, to]` of grid cells. */
+export function formatWeekTitle(from: string, to: string): string {
+  const dm = (ymd: string) =>
+    new Date(`${ymd}T00:00:00Z`).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      timeZone: 'UTC',
+    });
+  return `${dm(from)} – ${dm(to)} ${to.slice(0, 4)}`;
+}
+
 export function formatDateTime(iso: string, timeZone = DEFAULT_TIMEZONE): string {
   const date = new Date(iso);
   return `${date.toLocaleDateString('en-GB', {

@@ -124,13 +124,13 @@ export function PostModal(): JSX.Element | null {
   }, [currentId]);
 
   useEffect(() => {
-    if (invalidId) navigate('/posts', { replace: true });
+    if (invalidId) navigate('..', { replace: true });
   }, [invalidId, navigate]);
 
   useEffect(() => {
     if (postQuery.error instanceof ApiError && postQuery.error.status === 404) {
       toast('Post not found', 'warn');
-      navigate('/posts', { replace: true });
+      navigate('..', { replace: true });
     }
   }, [navigate, postQuery.error]);
 
@@ -212,7 +212,7 @@ export function PostModal(): JSX.Element | null {
         return;
       }
       if (savedRef.current) toast('Saved');
-      navigate('/posts');
+      navigate('..');
     })().catch((error: unknown) => {
       closedRef.current = false;
       toast(errorMessage(error), 'warn');
@@ -312,7 +312,7 @@ export function PostModal(): JSX.Element | null {
         );
       }
       setConfirm(null);
-      navigate('/posts');
+      navigate('..');
       toast('Deleted');
     } catch (error) {
       toast(errorMessage(error), 'warn');

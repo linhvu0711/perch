@@ -57,7 +57,9 @@ function AuthGate() {
               <Route path="save-tweets" element={<SaveTweetsModal />} />
               <Route path=":id" element={<ResourceModal />} />
             </Route>
-            <Route path="/calendar" element={<Calendar />} />
+            <Route path="/calendar" element={<Calendar />}>
+              <Route path=":id" element={<PostModal />} />
+            </Route>
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

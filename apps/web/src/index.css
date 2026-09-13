@@ -1878,3 +1878,155 @@ ul.checks li.ok svg {
   margin: 0;
   flex: 1;
 }
+
+.cal {
+  overflow: hidden;
+}
+.cal .dow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-bottom: 1px solid var(--border);
+}
+.cal .dow div {
+  padding: 10px 12px;
+  font-size: 11.5px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.cal .days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-auto-rows: 118px;
+}
+.day {
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+}
+.day:nth-child(7n) {
+  border-right: 0;
+}
+.day .n {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-3);
+  margin-bottom: 2px;
+}
+.day.out .n {
+  opacity: 0.4;
+}
+.day.past {
+  background: var(--surface-2);
+}
+.day.past .n {
+  opacity: 0.55;
+}
+.day.past .ev {
+  opacity: 0.75;
+}
+.day.past .ev:hover {
+  opacity: 1;
+  background: var(--surface-3);
+}
+.day.today .n {
+  color: var(--indigo-text);
+  font-weight: 500;
+}
+.day.today .n::after {
+  content: "today";
+  font-family: var(--sans);
+  margin-left: 6px;
+  font-size: 11px;
+}
+.calnav {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.ev {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  color: inherit;
+  text-decoration: none;
+}
+.ev:hover {
+  background: var(--surface-2);
+}
+.ev .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.ev .t {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text-2);
+  flex: none;
+}
+.ev .s {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ev.draft .dot {
+  background: var(--draft);
+}
+.ev.official .dot {
+  background: var(--official);
+}
+.ev.published .dot {
+  background: var(--published);
+}
+.ev.failed .dot {
+  background: var(--failed);
+}
+.ev.missed .dot {
+  background: var(--missed);
+}
+.legend {
+  display: flex;
+  gap: 16px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.legend i.draft {
+  background: var(--draft);
+}
+.legend i.official {
+  background: var(--official);
+}
+.legend i.published {
+  background: var(--published);
+}
+.legend i.failed {
+  background: var(--failed);
+}
+.legend i.missed {
+  background: var(--missed);
+}
+.cal .days.week {
+  grid-auto-rows: 420px;
+}

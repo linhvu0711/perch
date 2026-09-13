@@ -12,7 +12,13 @@ import type {
   SettingsPatch,
   TweetCreate,
 } from '@perch/core';
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import { ApiError, api, type JsonResponse, unwrap } from './api';
 
@@ -277,6 +283,30 @@ export function usePosts(filters: PostFilters, enabled = true) {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor ?? undefined,
     enabled,
+  });
+}
+
+export interface CalendarFilters {
+  from: string;
+  to: string;
+  tag?: string[];
+}
+
+export function useCalendar(filters: CalendarFilters) {
+  return useQuery({
+    queryKey: ['posts', 'list', 'calendar', filters],
+    queryFn: () =>
+      unwrap(
+        api.api.calendar.$get({
+          query: {
+            from: filters.from,
+            to: filters.to,
+            ...(filters.tag !== undefined ? { tag: filters.tag } : {}),
+          },
+        }),
+      ),
+    placeholderData: keepPreviousData,
+    refetchInterval: 30_000,
   });
 }
 
