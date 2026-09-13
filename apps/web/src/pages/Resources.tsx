@@ -12,24 +12,29 @@ import {
 import { type JSX, useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router';
 
+import { AuthorFilter } from '@/components/AuthorFilter';
 import { Empty } from '@/components/Empty';
 import { IconButton } from '@/components/IconButton';
 import { ResourceCard } from '@/components/ResourceCard';
 import { UploadImagesModal } from '@/components/UploadImagesModal';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { errorMessage } from '@/lib/api';
-import { RESOURCES_PAGE_SIZE, useResources, useTweetAuthors } from '@/lib/queries';
+import { RESOURCES_PAGE_SIZE, useResources } from '@/lib/queries';
 
 export function Resources() {
   const navigate = useNavigate();
   const [type, setType] = useState<ResourceType | undefined>();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [author, setAuthor] = useState('');
+  const [author, setAuthor] = useState<string | undefined>();
   const [sort, setSort] = useState<'newest' | 'oldest' | 'most' | 'least'>('newest');
   const [uploadOpen, setUploadOpen] = useState(false);
-  const authors = useTweetAuthors();
   const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const chooseType = (next: ResourceType | undefined) => {
+    setType(next);
+    if (next === 'md') setAuthor(undefined);
+  };
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedSearch(search), 250);
@@ -40,7 +45,7 @@ export function Resources() {
     () => ({
       ...(type !== undefined ? { type } : {}),
       ...(debouncedSearch !== '' ? { search: debouncedSearch } : {}),
-      ...(author !== '' ? { author } : {}),
+      ...(author !== undefined ? { author } : {}),
       sort: sort === 'most' || sort === 'least' ? ('used' as const) : ('created' as const),
       order: sort === 'oldest' || sort === 'least' ? ('asc' as const) : ('desc' as const),
     }),
@@ -67,8 +72,10 @@ export function Resources() {
     content = <div className="countline">Loading…</div>;
   } else if (resources.isError) {
     content = <Empty title="Could not load resources" text={errorMessage(resources.error)} />;
-  } else if (total === 0 && type === undefined && search === '') {
-    content = <Empty title="No resources yet" text="Upload images or create a note." />;
+  } else if (total === 0 && type === undefined && search === '' && author === undefined) {
+    content = (
+      <Empty title="No resources yet" text="Save tweets or create a note with the buttons above." />
+    );
   } else if (total === 0) {
     content = <Empty title="No resources match" text="Change a filter or the search." />;
   } else {
@@ -106,17 +113,17 @@ export function Resources() {
     <>
       <div className="head">
         <h1>Resources</h1>
+        <IconButton
+          label="Save tweets"
+          icon={BookmarkPlus}
+          onClick={() => navigate('/resources/save-tweets')}
+        />
         <IconButton label="Upload images" icon={Upload} onClick={() => setUploadOpen(true)} />
         <IconButton
           label="New note"
           icon={FilePlus}
           variant="primary"
           onClick={() => navigate('/resources/new')}
-        />
-        <IconButton
-          label="Save tweets"
-          icon={BookmarkPlus}
-          onClick={() => navigate('/resources/save-tweets')}
         />
       </div>
       <div className="filters">
@@ -127,7 +134,7 @@ export function Resources() {
                 type="button"
                 aria-label="All"
                 aria-pressed={type === undefined}
-                onClick={() => setType(undefined)}
+                onClick={() => chooseType(undefined)}
               >
                 <LayoutGrid size={16} strokeWidth={1.75} />
               </button>
@@ -140,7 +147,7 @@ export function Resources() {
                 type="button"
                 aria-label="Tweets"
                 aria-pressed={type === 'tweet'}
-                onClick={() => setType('tweet')}
+                onClick={() => chooseType('tweet')}
               >
                 <Bird size={16} strokeWidth={1.75} />
               </button>
@@ -153,7 +160,7 @@ export function Resources() {
                 type="button"
                 aria-label="Images"
                 aria-pressed={type === 'image'}
-                onClick={() => setType('image')}
+                onClick={() => chooseType('image')}
               >
                 <Image size={16} strokeWidth={1.75} />
               </button>
@@ -166,7 +173,7 @@ export function Resources() {
                 type="button"
                 aria-label="Notes"
                 aria-pressed={type === 'md'}
-                onClick={() => setType('md')}
+                onClick={() => chooseType('md')}
               >
                 <FileText size={16} strokeWidth={1.75} />
               </button>
@@ -174,20 +181,7 @@ export function Resources() {
             <TooltipContent>Notes</TooltipContent>
           </Tooltip>
         </div>
-        <select
-          className="sel"
-          aria-label="Author"
-          value={author}
-          disabled={type === 'md'}
-          onChange={(event) => setAuthor(event.target.value)}
-        >
-          <option value="">Any author</option>
-          {(authors.data?.authors ?? []).map((item) => (
-            <option key={item.username} value={item.username}>
-              @{item.username} ({item.count})
-            </option>
-          ))}
-        </select>
+        <AuthorFilter value={author} disabled={type === 'md'} onChange={setAuthor} />
         <div className="search">
           <Search size={16} strokeWidth={1.75} />
           <input

@@ -30,18 +30,17 @@ export function ResourceCard({ resource }: { resource: Resource }): JSX.Element 
             </>
           )}
         </span>
+        {isTweet && <span>@{resource.author_username}</span>}
         <span className="date">{formatDayMonth(resource.created_at)}</span>
       </div>
       {isImage && (
         <img className="thumb" src={`/api/resources/${resource.id}/file`} alt={resource.title} />
       )}
-      <div className="title">{resource.title}</div>
+      {!isTweet && <div className="title">{resource.title}</div>}
       {isImage ? (
         <div className="body">{formatBytes(resource.bytes)}</div>
       ) : isTweet ? (
-        <div className="body">
-          @{resource.author_username} · {resource.text}
-        </div>
+        <div className="body">{resource.text}</div>
       ) : (
         excerpt && <div className="body">{excerpt}</div>
       )}
