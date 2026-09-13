@@ -4,11 +4,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
 
+import type { CliEnv } from './env';
+import { parseCliEnv } from './env';
 import { CliError } from './output';
 
 export interface CliContext {
   argv: string[];
-  env: Record<string, string | undefined>;
+  env: CliEnv;
   stdout: { write(s: string): void };
   stderr: { write(s: string): void };
   isTTY: boolean;
@@ -27,14 +29,15 @@ export function realContext(
   argv: string[],
   env: Record<string, string | undefined> = process.env,
 ): CliContext {
+  const parsed = parseCliEnv(env);
   return {
     argv,
-    env,
+    env: parsed,
     stdout: process.stdout,
     stderr: process.stderr,
     isTTY: Boolean(process.stdout.isTTY),
     stdinIsTTY: Boolean(process.stdin.isTTY),
-    configPath: env.PERCH_CONFIG_PATH ?? path.join(os.homedir(), '.perch', 'config.json'),
+    configPath: parsed.PERCH_CONFIG_PATH ?? path.join(os.homedir(), '.perch', 'config.json'),
     homeDir: os.homedir(),
     now: () => new Date(),
     fetch: globalThis.fetch,
@@ -49,7 +52,7 @@ export function realContext(
       }
     },
     async editText(initial: string) {
-      const editor = env.VISUAL ?? env.EDITOR;
+      const editor = parsed.VISUAL ?? parsed.EDITOR;
       if (!editor) {
         throw new CliError('no_editor', 'Set $EDITOR (or $VISUAL) to use -e');
       }

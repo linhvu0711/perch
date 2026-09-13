@@ -6,9 +6,9 @@ import { parseServerEnv } from './env';
 import { buildServer } from './server';
 import { createRealXClient } from './x/real';
 
-export { buildServer } from './server';
 export type { AppType } from './app';
 export type { BuildServerOptions, PerchServer } from './server';
+export { buildServer } from './server';
 
 if (import.meta.main) {
   const parsed = parseServerEnv(process.env);
@@ -27,10 +27,7 @@ if (import.meta.main) {
 
   const xClientId = env.PERCH_X_CLIENT_ID;
   const xClientSecret = env.PERCH_X_CLIENT_SECRET;
-  const publicUrl = (env.PERCH_PUBLIC_URL ?? `http://127.0.0.1:${port}`).replace(
-    /\/$/,
-    '',
-  );
+  const publicUrl = (env.PERCH_PUBLIC_URL ?? `http://127.0.0.1:${port}`).replace(/\/$/, '');
   const xOAuth =
     xClientId && xClientSecret
       ? {
@@ -60,10 +57,7 @@ if (import.meta.main) {
     webDist,
   });
 
-  const intervalId = setInterval(
-    () => perch.tick(systemClock.now()).catch(console.error),
-    30_000,
-  );
+  const intervalId = setInterval(() => perch.tick(systemClock.now()).catch(console.error), 30_000);
   const server = Bun.serve({ port, fetch: perch.app.fetch });
 
   let shuttingDown = false;

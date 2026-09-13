@@ -33,9 +33,7 @@ describe('parseServerEnv', () => {
     // Given: { PERCH_TOKEN: 'secret', PERCH_SECURE_COOKIES: 'maybe' }
     // When: parseServerEnv(...)
     // Then: { ok: false, message: 'PERCH_SECURE_COOKIES must be true or false' }
-    expect(
-      parseServerEnv({ PERCH_TOKEN: 'secret', PERCH_SECURE_COOKIES: 'maybe' }),
-    ).toEqual({
+    expect(parseServerEnv({ PERCH_TOKEN: 'secret', PERCH_SECURE_COOKIES: 'maybe' })).toEqual({
       ok: false,
       message: 'PERCH_SECURE_COOKIES must be true or false',
     });
