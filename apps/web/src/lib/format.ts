@@ -26,6 +26,10 @@ export function noteExcerpt(body: string): string {
     .slice(0, 200);
 }
 
+export function formatUsd(n: number): string {
+  return `$${n.toFixed(3)}`;
+}
+
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1048576) return `${(n / 1024).toFixed(1)} KB`;

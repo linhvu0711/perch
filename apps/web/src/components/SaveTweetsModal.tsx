@@ -1,12 +1,16 @@
-import { X } from 'lucide-react';
-import { type JSX, useState } from 'react';
+import { X_COSTS_USD } from '@perch/core';
+import { Check, TriangleAlert, X } from 'lucide-react';
+import { type JSX, useEffect, useId, useState } from 'react';
 import { useNavigate } from 'react-router';
 
 import { errorMessage } from '@/lib/api';
+import { formatUsd } from '@/lib/format';
 import { useSaveTweets } from '@/lib/queries';
+import { IconButton } from './IconButton';
 import { toast } from './Toast';
 
 export function SaveTweetsModal(): JSX.Element {
+  const titleId = useId();
   const navigate = useNavigate();
   const mutation = useSaveTweets();
   const [value, setValue] = useState('');
@@ -15,41 +19,103 @@ export function SaveTweetsModal(): JSX.Element {
     .map((url) => url.trim())
     .filter(Boolean);
   const close = () => navigate('/resources');
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopImmediatePropagation();
+      close();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  });
+
   async function save(): Promise<void> {
     try {
-      const result = await mutation.mutateAsync({ urls });
-      const saved = result.results.filter((item) => item.ok && item.status !== 'existing').length;
+      const data = await mutation.mutateAsync({ urls, refresh: false });
+      const saved = data.results.filter(
+        (result) => result.ok && result.status !== 'existing',
+      ).length;
       toast(`Saved ${saved} of ${urls.length}`);
     } catch (error) {
       toast(errorMessage(error), 'warn');
     }
   }
+
+  const results = mutation.data?.results;
+  const saved = results?.filter((result) => result.ok && result.status !== 'existing').length ?? 0;
+
   return (
-    <div className="scrim" role="button" tabIndex={0} onMouseDown={(event) => event.target === event.currentTarget && close()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label="Save tweets">
+    <div
+      className="scrim top"
+      onMouseDown={(event) => event.target === event.currentTarget && close()}
+    >
+      <div className="modal sm" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="mhead">
-          <b>Save tweets</b>
-          <button type="button" onClick={close} aria-label="Close">
-            <X size={16} />
-          </button>
+          <b id={titleId}>Save tweets</b>
+          <div className="right">
+            <IconButton label="Close" icon={X} variant="ghost" onClick={close} />
+          </div>
         </div>
-        <div className="rbody">
-          <div className="rmain">
-            <p className="muted">$0.015 per URL. Duplicate URLs are free.</p>
-            <p className="muted">
-              Posts with media, articles, retweets, replies, and quotes are rejected.
-            </p>
+        <div className="sbody">
+          <div className="field">
+            <label>
+              Tweet URLs <span className="faint">one per line</span>
+            </label>
             <textarea
+              className="urls"
               aria-label="Tweet URLs"
-              rows={8}
+              placeholder="https://x.com/user/status/123…"
               value={value}
               onChange={(event) => setValue(event.target.value)}
-              placeholder="https://x.com/user/status/123"
             />
-            <p className="muted">
-              {urls.length} URL{urls.length === 1 ? '' : 's'} · maximum charge $
-              {(urls.length * 0.015).toFixed(3)}
-            </p>
+          </div>
+          <div className="note">
+            Reading a tweet costs <b>{formatUsd(X_COSTS_USD.saveTweet)}</b>. A URL already saved is
+            free and returns the existing resource. Tweets with images, video, articles, replies,
+            quotes, or retweets are rejected.
+          </div>
+          {results !== undefined && (
+            <div className="results">
+              {results.map((result) => {
+                const color = !result.ok
+                  ? 'var(--failed)'
+                  : result.status === 'existing'
+                    ? 'var(--text-2)'
+                    : 'var(--published)';
+                const Icon = result.ok ? Check : TriangleAlert;
+                const message = result.ok
+                  ? result.status === 'created'
+                    ? `Saved · #${result.resource.id}`
+                    : result.status === 'existing'
+                      ? `Already saved · #${result.resource.id}`
+                      : `Refreshed · #${result.resource.id}`
+                  : result.error.message;
+                return (
+                  <div className="result" style={{ color }} key={result.url}>
+                    <Icon size={16} strokeWidth={1.75} />
+                    <span className="u">{result.url}</span>
+                    <span>{message}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <div className="sfoot">
+          <span className="left">
+            {results !== undefined
+              ? `${saved} saved · charged ${formatUsd(saved * X_COSTS_USD.saveTweet)}`
+              : urls.length > 0
+                ? `${urls.length} URL${urls.length === 1 ? '' : 's'} · up to ${formatUsd(
+                    urls.length * X_COSTS_USD.saveTweet,
+                  )}`
+                : ''}
+          </span>
+          <button type="button" className="btn" onClick={close}>
+            Cancel
+          </button>
+          {results === undefined ? (
             <button
               type="button"
               className="btn primary"
@@ -58,18 +124,11 @@ export function SaveTweetsModal(): JSX.Element {
             >
               Save
             </button>
-            {mutation.data && (
-              <div className="results">
-                {mutation.data.results.map((result) => (
-                  <div key={result.url}>
-                    {result.ok
-                      ? `${result.status === 'created' ? 'Saved · $0.015' : result.status === 'existing' ? 'Already saved · $0.000' : 'Refreshed · $0.015'} · #${result.resource.id}`
-                      : result.error.message}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          ) : (
+            <button type="button" className="btn primary" onClick={close}>
+              Done
+            </button>
+          )}
         </div>
       </div>
     </div>

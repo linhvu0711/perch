@@ -191,6 +191,17 @@ main { padding:36px 40px 60px; min-width:0; } .wrap { max-width:1280px; margin:0
 .kv span { font-family:var(--mono); font-size:12.5px; color:var(--text); }
 .sbody { padding:22px 24px; display:flex; flex-direction:column; gap:18px; }
 .sfoot { display:flex; gap:8px; justify-content:flex-end; padding:14px 24px; border-top:1px solid var(--border); }
+.sfoot .left { margin-right:auto; color:var(--text-3); font-size:12.5px; align-self:center; }
+textarea.urls { border:1px solid var(--border-strong); border-radius:6px; padding:10px 12px; font-family:var(--mono); font-size:12.5px; min-height:110px; resize:vertical; background:var(--surface); }
+.results { display:flex; flex-direction:column; gap:6px; }
+.result { display:flex; gap:10px; align-items:center; padding:9px 12px; border:1px solid var(--border); border-radius:6px; font-size:13px; }
+.result .u { font-family:var(--mono); font-size:12px; color:var(--text-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+.menu { position:absolute; z-index:60; background:var(--surface); border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow); padding:6px; min-width:180px; display:flex; flex-direction:column; }
+.menu button { text-align:left; padding:7px 10px; border-radius:5px; display:flex; align-items:center; gap:8px; color:var(--text); }
+.menu button:hover { background:var(--surface-2); }
+.menu button[aria-checked="true"] { color:var(--indigo-text); font-weight:500; }
+.menu button .n { margin-left:auto; font-family:var(--mono); font-size:11px; color:var(--text-3); }
+.menu hr { border:0; border-top:1px solid var(--border); margin:4px 0; }
 .confirm p { margin:0; color:var(--text-2); line-height:1.55; }
 .confirm p b { color:var(--text); font-weight:500; }
 textarea:focus-visible { outline:2px solid var(--indigo); outline-offset:2px; }
@@ -261,8 +272,10 @@ textarea:focus-visible { outline:2px solid var(--indigo); outline-offset:2px; }
 .xcard .av.other { background:var(--surface-3); }
 .xcard > div:last-child { min-width:0; flex:1; }
 .xcard .name { display:flex; gap:6px; align-items:baseline; font-size:14px; }
+.xcard .name b { font-weight:600; }
 .xcard .name span { color:var(--text-3); font-size:13px; }
 .xcard .text { margin-top:4px; font-size:14px; line-height:1.45; white-space:pre-wrap; overflow-wrap:anywhere; }
+.xcard .text a { color:var(--x-blue); text-decoration:none; }
 .xcard .text p { margin:0 0 8px; } .xcard .text p:last-child { margin-bottom:0; }
 .xcard .text .xc.blue { color:var(--x-blue); }
 .xcard .meta { margin-top:8px; color:var(--text-3); font-size:13px; }

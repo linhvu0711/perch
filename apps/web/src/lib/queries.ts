@@ -8,6 +8,7 @@ import type {
   ResourcePatch,
   ResourceType,
   SettingsPatch,
+  TweetCreate,
 } from '@perch/core';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -97,8 +98,6 @@ export interface ResourceFilters {
   type?: ResourceType;
   search?: string;
   author?: string;
-  from?: string;
-  to?: string;
   sort?: 'created' | 'used';
   order: 'asc' | 'desc';
 }
@@ -115,8 +114,6 @@ export function useResources(filters: ResourceFilters, pageSize = RESOURCES_PAGE
             ...(filters.type !== undefined ? { type: filters.type } : {}),
             ...(filters.search !== undefined ? { search: filters.search } : {}),
             ...(filters.author !== undefined ? { author: filters.author } : {}),
-            ...(filters.from !== undefined ? { from: filters.from } : {}),
-            ...(filters.to !== undefined ? { to: filters.to } : {}),
             sort: filters.sort ?? 'created',
             order: filters.order,
             limit: String(pageSize),
@@ -129,7 +126,7 @@ export function useResources(filters: ResourceFilters, pageSize = RESOURCES_PAGE
   });
 }
 
-export function useTweetAuthors() {
+export function useResourceAuthors() {
   return useQuery({
     queryKey: ['resources', 'authors'],
     queryFn: () => unwrap(api.api.resources.authors.$get()),
@@ -139,11 +136,15 @@ export function useTweetAuthors() {
 export function useSaveTweets() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { urls: string[]; refresh?: boolean }) =>
-      unwrap(api.api.resources.tweets.$post({ json: input })),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['resources'] });
-      void queryClient.invalidateQueries({ queryKey: ['counts'] });
+    mutationFn: (input: TweetCreate) => unwrap(api.api.resources.tweets.$post({ json: input })),
+    onSuccess: (data) => {
+      for (const result of data.results) {
+        if (result.ok) {
+          queryClient.setQueryData(['resources', 'detail', result.resource.id], result.resource);
+        }
+      }
+      void queryClient.invalidateQueries({ queryKey: ['resources', 'list'] });
+      void queryClient.invalidateQueries({ queryKey: ['resources', 'authors'] });
     },
   });
 }
