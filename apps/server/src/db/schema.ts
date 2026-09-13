@@ -47,7 +47,7 @@ export const resources = sqliteTable(
   },
   (t) => [
     index('resources_user_created_idx').on(t.userId, t.createdAt, t.id),
-    uniqueIndex('resources_user_tweet_idx').on(t.userId, t.tweetXId),
+    uniqueIndex('resources_user_tweet_x_id_idx').on(t.userId, t.tweetXId),
   ],
 );
 

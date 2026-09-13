@@ -72,7 +72,9 @@ function printResource(ctx: CliContext, options: GlobalOptions, resource: Resour
         title: resource.title,
         author: `@${resource.author_username}`,
         posted: resource.posted_at,
-        url: resource.tweet_url,
+        url: resource.url,
+        notes: resource.notes,
+        created: resource.created_at,
       })}\n\n${resource.text}\n`,
     );
     return;
@@ -96,8 +98,8 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
 
   add
     .command('tweet <urls...>')
-    .description('Save X posts as resources')
-    .option('--refresh')
+    .description('Save tweets from X URLs')
+    .option('--refresh', 're-fetch a saved tweet')
     .action(async (urls: string[], commandOptions: { refresh?: boolean }) => {
       const options = program.opts<GlobalOptions>();
       const api = apiFor(program, ctx);

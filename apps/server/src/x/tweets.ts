@@ -11,7 +11,7 @@ import {
 import type { Clock } from '../clock';
 import type { Db } from '../db';
 import { logApiCall } from '../db/apiCalls';
-import { createTweet, getTweetByXId, updateTweet } from '../db/resources';
+import { createTweet, findTweetByXId, updateTweet } from '../db/resources';
 import type { XAccountService } from './accounts';
 import type { XTweet } from './client';
 import { type XClient, XError } from './client';
@@ -28,7 +28,7 @@ export function createTweetService(deps: {
 }): TweetService {
   return {
     async saveTweets(userId, input) {
-      const access = await deps.accounts.accessTokenFor(userId);
+      const { account, accessToken } = await deps.accounts.accessTokenFor(userId);
       const results: TweetCreateResponse['results'] = [];
 
       for (const url of input.urls) {
@@ -37,12 +37,12 @@ export function createTweetService(deps: {
           results.push({
             url,
             ok: false,
-            error: { code: 'invalid_url', message: 'Invalid X post URL' },
+            error: { code: 'invalid_url', message: 'Not a tweet URL' },
           });
           continue;
         }
 
-        const existing = getTweetByXId(deps.db, userId, parsed.id);
+        const existing = findTweetByXId(deps.db, userId, parsed.id);
         if (existing && !input.refresh) {
           results.push({ url, ok: true, status: 'existing', resource: existing });
           continue;
@@ -50,34 +50,28 @@ export function createTweetService(deps: {
 
         let tweet: XTweet;
         try {
-          tweet = await deps.xClient.getTweet(access.accessToken, parsed.id);
+          tweet = await deps.xClient.getTweet(accessToken, parsed.id);
         } catch (error) {
-          if (error instanceof XError && error.status === 404) {
-            results.push({
-              url,
-              ok: false,
-              error: { code: 'not_found', message: 'Post not found' },
-            });
-          } else {
-            results.push({
-              url,
-              ok: false,
-              error: {
-                code: 'x_error',
-                message: error instanceof Error ? error.message : String(error),
-              },
-            });
-          }
+          if (!(error instanceof XError)) throw error;
+          results.push({
+            url,
+            ok: false,
+            error:
+              error.status === 404
+                ? { code: 'not_found', message: 'Tweet not found or not readable' }
+                : { code: 'x_error', message: `X error: ${error.message}` },
+          });
           continue;
         }
 
         const rejection = tweetRejection(tweet);
         const now = deps.clock.now();
         if (rejection) {
+          // X served the tweet, so the fetch is charged without a resource.
           logApiCall(deps.db, userId, {
             endpoint: X_ENDPOINTS.getTweet,
             costUsd: X_COSTS_USD.saveTweet,
-            xAccountId: access.account.id,
+            xAccountId: account.id,
             now,
           });
           results.push({ url, ok: false, error: rejection });
@@ -86,37 +80,39 @@ export function createTweetService(deps: {
 
         const text = tweet.noteText ?? tweet.text;
         const canonicalUrl = `https://x.com/${tweet.authorUsername}/status/${tweet.id}`;
-        const resource = existing
-          ? updateTweet(deps.db, userId, existing.id, {
-              url: canonicalUrl,
-              xId: tweet.id,
-              authorId: tweet.authorId ?? '',
-              authorUsername: tweet.authorUsername,
-              text,
-              postedAt: new Date(tweet.postedAt ?? 0),
-              title:
-                existing.title === tweetTitle(existing.text) ? tweetTitle(text) : existing.title,
-            })
-          : createTweet(
-              deps.db,
-              userId,
-              {
+        const resource = deps.db.transaction((tx) => {
+          const saved = existing
+            ? updateTweet(tx, userId, existing.id, {
                 url: canonicalUrl,
-                xId: tweet.id,
-                authorId: tweet.authorId ?? '',
+                authorId: tweet.authorId,
                 authorUsername: tweet.authorUsername,
                 text,
-                postedAt: new Date(tweet.postedAt ?? 0),
-              },
-              now,
-            );
-        if (!resource) throw new Error('tweet resource update failed');
-        logApiCall(deps.db, userId, {
-          endpoint: X_ENDPOINTS.getTweet,
-          costUsd: X_COSTS_USD.saveTweet,
-          resourceId: resource.id,
-          xAccountId: access.account.id,
-          now,
+                title: tweetTitle(text),
+                postedAt: new Date(tweet.createdAt),
+              })
+            : createTweet(
+                tx,
+                userId,
+                {
+                  url: canonicalUrl,
+                  xId: tweet.id,
+                  authorId: tweet.authorId,
+                  authorUsername: tweet.authorUsername,
+                  text,
+                  title: tweetTitle(text),
+                  postedAt: new Date(tweet.createdAt),
+                },
+                now,
+              );
+          if (!saved) throw new Error('tweet resource update failed');
+          logApiCall(tx, userId, {
+            endpoint: X_ENDPOINTS.getTweet,
+            costUsd: X_COSTS_USD.saveTweet,
+            resourceId: saved.id,
+            xAccountId: account.id,
+            now,
+          });
+          return saved;
         });
         results.push({
           url,

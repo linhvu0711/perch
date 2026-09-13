@@ -135,28 +135,27 @@ export function createRealXClient(options: {
           referenced_tweets?: Array<{ type: string; id: string }>;
         };
         includes?: { users?: Array<{ id: string; username: string }> };
+        errors?: Array<{ detail?: string; title?: string }>;
       };
       if (!data.data) {
-        throw new XError('http', 404, 'Post not found');
+        throw new XError('http', 404, data.errors?.[0]?.detail ?? 'Tweet not found');
       }
       const tweetData = data.data;
+      if (!tweetData.author_id || !tweetData.created_at) {
+        throw new XError('http', res.status, 'tweet response missing fields');
+      }
       const author = data.includes?.users?.find((u) => u.id === tweetData.author_id);
       const tweet: XTweet = {
         id: tweetData.id,
         text: tweetData.text,
+        authorId: tweetData.author_id,
         authorUsername: author?.username ?? '',
+        createdAt: tweetData.created_at,
         hasMedia: (tweetData.attachments?.media_keys?.length ?? 0) > 0,
         isArticle: tweetData.article != null,
         noteText: tweetData.note_tweet?.text ?? null,
         referencedTweets: tweetData.referenced_tweets ?? [],
       };
-      Object.defineProperties(tweet, {
-        authorId: { value: tweetData.author_id ?? '', enumerable: false },
-        postedAt: {
-          value: tweetData.created_at ?? new Date(0).toISOString(),
-          enumerable: false,
-        },
-      });
       return tweet;
     },
 

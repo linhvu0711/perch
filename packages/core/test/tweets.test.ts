@@ -1,6 +1,11 @@
 import { expect, test } from 'bun:test';
 
-import { parseTweetUrl, tweetRejection, tweetTitle } from '../src/tweets';
+import {
+  parseTweetUrl,
+  type TweetRejectionCode,
+  tweetRejection,
+  tweetTitle,
+} from '../src/tweets';
 
 test('parseTweetUrl', () => {
   // Given: the URL forms below
@@ -25,7 +30,7 @@ test('tweetRejection names the first reason in order', () => {
   // Given: tweets carrying each rejection signal
   const cases: Array<[
     { hasMedia: boolean; isArticle: boolean; referencedTweets: Array<{ type: string }> },
-    { code: string; message: string } | null,
+    { code: TweetRejectionCode; message: string } | null,
   ]> = [
     [
       { hasMedia: true, isArticle: true, referencedTweets: [{ type: 'retweeted' }] },

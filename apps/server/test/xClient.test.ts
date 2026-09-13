@@ -164,6 +164,7 @@ describe('real X client', () => {
           id: '1',
           text: 'hi',
           author_id: '9',
+          created_at: '2020-05-12T19:44:51.000Z',
           note_tweet: { text: 'long' },
         },
         includes: { users: [{ id: '9', username: 'someone' }] },
@@ -187,16 +188,50 @@ describe('real X client', () => {
     expect(tweet).toEqual({
       id: '1',
       text: 'hi',
+      authorId: '9',
       authorUsername: 'someone',
       hasMedia: false,
       isArticle: false,
       noteText: 'long',
       referencedTweets: [],
+      createdAt: '2020-05-12T19:44:51.000Z',
     });
     expect(media).toEqual({ mediaId: 'm1' });
     expect(post).toEqual({ id: '2' });
     expect(stub.calls[0]!.url).toContain('https://api.x.com/2/tweets/1?');
+    expect(stub.calls[0]!.url).toContain(
+      'tweet.fields=attachments,article,author_id,created_at,note_tweet,referenced_tweets,text',
+    );
     expect(stub.calls[1]!.url).toBe('https://api.x.com/2/media/upload');
     expect(stub.calls[2]!.url).toBe('https://api.x.com/2/tweets');
+  });
+
+  test('maps a 200 with errors and no data to a 404', async () => {
+    const stub = recordingFetch(
+      Response.json({
+        errors: [
+          {
+            title: 'Not Found Error',
+            detail: 'Could not find tweet with id: [456].',
+            type: 'https://api.x.com/2/problems/resource-not-found',
+          },
+        ],
+      }),
+    );
+    const client = createRealXClient({
+      clientId: 'id',
+      clientSecret: 'secret',
+      fetch: stub.fetch,
+    });
+
+    try {
+      await client.getTweet('a', '456');
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(XError);
+      expect((error as XError).kind).toBe('http');
+      expect((error as XError).status).toBe(404);
+      expect((error as XError).message).toBe('Could not find tweet with id: [456].');
+    }
   });
 });

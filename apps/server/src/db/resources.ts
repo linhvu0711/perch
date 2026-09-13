@@ -3,6 +3,7 @@ import {
   type NoteCreate,
   noteTitle,
   type Resource,
+  type ResourceAuthors,
   type ResourceDeleteResponse,
   type ResourceList,
   type ResourceListQuery,
@@ -77,7 +78,7 @@ function toResource(row: ResourceRow, usedBy = 0): Resource {
       row.tweetText === null ||
       row.tweetPostedAt === null
     ) {
-      throw new Error('tweet row without tweet fields');
+      throw new Error('tweet row missing fields');
     }
     const resource: TweetResource = {
       id: row.id,
@@ -85,8 +86,8 @@ function toResource(row: ResourceRow, usedBy = 0): Resource {
       title: row.title,
       notes: row.notes,
       created_at: row.createdAt.toISOString(),
-      tweet_url: row.tweetUrl,
-      tweet_x_id: row.tweetXId,
+      url: row.tweetUrl,
+      x_id: row.tweetXId,
       author_id: row.tweetAuthorId,
       author_username: row.tweetAuthorUsername,
       text: row.tweetText,
@@ -117,6 +118,7 @@ export function createTweet(
     authorId: string;
     authorUsername: string;
     text: string;
+    title: string;
     postedAt: Date;
   },
   now: Date,
@@ -126,7 +128,7 @@ export function createTweet(
     .values({
       userId,
       type: 'tweet',
-      title: tweetTitle(input.text),
+      title: input.title,
       notes: '',
       createdAt: now,
       tweetUrl: input.url,
@@ -142,7 +144,7 @@ export function createTweet(
   return toResource(row) as TweetResource;
 }
 
-export function getTweetByXId(db: Db, userId: number, xId: string): TweetResource | null {
+export function findTweetByXId(db: Db, userId: number, xId: string): TweetResource | null {
   const row = db
     .select(resourceColumns())
     .from(resources)
@@ -159,19 +161,26 @@ export function updateTweet(
   id: number,
   input: {
     url: string;
-    xId: string;
     authorId: string;
     authorUsername: string;
     text: string;
-    postedAt: Date;
     title: string;
+    postedAt: Date;
   },
 ): TweetResource | null {
+  const current = db
+    .select()
+    .from(resources)
+    .where(and(eq(resources.id, id), eq(resources.userId, userId)))
+    .get();
+  if (!current) return null;
+
   db.update(resources)
     .set({
-      title: input.title,
+      // An untouched derived title follows the text; a user-set title stays.
+      title:
+        current.title === tweetTitle(current.tweetText ?? '') ? input.title : current.title,
       tweetUrl: input.url,
-      tweetXId: input.xId,
       tweetAuthorId: input.authorId,
       tweetAuthorUsername: input.authorUsername,
       tweetText: input.text,
@@ -179,16 +188,13 @@ export function updateTweet(
     })
     .where(and(eq(resources.id, id), eq(resources.userId, userId)))
     .run();
-  return getTweetByXId(db, userId, input.xId);
+
+  const updated = getResource(db, userId, id);
+  return updated?.type === 'tweet' ? updated : null;
 }
 
-export interface ResourceAuthor {
-  username: string;
-  count: number;
-}
-
-export function listTweetAuthors(db: Db, userId: number): ResourceAuthor[] {
-  return db
+export function listTweetAuthors(db: Db, userId: number): ResourceAuthors {
+  const authors = db
     .select({
       username: resources.tweetAuthorUsername,
       count: count(),
@@ -199,6 +205,7 @@ export function listTweetAuthors(db: Db, userId: number): ResourceAuthor[] {
     .orderBy(sql`lower(${resources.tweetAuthorUsername})`)
     .all()
     .filter((row): row is { username: string; count: number } => row.username !== null);
+  return { authors };
 }
 
 export function createNote(db: Db, userId: number, input: NoteCreate, now: Date): Resource {

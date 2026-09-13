@@ -38,7 +38,6 @@ function notFound(id: number): ApiError {
 
 export function resourcesRoutes(deps: AppDeps) {
   return new Hono<AppEnv>()
-    .get('/authors', (c) => c.json({ authors: listTweetAuthors(deps.db, c.get('user').id) }))
     .get('/', zValidator('query', resourceListQuerySchema, validationHook), (c) => {
       try {
         return c.json(listResources(deps.db, c.get('user').id, c.req.valid('query')), 200);
@@ -57,6 +56,7 @@ export function resourcesRoutes(deps: AppDeps) {
     .post('/tweets', zValidator('json', tweetCreateSchema, validationHook), async (c) =>
       c.json(await deps.tweets.saveTweets(c.get('user').id, c.req.valid('json')), 200),
     )
+    .get('/authors', (c) => c.json(listTweetAuthors(deps.db, c.get('user').id), 200))
     .post('/images', async (c) => {
       const form = await c.req.formData();
       const files = form.getAll('files').filter((v): v is File => v instanceof File);

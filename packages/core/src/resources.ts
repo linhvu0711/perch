@@ -44,8 +44,8 @@ export const tweetResourceSchema = z.object({
   title: z.string(),
   notes: z.string(),
   created_at: z.string(),
-  tweet_url: z.string().url(),
-  tweet_x_id: z.string(),
+  url: z.string().url(),
+  x_id: z.string(),
   author_id: z.string(),
   author_username: z.string(),
   text: z.string(),
@@ -122,6 +122,11 @@ export const resourceListSchema = z.object({
 });
 export type ResourceList = z.infer<typeof resourceListSchema>;
 
+export const resourceAuthorsSchema = z.object({
+  authors: z.array(z.object({ username: z.string(), count: z.number().int() })),
+});
+export type ResourceAuthors = z.infer<typeof resourceAuthorsSchema>;
+
 export const resourceDeleteBodySchema = z.object({
   ids: z.array(z.number().int().positive()).min(1).max(RESOURCE_BATCH_MAX),
 });
@@ -166,22 +171,22 @@ export const tweetCreateSchema = z.object({
 });
 export type TweetCreate = z.infer<typeof tweetCreateSchema>;
 
+export const tweetCreateResultSchema = z.discriminatedUnion('ok', [
+  z.object({
+    url: z.string(),
+    ok: z.literal(true),
+    status: z.enum(['created', 'existing', 'refreshed']),
+    resource: tweetResourceSchema,
+  }),
+  z.object({
+    url: z.string(),
+    ok: z.literal(false),
+    error: batchErrorSchema,
+  }),
+]);
+export type TweetCreateResult = z.infer<typeof tweetCreateResultSchema>;
 export const tweetCreateResponseSchema = z.object({
-  results: z.array(
-    z.discriminatedUnion('ok', [
-      z.object({
-        url: z.string(),
-        ok: z.literal(true),
-        status: z.enum(['created', 'existing', 'refreshed']),
-        resource: tweetResourceSchema,
-      }),
-      z.object({
-        url: z.string(),
-        ok: z.literal(false),
-        error: batchErrorSchema,
-      }),
-    ]),
-  ),
+  results: z.array(tweetCreateResultSchema),
 });
 export type TweetCreateResponse = z.infer<typeof tweetCreateResponseSchema>;
 
