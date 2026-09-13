@@ -31,6 +31,9 @@ if (process.argv.includes('--invalid-grant')) {
   xClient.tokens.expiresIn = 0;
   xClient.refreshError = new XError('invalid_grant', 400, 'expired');
 }
+if (process.argv.includes('--fail-send')) {
+  xClient.createPostError = new XError('http', 503, 'Service Unavailable');
+}
 
 const perch = await buildServer({
   dbPath: path.join(dir, 'perch.db'),

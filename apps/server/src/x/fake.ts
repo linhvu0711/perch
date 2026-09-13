@@ -14,6 +14,9 @@ export interface FakeXClient extends XClient {
   refreshError: Error | null;
   meError: Error | null;
   revokeError: Error | null;
+  uploadMediaError: Error | null;
+  createPostError: Error | null;
+  createPostGate: Promise<void> | null;
 }
 
 export function fakeXClient(): FakeXClient {
@@ -57,6 +60,9 @@ export function fakeXClient(): FakeXClient {
     refreshError: null,
     meError: null,
     revokeError: null,
+    uploadMediaError: null,
+    createPostError: null,
+    createPostGate: null,
 
     async exchangeCode(input) {
       fake.calls.push({ name: 'exchangeCode', args: [input] });
@@ -84,10 +90,13 @@ export function fakeXClient(): FakeXClient {
     },
     async uploadMedia(accessToken, input) {
       fake.calls.push({ name: 'uploadMedia', args: [accessToken, input] });
+      if (fake.uploadMediaError) throw fake.uploadMediaError;
       return { mediaId: fake.mediaId };
     },
     async createPost(accessToken, input) {
       fake.calls.push({ name: 'createPost', args: [accessToken, input] });
+      if (fake.createPostError) throw fake.createPostError;
+      if (fake.createPostGate) await fake.createPostGate;
       return fake.createdPost;
     },
   };
