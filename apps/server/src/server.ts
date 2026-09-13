@@ -6,6 +6,7 @@ import type { Hono } from 'hono';
 import { type AppEnv, createApp } from './app';
 import type { Clock } from './clock';
 import { migrateDb, openDb, seedDb } from './db';
+import type { R2Client } from './r2/client';
 import { createTick } from './scheduler';
 import { createXAccountService } from './x/accounts';
 import type { XClient } from './x/client';
@@ -23,6 +24,8 @@ export interface BuildServerOptions {
   secureCookies: boolean;
   webDist: string;
   timezone: string;
+  r2: R2Client | null;
+  logError: (error: unknown) => void;
 }
 
 export interface PerchServer {
@@ -66,6 +69,8 @@ export async function buildServer(options: BuildServerOptions): Promise<PerchSer
     accounts,
     tweets,
     publisher,
+    r2: options.r2,
+    logError: options.logError,
   });
   const tick = createTick({
     db,

@@ -51,7 +51,14 @@ import { postMedia, posts } from '../db/schema';
 import { getSettings } from '../db/settings';
 import { tagPosts, untagPosts } from '../db/tags';
 import { ApiError, validationHook } from '../errors';
-import { inspectImage, readMedia, removeMedia, removeMediaDir, storeMedia } from '../images';
+import {
+  copyToR2,
+  inspectImage,
+  readMedia,
+  removeMedia,
+  removeMediaDir,
+  storeMedia,
+} from '../images';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -79,7 +86,11 @@ function mediaLimit(error: unknown): ApiError {
 
 const mediaFiles = (deps: AppDeps, userId: number): MediaFiles => ({
   read: (rel) => readMedia(deps.uploadDir, rel),
-  store: (postId, bytes, ext) => storeMedia(deps.uploadDir, userId, postId, bytes, ext),
+  store: async (postId, bytes, ext) => {
+    const rel = await storeMedia(deps.uploadDir, userId, postId, bytes, ext);
+    await copyToR2(deps.r2, rel, bytes, deps.logError);
+    return rel;
+  },
   remove: (rel) => removeMedia(deps.uploadDir, rel),
 });
 

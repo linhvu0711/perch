@@ -298,6 +298,53 @@ describe('post media', () => {
     expect(fs.statSync(path.join(mediaDir(1), copies[0] as string)).size).toBe(777);
   });
 
+  test('copies attached media to R2', async () => {
+    // Given: a post and a file uploaded straight to it
+    await createPost({ text: 'Hi' });
+    const form = new FormData();
+    form.append(
+      'files',
+      new File([JPG_3X2.slice().buffer as ArrayBuffer], 'photo.jpg', {
+        type: 'image/jpeg',
+      }),
+    );
+    const response = await request('/api/posts/1/media/files', {
+      method: 'POST',
+      body: form,
+    });
+
+    // When: the stored media path is read
+    expect(response.status).toBe(200);
+    const rel = `1/posts/1/${mediaFiles(1)[0]}`;
+
+    // Then: one put copied the bytes under uploads/<rel>
+    expect(server.r2.calls).toEqual([{ name: 'put', key: `uploads/${rel}` }]);
+  });
+
+  test('keeps the media when the R2 copy fails', async () => {
+    // Given: the R2 client throws, then a file uploaded to a post
+    server.r2.putError = new Error('r2 down');
+    await createPost({ text: 'Hi' });
+    const form = new FormData();
+    form.append(
+      'files',
+      new File([JPG_3X2.slice().buffer as ArrayBuffer], 'photo.jpg', {
+        type: 'image/jpeg',
+      }),
+    );
+    const response = await request('/api/posts/1/media/files', {
+      method: 'POST',
+      body: form,
+    });
+
+    // Then: the media row and file survive and the failure is logged
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { results: Array<{ ok: boolean; media?: { id: number } }> };
+    expect(body.results[0]?.media?.id).toBe(1);
+    expect(mediaFiles(1)).toHaveLength(1);
+    expect((server.errors[0] as Error).message).toBe('r2 down');
+  });
+
   test('rejects a non-image file', async () => {
     // Given: a post
     await createPost({ text: 'Hi' });

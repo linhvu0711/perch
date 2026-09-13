@@ -98,6 +98,8 @@ describe('settings', () => {
       secureCookies: false,
       webDist: server.webDist,
       timezone: 'Europe/Berlin',
+      r2: null,
+      logError: () => {},
     });
     try {
       // When: GET /api/settings on the second app

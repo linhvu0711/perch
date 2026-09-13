@@ -44,6 +44,8 @@ const perch = await buildServer({
   secureCookies: false,
   webDist,
   timezone: 'UTC',
+  r2: null,
+  logError: console.error,
   xOAuth: {
     clientId: 'fake',
     redirectUri: `http://127.0.0.1:${port}/auth/x/callback`,

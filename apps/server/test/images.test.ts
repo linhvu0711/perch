@@ -299,6 +299,39 @@ describe('images', () => {
     expect(get.status).toBe(404);
   });
 
+  test('copies each stored image to R2', async () => {
+    // Given: an upload of one image
+    const rows = await results(await upload([{ name: 'a.png', bytes: PNG_3X2 }]));
+
+    // When: the stored path is read from the response
+    if (!rows[0]!.ok) throw new Error('upload failed');
+    const rel = rows[0]!.resource.path;
+    expect(rel).toMatch(/^1\/[0-9a-f-]{36}\.png$/);
+
+    // Then: one put copied the bytes under uploads/<rel>
+    expect(server.r2.calls).toEqual([{ name: 'put', key: `uploads/${rel}` }]);
+    expect(server.r2.objects.get(`uploads/${rel}`)?.byteLength).toBe(PNG_3X2.byteLength);
+  });
+
+  test('keeps the upload when the R2 copy fails', async () => {
+    // Given: the R2 client throws
+    server.r2.putError = new Error('r2 down');
+
+    // When: an image is uploaded
+    const response = await upload([{ name: 'a.png', bytes: PNG_3X2 }]);
+
+    // Then: the upload still succeeds on disk and the failure is logged
+    expect(response.status).toBe(200);
+    const rows = ((await response.json()) as ImageCreateResponse).results;
+    expect(rows[0]!.ok).toBe(true);
+    if (!rows[0]!.ok) throw new Error('upload failed');
+    expect(
+      fs.statSync(path.join(server.dir, 'uploads', rows[0]!.resource.path)).size,
+    ).toBe(PNG_3X2.byteLength);
+    expect(server.errors.map((e) => (e as Error).message)).toEqual(['r2 down']);
+    expect(server.r2.objects.size).toBe(0);
+  });
+
   test('requires authentication', async () => {
     const form = new FormData();
     form.append('files', new File([PNG_3X2], 'a.png'));

@@ -73,6 +73,8 @@ describe('static app', () => {
       secureCookies: false,
       webDist: `${server.webDist}${path.sep}`,
       timezone: 'UTC',
+      r2: null,
+      logError: () => {},
     });
     try {
       const response = await trailingServer.app.request('/assets/app.js');
