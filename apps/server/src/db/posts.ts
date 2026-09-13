@@ -190,6 +190,11 @@ export function listPosts(
       sql`EXISTS (select 1 from post_links where post_links.post_id = ${posts.id} and post_links.resource_id = ${query.resource_id})`,
     );
   }
+  for (const name of query.tag ?? []) {
+    filterConditions.push(
+      sql`EXISTS (select 1 from post_tags pt join tags on tags.id = pt.tag_id where pt.post_id = ${posts.id} and tags.user_id = ${userId} and lower(tags.name) = lower(${name}))`,
+    );
+  }
 
   const totalRow = db
     .select({ value: count() })

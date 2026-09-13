@@ -30,7 +30,7 @@ import {
 
 import { decodeCursor, encodeCursor } from './cursor';
 import type { Db } from './index';
-import { postLinks, resources } from './schema';
+import { postLinks, resources, resourceTags, tags } from './schema';
 import { getSettings } from './settings';
 import { addResourceTags, tagsForResources } from './tags';
 
@@ -333,11 +333,11 @@ export function listAllResources(db: Db, userId: number): Resource[] {
     .orderBy(asc(resources.createdAt), asc(resources.id))
     .all();
 
-  const tags = tagsForResources(
+  const tagsById = tagsForResources(
     db,
     rows.map((row) => row.id),
   );
-  return rows.map((row) => toResource(row, row.usedBy, tags.get(row.id) ?? []));
+  return rows.map((row) => toResource(row, row.usedBy, tagsById.get(row.id) ?? []));
 }
 
 export function listResources(db: Db, userId: number, query: ResourceListQuery): ResourceList {
@@ -363,6 +363,11 @@ export function listResources(db: Db, userId: number, query: ResourceListQuery):
     if (query.from)
       filterConditions.push(gte(resources.createdAt, zonedDayStart(query.from, timezone)));
     if (query.to) filterConditions.push(lt(resources.createdAt, zonedDayEnd(query.to, timezone)));
+  }
+  for (const name of query.tag ?? []) {
+    filterConditions.push(
+      sql`exists (select 1 from ${resourceTags} join ${tags} on ${tags.id} = ${resourceTags.tagId} where ${resourceTags.resourceId} = ${resources.id} and ${tags.userId} = ${userId} and lower(${tags.name}) = lower(${name}))`,
+    );
   }
 
   const totalRow = db
@@ -413,13 +418,13 @@ export function listResources(db: Db, userId: number, query: ResourceListQuery):
   const pageRows = hasNextPage ? rows.slice(0, query.limit) : rows;
   const last = pageRows.at(-1);
 
-  const tags = tagsForResources(
+  const tagsById = tagsForResources(
     db,
     pageRows.map((row) => row.id),
   );
 
   return {
-    items: pageRows.map((row) => toResource(row, row.usedBy, tags.get(row.id) ?? [])),
+    items: pageRows.map((row) => toResource(row, row.usedBy, tagsById.get(row.id) ?? [])),
     total: totalRow?.value ?? 0,
     next_cursor:
       hasNextPage && last

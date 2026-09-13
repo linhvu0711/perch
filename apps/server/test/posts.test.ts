@@ -465,4 +465,12 @@ describe('posts', () => {
     const list = await (await request('/api/tags')).json();
     expect(list.total).toBe(4);
   });
+  test('filters by tag', async () => {
+    await createPost({ text: 'one', tags: ['x'] });
+    await createPost({ text: 'two' });
+
+    const res = await (await request('/api/posts?tag=x')).json();
+    expect(res.total).toBe(1);
+    expect(res.items.map((i: { id: number }) => i.id)).toEqual([1]);
+  });
 });

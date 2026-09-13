@@ -40,3 +40,8 @@ export const itemTagsResultSchema = z.discriminatedUnion('ok', [
 export type ItemTagsResult = z.infer<typeof itemTagsResultSchema>;
 export const itemTagsResponseSchema = z.object({ results: z.array(itemTagsResultSchema) });
 export type ItemTagsResponse = z.infer<typeof itemTagsResponseSchema>;
+
+export const tagFilterSchema = z
+  .union([tagNameSchema, z.array(tagNameSchema)])
+  .transform((value) => (Array.isArray(value) ? value : [value]))
+  .optional();

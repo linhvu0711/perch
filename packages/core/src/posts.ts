@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { batchErrorSchema, resourceTypeSchema } from './resources';
-import { TAG_BATCH_MAX, tagNameSchema } from './tags';
+import { TAG_BATCH_MAX, tagFilterSchema, tagNameSchema } from './tags';
 
 export const POST_STATUSES = ['draft', 'official', 'published', 'failed'] as const;
 export const postStatusSchema = z.enum(POST_STATUSES);
@@ -72,6 +72,7 @@ export const postListQuerySchema = z.object({
   from: listDateSchema.optional(),
   to: listDateSchema.optional(),
   resource_id: z.coerce.number().int().positive().optional(),
+  tag: tagFilterSchema,
   limit: z.coerce.number().int().min(1).max(POST_LIST_LIMIT_MAX).default(POST_LIST_LIMIT_DEFAULT),
   cursor: z.string().min(1).optional(),
 });

@@ -307,4 +307,29 @@ describe('resources', () => {
     const response = await server.app.request('/api/resources');
     expect(response.status).toBe(401);
   });
+  test('filters by tag', async () => {
+    await request('/api/resources/notes', {
+      method: 'POST',
+      body: JSON.stringify({ body: '# One', tags: ['x', 'y'] }),
+    });
+    await request('/api/resources/notes', {
+      method: 'POST',
+      body: JSON.stringify({ body: '# Two', tags: ['x'] }),
+    });
+    await request('/api/resources/notes', {
+      method: 'POST',
+      body: JSON.stringify({ body: '# Three' }),
+    });
+
+    const one = await (await request('/api/resources?tag=X')).json();
+    expect(one.total).toBe(2);
+    expect(one.items.map((i: { id: number }) => i.id)).toEqual([2, 1]);
+
+    const both = await (await request('/api/resources?tag=x&tag=y')).json();
+    expect(both.items.map((i: { id: number }) => i.id)).toEqual([1]);
+
+    const none = await (await request('/api/resources?tag=none')).json();
+    expect(none.items).toEqual([]);
+    expect(none.total).toBe(0);
+  });
 });

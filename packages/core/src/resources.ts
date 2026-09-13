@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { TAG_BATCH_MAX, tagNameSchema } from './tags';
+import { TAG_BATCH_MAX, tagFilterSchema, tagNameSchema } from './tags';
 import { isValidDate } from './timezone';
 
 export const RESOURCE_TYPES = ['tweet', 'image', 'md'] as const;
@@ -108,6 +108,7 @@ export const resourceListQuerySchema = z.object({
     .optional(),
   from: z.string().refine(isValidDate, 'Use YYYY-MM-DD').optional(),
   to: z.string().refine(isValidDate, 'Use YYYY-MM-DD').optional(),
+  tag: tagFilterSchema,
   sort: z.enum(['created', 'used']).default('created'),
   order: z.enum(['asc', 'desc']).default('desc'),
   limit: z.coerce
