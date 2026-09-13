@@ -34,8 +34,7 @@ export function realContext(
     stderr: process.stderr,
     isTTY: Boolean(process.stdout.isTTY),
     stdinIsTTY: Boolean(process.stdin.isTTY),
-    configPath:
-      env.PERCH_CONFIG_PATH ?? path.join(os.homedir(), '.perch', 'config.json'),
+    configPath: env.PERCH_CONFIG_PATH ?? path.join(os.homedir(), '.perch', 'config.json'),
     homeDir: os.homedir(),
     now: () => new Date(),
     fetch: globalThis.fetch,
@@ -64,10 +63,7 @@ export function realContext(
           stderr: 'inherit',
         });
         if (result.exitCode !== 0) {
-          throw new CliError(
-            'editor_failed',
-            `Editor exited with code ${result.exitCode}`,
-          );
+          throw new CliError('editor_failed', `Editor exited with code ${result.exitCode}`);
         }
         return fs.readFileSync(file, 'utf8');
       } finally {
