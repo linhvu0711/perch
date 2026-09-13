@@ -341,7 +341,9 @@ export function listPosts(
   }
   if (query.needs_attention !== undefined) {
     const condition = attentionSql(userId, now);
-    filterConditions.push(query.needs_attention ? condition : not(sql`(${condition})`));
+    filterConditions.push(
+      query.needs_attention ? condition : not(sql`coalesce((${condition}), 0)`),
+    );
   }
   if (query.resource_id !== undefined) {
     filterConditions.push(
