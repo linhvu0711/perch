@@ -102,7 +102,7 @@ export function Settings() {
             <div className="k">@{account.data.account.username}</div>
             <div className="d">X rejected the saved token. Reconnect to keep publishing.</div>
           </div>
-          <button className="btn primary" onClick={() => setConfirm('connect')}>
+          <button type="button" className="btn primary" onClick={() => setConfirm('connect')}>
             Reconnect X
           </button>
         </>
@@ -120,7 +120,7 @@ export function Settings() {
               }).format(new Date(account.data.account.connected_at))}
             </div>
           </div>
-          <button className="btn danger" onClick={() => setConfirm('disconnect')}>
+          <button type="button" className="btn danger" onClick={() => setConfirm('disconnect')}>
             Disconnect
           </button>
         </>
@@ -133,7 +133,7 @@ export function Settings() {
               {formatCost(X_COSTS_USD.getMe)} once.
             </div>
           </div>
-          <button className="btn primary" onClick={() => setConfirm('connect')}>
+          <button type="button" className="btn primary" onClick={() => setConfirm('connect')}>
             Connect X
           </button>
         </>
