@@ -390,7 +390,11 @@ export function deletePosts(
           error: { code: 'not_found', message: `Post ${id} not found` },
         };
       }
-      removeMediaDir?.(id);
+      try {
+        removeMediaDir?.(id);
+      } catch {
+        // leave the directory; the post row is already gone
+      }
       return { id, ok: true as const };
     }),
   };
