@@ -90,6 +90,7 @@ describe('posts', () => {
       published_at: null,
       x_account_id: null,
       x_post_id: null,
+      x_post_url: null,
       last_error: null,
       retry_count: 0,
       created_at: '2026-09-04T10:00:00.000Z',
@@ -109,6 +110,7 @@ describe('posts', () => {
           { code: 'account', ok: false, label: 'No X account connected' },
         ],
       },
+      missed: false,
     };
     expect(await created.json()).toEqual(expected);
 

@@ -168,11 +168,16 @@ export function createRealXClient(options: {
         },
         body: JSON.stringify({
           media: Buffer.from(input.bytes).toString('base64'),
-          media_category: 'tweet_image',
-          media_type: input.mediaType,
+          media_category: input.mediaType === 'image/gif' ? 'tweet_gif' : 'tweet_image',
         }),
       });
-      const data = (await res.json()) as { data: { id: string } };
+      const data = (await res.json()) as {
+        data?: { id: string };
+        errors?: Array<{ detail?: string }>;
+      };
+      if (!data.data) {
+        throw new XError('http', res.status, data.errors?.[0]?.detail ?? 'Media not uploaded');
+      }
       return { mediaId: data.data.id };
     },
 
@@ -189,7 +194,13 @@ export function createRealXClient(options: {
             : { text: input.text },
         ),
       });
-      const data = (await res.json()) as { data: { id: string } };
+      const data = (await res.json()) as {
+        data?: { id: string };
+        errors?: Array<{ detail?: string }>;
+      };
+      if (!data.data) {
+        throw new XError('http', res.status, data.errors?.[0]?.detail ?? 'Post not created');
+      }
       return { id: data.data.id };
     },
   };

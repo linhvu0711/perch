@@ -240,6 +240,14 @@ h1 {
   background: var(--missed-bg);
   color: var(--missed);
 }
+.banner.failed {
+  background: var(--failed-bg);
+  color: var(--failed);
+}
+.banner.info {
+  background: var(--published-bg);
+  color: var(--published);
+}
 .banner .btn {
   margin-left: auto;
 }
@@ -1388,6 +1396,10 @@ textarea:focus-visible {
 .pill.failed {
   background: var(--failed-bg);
   color: var(--failed);
+}
+.pill.missed {
+  background: var(--missed-bg);
+  color: var(--missed);
 }
 .seg button[data-status] svg {
   color: var(--text-3);

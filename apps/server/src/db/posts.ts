@@ -39,9 +39,11 @@ import {
   count,
   desc,
   eq,
+  getTableColumns,
   inArray,
   isNotNull,
   isNull,
+  not,
   or,
   type SQL,
   sql,
@@ -50,7 +52,7 @@ import {
 import { decodePostCursor, encodePostCursor } from './cursor';
 import type { Db } from './index';
 import { type MediaFiles, mediaForPosts } from './postMedia';
-import { postLinks, postMedia, posts, postTags, resources } from './schema';
+import { postLinks, postMedia, posts, postTags, resources, xAccounts } from './schema';
 import { getSettings } from './settings';
 import { addPostTags, tagIdsByName, tagsForPosts, tagsForResources } from './tags';
 import { getConnectedAccount } from './xAccounts';
@@ -99,9 +101,10 @@ export class TagExistsError extends Error {
 }
 
 type PostRow = typeof posts.$inferSelect;
+type PostJoinRow = PostRow & { username: string | null; missed: number };
 
 function toPost(
-  row: PostRow,
+  row: PostJoinRow,
   links: PostLink[],
   media: PostMedia[],
   limit: number,
@@ -117,6 +120,10 @@ function toPost(
     published_at: row.publishedAt?.toISOString() ?? null,
     x_account_id: row.xAccountId,
     x_post_id: row.xPostId,
+    x_post_url:
+      row.username !== null && row.xPostId !== null
+        ? `https://x.com/${row.username}/status/${row.xPostId}`
+        : null,
     last_error: row.lastError,
     retry_count: row.retryCount,
     created_at: row.createdAt.toISOString(),
@@ -128,6 +135,7 @@ function toPost(
     tags,
     media,
     ready,
+    missed: row.missed === 1,
   };
 }
 
@@ -246,15 +254,20 @@ export async function createPost(
       .run();
   }
 
-  const post = getPost(db, userId, row.id);
+  const post = getPost(db, userId, row.id, now);
   if (!post) throw new Error('post insert failed');
   return post;
 }
 
-export function getPost(db: Db, userId: number, id: number): Post | null {
+export function getPost(db: Db, userId: number, id: number, now: Date): Post | null {
   const row = db
-    .select()
+    .select({
+      ...getTableColumns(posts),
+      username: xAccounts.username,
+      missed: sql<number>`${missedSql(userId, now)}`,
+    })
     .from(posts)
+    .leftJoin(xAccounts, eq(xAccounts.id, posts.xAccountId))
     .where(and(eq(posts.id, id), eq(posts.userId, userId)))
     .get();
   if (!row) return null;
@@ -281,6 +294,7 @@ export function listPosts(
   userId: number,
   query: PostListQuery,
   timeZone: string,
+  now: Date,
 ): PostList {
   const sortTime = sql`CASE WHEN ${posts.status} = 'published' THEN ${posts.publishedAt} ELSE ${posts.scheduledAt} END`;
 
@@ -308,6 +322,10 @@ export function listPosts(
     filterConditions.push(
       query.scheduled ? isNotNull(posts.scheduledAt) : isNull(posts.scheduledAt),
     );
+  }
+  if (query.missed !== undefined) {
+    const condition = missedSql(userId, now);
+    filterConditions.push(query.missed ? condition : not(sql`(${condition})`));
   }
   if (query.resource_id !== undefined) {
     filterConditions.push(
@@ -339,8 +357,13 @@ export function listPosts(
   }
 
   const rows = db
-    .select()
+    .select({
+      ...getTableColumns(posts),
+      username: xAccounts.username,
+      missed: sql<number>`${missedSql(userId, now)}`,
+    })
     .from(posts)
+    .leftJoin(xAccounts, eq(xAccounts.id, posts.xAccountId))
     .where(and(...pageConditions))
     .orderBy(sql`${sortTime} IS NULL`, desc(sortTime), desc(posts.id))
     .limit(query.limit + 1)
@@ -480,15 +503,50 @@ export function updatePost(
     .where(and(eq(posts.id, id), eq(posts.userId, userId)))
     .run();
 
-  return getPost(db, userId, id);
+  return getPost(db, userId, id, now);
 }
 
-function getPostRow(db: Db, userId: number, id: number): PostRow | undefined {
+export function getPostRow(db: Db, userId: number, id: number): PostRow | undefined {
   return db
     .select()
     .from(posts)
     .where(and(eq(posts.id, id), eq(posts.userId, userId)))
     .get();
+}
+
+function accountConnectedAtSql(userId: number | typeof posts.userId, at: SQL): SQL {
+  return sql`EXISTS (select 1 from x_accounts where x_accounts.user_id = ${userId} and x_accounts.connected_at <= ${at} and (x_accounts.disconnected_at is null or x_accounts.disconnected_at > ${at}))`;
+}
+
+/**
+ * Scheduled posts whose time has already passed without Perch sending them:
+ * drafts that were never promoted, or officials scheduled while the account
+ * was disconnected.
+ */
+export function missedSql(userId: number | typeof posts.userId, now: Date): SQL {
+  return sql`${posts.scheduledAt} IS NOT NULL
+    AND ${posts.scheduledAt} < ${now.getTime()}
+    AND (
+      ${posts.status} = 'draft'
+      OR (${posts.status} = 'official' AND NOT ${accountConnectedAtSql(userId, sql`${posts.scheduledAt}`)})
+    )`;
+}
+
+/** Official posts due to be sent at `now`, oldest schedule time first. */
+export function duePosts(db: Db, now: Date): PostRow[] {
+  return db
+    .select()
+    .from(posts)
+    .where(
+      and(
+        eq(posts.status, 'official'),
+        isNotNull(posts.scheduledAt),
+        sql`coalesce(${posts.nextAttemptAt}, ${posts.scheduledAt}) <= ${now.getTime()}`,
+        accountConnectedAtSql(posts.userId, sql`${posts.scheduledAt}`),
+      ),
+    )
+    .orderBy(asc(posts.scheduledAt), asc(posts.id))
+    .all();
 }
 
 function resourceExists(db: Db, userId: number, resourceId: number): boolean {
@@ -599,6 +657,7 @@ export function promotePosts(
   ids: number[],
   fileExists: (path: string) => boolean,
   now: Date,
+  commit = true,
 ): PostStatusResponse {
   return {
     results: ids.map((id) => {
@@ -625,6 +684,7 @@ export function promotePosts(
       if (checks.length > 0) {
         return statusResultError(id, 'validation', `Post ${id} is not ready`, checks);
       }
+      if (!commit) return { id, ok: true as const };
       db.update(posts)
         .set({ status: 'official', updatedAt: now })
         .where(and(eq(posts.id, id), eq(posts.userId, userId)))
@@ -645,7 +705,13 @@ export function demotePosts(db: Db, userId: number, ids: number[], now: Date): P
         return statusResultError(id, 'invalid_status', `Post ${id} is ${row.status}`);
       }
       db.update(posts)
-        .set({ status: 'draft', lastError: null, retryCount: 0, updatedAt: now })
+        .set({
+          status: 'draft',
+          lastError: null,
+          retryCount: 0,
+          nextAttemptAt: null,
+          updatedAt: now,
+        })
         .where(and(eq(posts.id, id), eq(posts.userId, userId)))
         .run();
       return { id, ok: true as const };
@@ -673,10 +739,16 @@ export function schedulePost(
     throw new ScheduleTimeError('Time is in the past');
   }
   db.update(posts)
-    .set({ scheduledAt: at, updatedAt: now })
+    .set({
+      scheduledAt: at,
+      nextAttemptAt: null,
+      lastError: null,
+      retryCount: 0,
+      updatedAt: now,
+    })
     .where(and(eq(posts.id, id), eq(posts.userId, userId)))
     .run();
-  return getPost(db, userId, id);
+  return getPost(db, userId, id, now);
 }
 
 export function unschedulePosts(
@@ -695,7 +767,13 @@ export function unschedulePosts(
         return statusResultError(id, 'invalid_status', `Post ${id} is ${row.status}`);
       }
       db.update(posts)
-        .set({ scheduledAt: null, updatedAt: now })
+        .set({
+          scheduledAt: null,
+          nextAttemptAt: null,
+          lastError: null,
+          retryCount: 0,
+          updatedAt: now,
+        })
         .where(and(eq(posts.id, id), eq(posts.userId, userId)))
         .run();
       return { id, ok: true as const };

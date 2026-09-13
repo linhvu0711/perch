@@ -4,6 +4,9 @@ import path from 'node:path';
 import { deflateSync } from 'node:zlib';
 
 import { fixedClock } from './clock';
+import { openDb } from './db';
+import { xAccounts } from './db/schema';
+import { disconnectAccount, getConnectedAccount } from './db/xAccounts';
 import { buildServer, type PerchServer } from './server';
 import { type FakeXClient, fakeXClient } from './x/fake';
 
@@ -65,6 +68,35 @@ export async function createTestServer(opts?: {
       fs.rmSync(dir, { recursive: true, force: true });
     },
   };
+}
+
+/** Inserts the connected perchtester X account straight into the test database. */
+export function connectTestAccount(
+  server: TestServer,
+  connectedAt = new Date('2026-09-04T10:00:00Z'),
+): void {
+  const { db, sqlite } = openDb(path.join(server.dir, 'perch.db'));
+  db.insert(xAccounts)
+    .values({
+      userId: 1,
+      xUserId: '1000',
+      username: 'perchtester',
+      subscriptionType: 'Premium',
+      accessToken: 'a',
+      refreshToken: 'r',
+      expiresAt: new Date('2027-01-01T00:00:00Z'),
+      connectedAt,
+    })
+    .run();
+  sqlite.close();
+}
+
+/** Marks the connected account disconnected at the given time. */
+export function disconnectTestAccount(server: TestServer, disconnectedAt: Date): void {
+  const { db, sqlite } = openDb(path.join(server.dir, 'perch.db'));
+  const row = getConnectedAccount(db, 1);
+  if (row) disconnectAccount(db, row.id, disconnectedAt);
+  sqlite.close();
 }
 
 const PNG_3X2_B64 =

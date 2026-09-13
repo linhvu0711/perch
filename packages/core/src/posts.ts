@@ -42,6 +42,7 @@ export const postSchema = z.object({
   published_at: z.string().nullable(),
   x_account_id: z.number().int().nullable(),
   x_post_id: z.string().nullable(),
+  x_post_url: z.string().nullable(),
   last_error: z.string().nullable(),
   retry_count: z.number().int(),
   created_at: z.string(),
@@ -53,6 +54,7 @@ export const postSchema = z.object({
   tags: z.array(z.string()),
   media: z.array(postMediaSchema),
   ready: readySchema,
+  missed: z.boolean(),
 });
 export type Post = z.infer<typeof postSchema>;
 
@@ -84,6 +86,10 @@ export const postListQuerySchema = z.object({
   resource_id: z.coerce.number().int().positive().optional(),
   tag: tagFilterSchema,
   scheduled: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .optional(),
+  missed: z
     .enum(['true', 'false'])
     .transform((value) => value === 'true')
     .optional(),

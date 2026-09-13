@@ -16,6 +16,7 @@ import { tagsRoutes } from './routes/tags';
 import { xCallbackHandler } from './routes/xCallback';
 import { staticHandler } from './static';
 import type { XAccountService } from './x/accounts';
+import type { PublishService } from './x/publish';
 import type { TweetService } from './x/tweets';
 
 export type AppEnv = { Variables: { user: User } };
@@ -29,6 +30,7 @@ export interface AppDeps {
   clock: Clock;
   accounts: XAccountService;
   tweets: TweetService;
+  publisher: PublishService;
 }
 
 function createRoutes(deps: AppDeps) {

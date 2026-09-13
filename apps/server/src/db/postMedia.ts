@@ -66,7 +66,7 @@ function getPostRow(db: Db, userId: number, postId: number) {
     .get();
 }
 
-function mediaRowsForPost(db: Db, postId: number): PostMediaRow[] {
+export function mediaRowsForPost(db: Db, postId: number): PostMediaRow[] {
   return db
     .select()
     .from(postMedia)
@@ -259,5 +259,5 @@ export function detachMedia(
     }
   }
   if (cleanupError !== undefined) throw cleanupError;
-  return getPost(db, userId, postId);
+  return getPost(db, userId, postId, new Date());
 }

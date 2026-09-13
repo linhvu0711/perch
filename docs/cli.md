@@ -84,7 +84,8 @@ perch post delete <id>... [--yes]
 - `attach`: total media ≤ 4. From a resource: copies the file and links the resource. From a file: uploads it. Media has no alt text. `--json` prints per-item results: `[{ id, ok, media }]` for resources, `[{ name, ok, media }]` for files, with `error` on failures — including `read_failed` for files the CLI cannot read.
 - `detach --media <n>`: n is the 1-based position shown by `post show`. Prints the remaining media array (`--json`: `[{ id, position, mime, bytes, from_resource_id }]`).
 - `publish`: on a draft, runs the promote checks and promotes first; clears the schedule time; on success status becomes published and `x_account_id` is set. `post list --from/--to` filter on schedule time, or published time for published posts.
-- `retry`: only for failed posts; sends now.
+- `retry`: only for failed posts; sends now. `publish` and `retry` print the post on success; when X rejects the send they print `{ code: 'publish_failed', message }` on stderr and exit 1.
+- `show` and `list --json` carry `x_post_url` and `missed`; the table shows `missed` in the status column.
 - `delete`: local only. Never deletes on X.
 
 ### Tags, calendar, cost

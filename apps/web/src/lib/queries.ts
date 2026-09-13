@@ -282,6 +282,8 @@ export function usePosts(filters: PostFilters, enabled = true) {
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor ?? undefined,
+    // missed/published rows change with the scheduler clock, so poll on the tick cadence
+    refetchInterval: 30_000,
     enabled,
   });
 }
@@ -314,6 +316,8 @@ export function usePost(id: number | null) {
   return useQuery({
     queryKey: ['posts', 'detail', id],
     queryFn: () => unwrap(api.api.posts[':id'].$get({ param: { id: String(id) } })),
+    // same cadence as the list poll so an open modal sees scheduler transitions
+    refetchInterval: 30_000,
     enabled: id !== null,
   });
 }
@@ -424,6 +428,36 @@ export function useSchedulePost() {
     onSuccess: (data) => {
       queryClient.setQueryData(['posts', 'detail', data.id], data);
       void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
+    },
+  });
+}
+
+export function usePublishPost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      unwrap(api.api.posts[':id'].publish.$post({ param: { id: String(id) } })),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['posts', 'detail', data.id], data);
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
+    },
+    onError: (_error, id) => {
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', id] });
+    },
+  });
+}
+
+export function useRetryPost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      unwrap(api.api.posts[':id'].retry.$post({ param: { id: String(id) } })),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['posts', 'detail', data.id], data);
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
+    },
+    onError: (_error, id) => {
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', id] });
     },
   });
 }

@@ -71,6 +71,13 @@
       "when": 1789292629719,
       "tag": "0009_bitter_annihilus",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1789295968110,
+      "tag": "0010_elite_the_hood",
+      "breakpoints": true
     }
   ]
 }

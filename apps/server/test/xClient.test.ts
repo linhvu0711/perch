@@ -200,6 +200,63 @@ describe('real X client', () => {
     expect(stub.calls[2]?.url).toBe('https://api.x.com/2/tweets');
   });
 
+  test('uploads an image with only media and media_category', async () => {
+    const stub = recordingFetch(Response.json({ data: { id: 'm1' } }));
+    const client = createRealXClient({
+      clientId: 'id',
+      clientSecret: 'secret',
+      fetch: stub.fetch,
+    });
+
+    const media = await client.uploadMedia('a', {
+      bytes: new Uint8Array([1]),
+      mediaType: 'image/png',
+    });
+
+    expect(media).toEqual({ mediaId: 'm1' });
+    expect(JSON.parse(String(stub.calls[0]?.init?.body))).toEqual({
+      media: 'AQ==',
+      media_category: 'tweet_image',
+    });
+  });
+
+  test('uploads a gif as tweet_gif', async () => {
+    const stub = recordingFetch(Response.json({ data: { id: 'm1' } }));
+    const client = createRealXClient({
+      clientId: 'id',
+      clientSecret: 'secret',
+      fetch: stub.fetch,
+    });
+
+    await client.uploadMedia('a', { bytes: new Uint8Array([1]), mediaType: 'image/gif' });
+
+    expect(JSON.parse(String(stub.calls[0]?.init?.body))).toEqual({
+      media: 'AQ==',
+      media_category: 'tweet_gif',
+    });
+  });
+
+  test('maps a create-post 200 without data to an XError', async () => {
+    const stub = recordingFetch(
+      Response.json({ errors: [{ detail: 'You are not allowed to create a Post' }] }),
+    );
+    const client = createRealXClient({
+      clientId: 'id',
+      clientSecret: 'secret',
+      fetch: stub.fetch,
+    });
+
+    try {
+      await client.createPost('a', { text: 'x' });
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(XError);
+      expect((error as XError).kind).toBe('http');
+      expect((error as XError).status).toBe(200);
+      expect((error as XError).message).toBe('You are not allowed to create a Post');
+    }
+  });
+
   test('maps a 200 with errors and no data to a 404', async () => {
     const stub = recordingFetch(
       Response.json({
