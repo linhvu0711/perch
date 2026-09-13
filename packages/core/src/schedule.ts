@@ -48,7 +48,8 @@ const ISO_RE = /^(\d{4}-\d{2}-\d{2})t(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(z|[+-]
 const DATE_TIME_RE = /^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})$/;
 const RELATIVE_RE = /^\+(\d+)([mhd])$/;
 const TODAY_RE = /^(today|tomorrow) (.+)$/;
-const WEEKDAY_RE = /^(?:next )?(sun|mon|tue|wed|thu|fri|sat)[a-z]* (.+)$/;
+const WEEKDAY_RE =
+  /^(?:next )?(sun(?:day)?|mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:r|rs|rsday)?|fri(?:day)?|sat(?:urday)?) (.+)$/;
 
 /**
  * Parses `input` as a time in `timeZone` and returns the UTC instant.
@@ -68,6 +69,9 @@ export function parseScheduleTime(input: string, timeZone: string, now: Date): D
     const date = match[1] as string;
     const [y, m, d] = date.split('-').map(Number) as [number, number, number];
     if (!isCalendarDate(y, m, d)) return null;
+    const hours = Number(match[2]);
+    const minutes = Number(match[3]);
+    if (hours > 23 || minutes > 59) return null;
     if (match[4] !== undefined) {
       const parsed = new Date(match[0].toUpperCase());
       if (Number.isNaN(parsed.getTime())) return null;
@@ -79,6 +83,7 @@ export function parseScheduleTime(input: string, timeZone: string, now: Date): D
     const match = dateTimeMatch;
     const [y, m, d] = (match[1] as string).split('-').map(Number) as [number, number, number];
     if (!isCalendarDate(y, m, d)) return null;
+    if (Number(match[2]) > 23 || Number(match[3]) > 59) return null;
     result = zonedToUtc(match[1] as string, `${match[2]}:${match[3]}`, timeZone);
   } else if (relMatch !== null) {
     const match = relMatch;
@@ -104,7 +109,7 @@ export function parseScheduleTime(input: string, timeZone: string, now: Date): D
         timeZone,
       );
     } else {
-      const target = WEEKDAY_NUMBERS[word[1] as string] ?? 0;
+      const target = WEEKDAY_NUMBERS[(word[1] as string).slice(0, 3)] ?? 0;
       let delta = (target - parts.weekday + 7) % 7;
       if (delta === 0) delta = 7;
       result = zonedToUtc(addDays(parts.date, delta), time, timeZone);

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { readySchema } from './postRules';
+import { POST_MEDIA_MAX, readySchema } from './postRules';
 import { batchErrorSchema, IMAGE_MIME_TYPES, resourceTypeSchema } from './resources';
 import { isCalendarDate } from './schedule';
 
@@ -21,7 +21,7 @@ export const postLinkSchema = z.object({
 });
 export type PostLink = z.infer<typeof postLinkSchema>;
 
-export const POST_MEDIA_MAX = 4;
+export { POST_MEDIA_MAX };
 
 export const postMediaSchema = z.object({
   id: z.number().int(),

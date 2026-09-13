@@ -121,6 +121,31 @@ function mediaDir(postId: number): string {
   return path.join(server.dir, 'uploads', '1', 'posts', String(postId));
 }
 
+describe('status', () => {
+  test('reflects the configured time zone', async () => {
+    const initial = await request('/api/status');
+    expect(await initial.json()).toEqual({
+      timezone: 'UTC',
+      month_cost_usd: 0,
+    });
+
+    await request('/api/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ timezone: 'Europe/Berlin' }),
+    });
+
+    const updated = await request('/api/status');
+    expect(await updated.json()).toEqual({
+      timezone: 'Europe/Berlin',
+      month_cost_usd: 0,
+    });
+  });
+
+  test('exposes a resolving scheduler tick', async () => {
+    await expect(server.tick(server.clock.now())).resolves.toBeUndefined();
+  });
+});
+
 describe('post status', () => {
   test('promote returns every failing check at once', async () => {
     // Given: post 1 over-limit text plus a media row whose file is missing; post 2 empty

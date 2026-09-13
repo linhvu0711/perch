@@ -55,6 +55,9 @@ describe('parseScheduleTime', () => {
     'today 25:00',
     'friday',
     '2026-09-10 9:00',
+    '2026-09-10 99:99',
+    'monkey 9am',
+    'thursdayish 9am',
   ];
 
   test.each(unknown)('rejects what it does not know: %s', (input) => {

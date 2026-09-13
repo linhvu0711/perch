@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { weightedLength } from './charCount';
 
+export const POST_MEDIA_MAX = 4;
 export const PROMOTE_FROM = ['draft'] as const;
 export const DEMOTE_FROM = ['official', 'failed'] as const;
 export const SCHEDULE_FROM = ['draft', 'official'] as const;
@@ -20,8 +21,8 @@ export function promoteChecks(input: {
   if (length > input.limit) {
     checks.push({ path: 'text', message: `${length} of ${input.limit} characters` });
   }
-  if (input.media.length > 4) {
-    checks.push({ path: 'media', message: `${input.media.length} of 4 media` });
+  if (input.media.length > POST_MEDIA_MAX) {
+    checks.push({ path: 'media', message: `${input.media.length} of ${POST_MEDIA_MAX} media` });
   }
   for (const media of input.media) {
     if (!media.present) {
@@ -61,8 +62,8 @@ export function readyChecks(input: {
     },
     {
       code: 'media',
-      ok: input.mediaCount <= 4,
-      label: `${input.mediaCount} of 4 images`,
+      ok: input.mediaCount <= POST_MEDIA_MAX,
+      label: `${input.mediaCount} of ${POST_MEDIA_MAX} images`,
     },
     {
       code: 'account',

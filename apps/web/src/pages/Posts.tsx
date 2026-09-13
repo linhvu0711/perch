@@ -127,6 +127,7 @@ export function Posts() {
             </Tooltip>
           ))}
         </div>
+        {/* biome-ignore lint/a11y/useSemanticElements: mirrors the Status filter group above */}
         <div className="seg icons" role="group" aria-label="Scheduled">
           <Tooltip>
             <TooltipTrigger asChild>

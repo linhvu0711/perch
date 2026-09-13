@@ -184,7 +184,7 @@ export async function createPost(
       .insert(posts)
       .values({
         userId,
-        status: input.official ? 'official' : 'draft',
+        status: 'draft',
         title: input.title ?? '',
         text: input.text ?? '',
         createdAt: now,
@@ -218,6 +218,13 @@ export async function createPost(
         })
         .run();
     }
+  }
+
+  if (input.official) {
+    db.update(posts)
+      .set({ status: 'official', updatedAt: now })
+      .where(and(eq(posts.id, row.id), eq(posts.userId, userId)))
+      .run();
   }
 
   const post = getPost(db, userId, row.id);
