@@ -178,8 +178,7 @@ export function updateTweet(
   db.update(resources)
     .set({
       // An untouched derived title follows the text; a user-set title stays.
-      title:
-        current.title === tweetTitle(current.tweetText ?? '') ? input.title : current.title,
+      title: current.title === tweetTitle(current.tweetText ?? '') ? input.title : current.title,
       tweetUrl: input.url,
       tweetAuthorId: input.authorId,
       tweetAuthorUsername: input.authorUsername,

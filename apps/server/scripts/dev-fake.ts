@@ -53,10 +53,7 @@ app.get('/auth/x/fake-authorize', (c) =>
 );
 app.route('/', perch.app);
 
-const intervalId = setInterval(
-  () => perch.tick(systemClock.now()).catch(console.error),
-  30_000,
-);
+const intervalId = setInterval(() => perch.tick(systemClock.now()).catch(console.error), 30_000);
 const server = Bun.serve({ port, fetch: app.fetch });
 
 let shuttingDown = false;

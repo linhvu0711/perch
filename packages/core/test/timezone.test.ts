@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
-import { dayBoundsUtc, isValidDate, isValidTimeZone, zonedDayEnd, zonedDayStart } from '../src/timezone';
+import {
+  dayBoundsUtc,
+  isValidDate,
+  isValidTimeZone,
+  zonedDayEnd,
+  zonedDayStart,
+} from '../src/timezone';
 
 test('zonedDayStart and zonedDayEnd', () => {
   // Given: calendar days in several zones
@@ -13,7 +19,9 @@ test('zonedDayStart and zonedDayEnd', () => {
   expect(zonedDayStart('2026-11-01', 'America/New_York').toISOString()).toBe(
     '2026-11-01T04:00:00.000Z',
   );
-  expect(zonedDayStart('2026-07-01', 'Europe/London').toISOString()).toBe('2026-06-30T23:00:00.000Z');
+  expect(zonedDayStart('2026-07-01', 'Europe/London').toISOString()).toBe(
+    '2026-06-30T23:00:00.000Z',
+  );
   expect(zonedDayEnd('2026-09-10', 'Asia/Saigon').toISOString()).toBe('2026-09-10T17:00:00.000Z');
 });
 
@@ -38,30 +46,10 @@ describe('isValidTimeZone', () => {
 
 describe('dayBoundsUtc', () => {
   const cases: Array<[string, string, string, string]> = [
-    [
-      '2026-09-11',
-      'UTC',
-      '2026-09-11T00:00:00.000Z',
-      '2026-09-11T23:59:59.999Z',
-    ],
-    [
-      '2026-09-11',
-      'Asia/Ho_Chi_Minh',
-      '2026-09-10T17:00:00.000Z',
-      '2026-09-11T16:59:59.999Z',
-    ],
-    [
-      '2026-03-29',
-      'Europe/Berlin',
-      '2026-03-28T23:00:00.000Z',
-      '2026-03-29T21:59:59.999Z',
-    ],
-    [
-      '2020-03-08',
-      'America/Havana',
-      '2020-03-08T05:00:00.000Z',
-      '2020-03-09T03:59:59.999Z',
-    ],
+    ['2026-09-11', 'UTC', '2026-09-11T00:00:00.000Z', '2026-09-11T23:59:59.999Z'],
+    ['2026-09-11', 'Asia/Ho_Chi_Minh', '2026-09-10T17:00:00.000Z', '2026-09-11T16:59:59.999Z'],
+    ['2026-03-29', 'Europe/Berlin', '2026-03-28T23:00:00.000Z', '2026-03-29T21:59:59.999Z'],
+    ['2020-03-08', 'America/Havana', '2020-03-08T05:00:00.000Z', '2020-03-09T03:59:59.999Z'],
   ];
 
   test.each(cases)('%s in %s', (day, tz, start, end) => {

@@ -50,7 +50,7 @@ describe('real X client', () => {
     expect(call.url).toBe('https://api.x.com/2/oauth2/token');
     expect(call.init?.method).toBe('POST');
     const headers = call.init?.headers as Record<string, string>;
-    expect(headers['Authorization']).toBe('Basic aWQ6c2VjcmV0');
+    expect(headers.Authorization).toBe('Basic aWQ6c2VjcmV0');
     expect(headers['Content-Type']).toBe('application/x-www-form-urlencoded');
     expect(call.init?.body).toBe(
       'grant_type=authorization_code&code=c&redirect_uri=http%3A%2F%2F127.0.0.1%3A3000%2Fauth%2Fx%2Fcallback&code_verifier=v',
@@ -75,9 +75,7 @@ describe('real X client', () => {
 
     const tokens = await client.refreshToken('r0');
 
-    expect(stub.calls[0]!.init?.body).toBe(
-      'grant_type=refresh_token&refresh_token=r0',
-    );
+    expect(stub.calls[0]?.init?.body).toBe('grant_type=refresh_token&refresh_token=r0');
     expect(tokens).toEqual({
       accessToken: 'a',
       refreshToken: 'r',
@@ -96,10 +94,10 @@ describe('real X client', () => {
 
     await client.revokeToken('a');
 
-    expect(stub.calls[0]!.url).toBe('https://api.x.com/2/oauth2/revoke');
-    expect(stub.calls[0]!.init?.body).toBe('token=a');
-    const headers = stub.calls[0]!.init?.headers as Record<string, string>;
-    expect(headers['Authorization']).toBe('Basic aWQ6c2VjcmV0');
+    expect(stub.calls[0]?.url).toBe('https://api.x.com/2/oauth2/revoke');
+    expect(stub.calls[0]?.init?.body).toBe('token=a');
+    const headers = stub.calls[0]?.init?.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Basic aWQ6c2VjcmV0');
   });
 
   test('reads me with subscription type', async () => {
@@ -127,19 +125,14 @@ describe('real X client', () => {
       name: 'Perch Tester',
       subscriptionType: 'Premium',
     });
-    expect(stub.calls[0]!.url).toBe(
-      'https://api.x.com/2/users/me?user.fields=subscription_type',
-    );
-    const headers = stub.calls[0]!.init?.headers as Record<string, string>;
-    expect(headers['Authorization']).toBe('Bearer a');
+    expect(stub.calls[0]?.url).toBe('https://api.x.com/2/users/me?user.fields=subscription_type');
+    const headers = stub.calls[0]?.init?.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer a');
   });
 
   test('maps a 400 from the token endpoint to invalid_grant', async () => {
     const stub = recordingFetch(
-      Response.json(
-        { error: 'invalid_grant', error_description: 'expired' },
-        { status: 400 },
-      ),
+      Response.json({ error: 'invalid_grant', error_description: 'expired' }, { status: 400 }),
     );
     const client = createRealXClient({
       clientId: 'id',
@@ -198,12 +191,12 @@ describe('real X client', () => {
     });
     expect(media).toEqual({ mediaId: 'm1' });
     expect(post).toEqual({ id: '2' });
-    expect(stub.calls[0]!.url).toContain('https://api.x.com/2/tweets/1?');
-    expect(stub.calls[0]!.url).toContain(
+    expect(stub.calls[0]?.url).toContain('https://api.x.com/2/tweets/1?');
+    expect(stub.calls[0]?.url).toContain(
       'tweet.fields=attachments,article,author_id,created_at,note_tweet,referenced_tweets,text',
     );
-    expect(stub.calls[1]!.url).toBe('https://api.x.com/2/media/upload');
-    expect(stub.calls[2]!.url).toBe('https://api.x.com/2/tweets');
+    expect(stub.calls[1]?.url).toBe('https://api.x.com/2/media/upload');
+    expect(stub.calls[2]?.url).toBe('https://api.x.com/2/tweets');
   });
 
   test('maps a 200 with errors and no data to a 404', async () => {
