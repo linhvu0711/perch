@@ -66,7 +66,7 @@ function getPostRow(db: Db, userId: number, postId: number) {
     .get();
 }
 
-function mediaRowsForPost(db: Db, postId: number): PostMediaRow[] {
+export function mediaRowsForPost(db: Db, postId: number): PostMediaRow[] {
   return db
     .select()
     .from(postMedia)
