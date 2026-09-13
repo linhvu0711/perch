@@ -262,11 +262,11 @@ export function postsRoutes(deps: AppDeps) {
         const { id } = c.req.valid('param');
         const userId = c.get('user').id;
         try {
-          const media = detachMedia(deps.db, userId, id, c.req.valid('json'), (rel) =>
+          const post = detachMedia(deps.db, userId, id, c.req.valid('json'), (rel) =>
             removeMedia(deps.uploadDir, rel),
           );
-          if (!media) throw notFound(id);
-          return c.json({ media }, 200);
+          if (!post) throw notFound(id);
+          return c.json({ media: post.media }, 200);
         } catch (error) {
           if (error instanceof MediaLimitError) throw mediaLimit(error);
           if (error instanceof MissingMediaPositionError) {

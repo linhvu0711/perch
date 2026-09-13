@@ -379,14 +379,15 @@ describe('post media', () => {
     const ids = await uploadImages({ name: 'a.png', bytes: PNG_3X2 });
     await createPost({ text: 'Hi' });
     await attachMedia(1, ids);
+    const file = path.join(mediaDir(1), mediaFiles(1)[0] as string);
 
-    // When: detaching position 3
+    // When: detaching positions 1 and 3
     const response = await request('/api/posts/1/media', {
       method: 'DELETE',
-      body: JSON.stringify({ positions: [3] }),
+      body: JSON.stringify({ positions: [1, 3] }),
     });
 
-    // Then: the position error is named
+    // Then: the position error is named and nothing is deleted
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
       code: 'validation',
@@ -394,6 +395,7 @@ describe('post media', () => {
       errors: [{ path: 'positions', message: 'No media at position 3' }],
     });
     expect((await getPost(1)).media).toHaveLength(1);
+    expect(fs.existsSync(file)).toBe(true);
   });
 
   test('serves a media file', async () => {

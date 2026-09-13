@@ -1,5 +1,6 @@
 import {
   POST_MEDIA_MAX,
+  type Post,
   type PostMedia,
   type PostMediaAttachResponse,
   type PostMediaDetachBody,
@@ -8,7 +9,7 @@ import {
 import { and, asc, eq, inArray } from 'drizzle-orm';
 
 import type { Db } from './index';
-import { MediaLimitError, PostImmutableError } from './posts';
+import { getPost, MediaLimitError, PostImmutableError } from './posts';
 import { postLinks, postMedia, posts, resources } from './schema';
 
 export class MissingMediaPositionError extends Error {
@@ -211,38 +212,46 @@ export function detachMedia(
   postId: number,
   body: PostMediaDetachBody,
   remove: (rel: string) => void,
-): PostMedia[] | null {
+): Post | null {
   const postRow = getPostRow(db, userId, postId);
   if (!postRow) return null;
   if (postRow.status === 'published') throw new PostImmutableError(postId);
 
   const rows = mediaRowsForPost(db, postId);
+  let deleted: PostMediaRow[];
+  let kept: PostMediaRow[];
   if ('all' in body) {
-    for (const row of rows) {
-      db.delete(postMedia).where(eq(postMedia.id, row.id)).run();
-      remove(row.path);
+    deleted = rows;
+    kept = [];
+  } else {
+    const byPosition = new Map(rows.map((row) => [row.position, row]));
+    const picked = new Set<number>();
+    deleted = [];
+    for (const position of body.positions) {
+      const row = byPosition.get(position);
+      if (!row || picked.has(position)) {
+        throw new MissingMediaPositionError(postId, position);
+      }
+      picked.add(position);
+      deleted.push(row);
     }
-    return [];
+    kept = rows.filter((row) => !picked.has(row.position));
   }
 
-  const byPosition = new Map(rows.map((row) => [row.position, row]));
-  const keep: PostMediaRow[] = [];
-  for (const position of body.positions) {
-    const row = byPosition.get(position);
-    if (!row) throw new MissingMediaPositionError(postId, position);
-    db.delete(postMedia).where(eq(postMedia.id, row.id)).run();
-    remove(row.path);
-    byPosition.delete(position);
-  }
-  for (const row of rows) {
-    if (byPosition.has(row.position)) keep.push(row);
-  }
-  keep.forEach((row, index) => {
-    const target = index + 1;
-    if (row.position !== target) {
-      db.update(postMedia).set({ position: target }).where(eq(postMedia.id, row.id)).run();
-      row.position = target;
+  const deletedIds = deleted.map((row) => row.id);
+  db.transaction((tx) => {
+    if (deletedIds.length > 0) {
+      tx.delete(postMedia).where(inArray(postMedia.id, deletedIds)).run();
     }
+    kept.forEach((row, index) => {
+      const target = index + 1;
+      if (row.position !== target) {
+        tx.update(postMedia).set({ position: target }).where(eq(postMedia.id, row.id)).run();
+      }
+    });
   });
-  return keep.map(toPostMedia);
+  for (const row of deleted) {
+    remove(row.path);
+  }
+  return getPost(db, userId, postId);
 }
