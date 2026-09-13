@@ -59,6 +59,12 @@ apps/cli/dist/perch auth status
 
 The CLI stores local configuration at `~/.perch/config.json` unless `PERCH_CONFIG_PATH` overrides it. Use `perch config set token <value>` or set `PERCH_TOKEN`, then use `perch auth status` to verify authentication.
 
+## For agents
+
+- Run `perch resource pull` first. It copies every resource into a local folder of Markdown files.
+- Read the Mirror at `~/.perch/resources/` with your file tools. `perch status` prints the Mirror path and the last pull time.
+- Write through the CLI (`perch resource add`, `edit`, `delete`), never into the Mirror. Pull again to pick up changes.
+
 ## Environment
 
 | Variable | Required | Default | Purpose |

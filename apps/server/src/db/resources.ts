@@ -1,5 +1,6 @@
 import {
   noteTitle,
+  type ImageResource,
   type NoteCreate,
   type Resource,
   type ResourceDeleteResponse,
@@ -18,6 +19,29 @@ export class InvalidCursorError extends Error {}
 type ResourceRow = typeof resources.$inferSelect;
 
 function toResource(row: ResourceRow): Resource {
+  if (row.type === 'image') {
+    if (
+      row.imagePath === null ||
+      row.imageMime === null ||
+      row.imageBytes === null ||
+      row.imageWidth === null ||
+      row.imageHeight === null
+    ) {
+      throw new Error('image row without file fields');
+    }
+    return {
+      id: row.id,
+      type: 'image',
+      title: row.title,
+      notes: row.notes,
+      created_at: row.createdAt.toISOString(),
+      path: row.imagePath,
+      mime: row.imageMime as ImageResource['mime'],
+      bytes: row.imageBytes,
+      width: row.imageWidth,
+      height: row.imageHeight,
+    };
+  }
   if (row.type !== 'md') throw new Error('unsupported resource type');
 
   return {
@@ -40,6 +64,41 @@ export function createNote(db: Db, userId: number, input: NoteCreate, now: Date)
       notes: input.notes ?? '',
       createdAt: now,
       mdBody: input.body,
+    })
+    .returning()
+    .get();
+
+  if (!row) throw new Error('resource insert failed');
+  return toResource(row);
+}
+
+export function createImage(
+  db: Db,
+  userId: number,
+  input: {
+    title: string;
+    notes?: string;
+    path: string;
+    mime: ImageResource['mime'];
+    bytes: number;
+    width: number;
+    height: number;
+  },
+  now: Date,
+): Resource {
+  const row = db
+    .insert(resources)
+    .values({
+      userId,
+      type: 'image',
+      title: input.title,
+      notes: input.notes ?? '',
+      createdAt: now,
+      imagePath: input.path,
+      imageMime: input.mime,
+      imageBytes: input.bytes,
+      imageWidth: input.width,
+      imageHeight: input.height,
     })
     .returning()
     .get();
@@ -88,6 +147,17 @@ export function updateResource(
 
   if (!row) throw new Error('resource update failed');
   return toResource(row);
+}
+
+export function listAllResources(db: Db, userId: number): Resource[] {
+  const rows = db
+    .select()
+    .from(resources)
+    .where(eq(resources.userId, userId))
+    .orderBy(asc(resources.createdAt), asc(resources.id))
+    .all();
+
+  return rows.map(toResource);
 }
 
 export function listResources(
@@ -164,14 +234,23 @@ export function deleteResources(
   db: Db,
   userId: number,
   ids: number[],
+  removeFile: (rel: string) => void = () => {},
 ): ResourceDeleteResponse {
   return {
     results: ids.map((id) => {
+      const row = db
+        .select({ imagePath: resources.imagePath })
+        .from(resources)
+        .where(and(eq(resources.id, id), eq(resources.userId, userId)))
+        .get();
+
       const deleted = db
         .delete(resources)
         .where(and(eq(resources.id, id), eq(resources.userId, userId)))
         .returning({ id: resources.id })
         .get();
+
+      if (deleted && row?.imagePath) removeFile(row.imagePath);
 
       return deleted
         ? { id, ok: true as const, unlinked_post_ids: [] }

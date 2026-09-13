@@ -14,6 +14,8 @@ export interface CliContext {
   isTTY: boolean;
   stdinIsTTY: boolean;
   configPath: string;
+  homeDir: string;
+  now: () => Date;
   fetch: typeof fetch;
   openUrl: (url: string) => Promise<void>;
   readStdin(): Promise<string>;
@@ -32,6 +34,8 @@ export function realContext(argv: string[]): CliContext {
     stdinIsTTY: Boolean(process.stdin.isTTY),
     configPath:
       env.PERCH_CONFIG_PATH ?? path.join(os.homedir(), '.perch', 'config.json'),
+    homeDir: os.homedir(),
+    now: () => new Date(),
     fetch: globalThis.fetch,
     readStdin: () => Bun.stdin.text(),
     async confirm(question: string) {

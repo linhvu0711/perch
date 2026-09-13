@@ -21,19 +21,39 @@ export function createApi(
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 
+  async function resolve<R extends { ok: boolean }>(
+    responsePromise: Promise<R>,
+  ): Promise<R> {
+    try {
+      return await responsePromise;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new CliError('unreachable', `Cannot reach ${serverUrl}: ${message}`);
+    }
+  }
+
+  async function throwApiError(response: JsonResponse<unknown>): Promise<never> {
+    try {
+      const parsed = apiErrorSchema.safeParse(await response.json());
+      if (parsed.success) {
+        throw new CliError(
+          parsed.data.code,
+          parsed.data.message,
+          parsed.data.code === 'unauthorized' ? 3 : 1,
+          parsed.data.errors,
+        );
+      }
+    } catch (error) {
+      if (error instanceof CliError) throw error;
+    }
+
+    throw new CliError('http_error', `HTTP ${response.status}`);
+  }
+
   return {
     client,
     async call<T>(responsePromise: Promise<JsonResponse<T>>): Promise<T> {
-      let response: JsonResponse<T>;
-      try {
-        response = await responsePromise;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        throw new CliError(
-          'unreachable',
-          `Cannot reach ${serverUrl}: ${message}`,
-        );
-      }
+      const response = await resolve(responsePromise);
 
       if (response.ok) {
         try {
@@ -46,20 +66,15 @@ export function createApi(
         }
       }
 
-      try {
-        const parsed = apiErrorSchema.safeParse(await response.json());
-        if (parsed.success) {
-          throw new CliError(
-            parsed.data.code,
-            parsed.data.message,
-            parsed.data.code === 'unauthorized' ? 3 : 1,
-            parsed.data.errors,
-          );
-        }
-      } catch (error) {
-        if (error instanceof CliError) throw error;
-      }
-
+      await throwApiError(response);
+      throw new CliError('http_error', `HTTP ${response.status}`);
+    },
+    async callText(
+      responsePromise: Promise<JsonResponse<unknown> & { text(): Promise<string> }>,
+    ): Promise<string> {
+      const response = await resolve(responsePromise);
+      if (response.ok) return response.text();
+      await throwApiError(response);
       throw new CliError('http_error', `HTTP ${response.status}`);
     },
   };

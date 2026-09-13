@@ -32,6 +32,11 @@ export const resources = sqliteTable(
     notes: text('notes').notNull().default(''),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     mdBody: text('md_body'),
+    imagePath: text('image_path'),
+    imageMime: text('image_mime'),
+    imageBytes: integer('image_bytes'),
+    imageWidth: integer('image_w'),
+    imageHeight: integer('image_h'),
   },
   (t) => [index('resources_user_created_idx').on(t.userId, t.createdAt, t.id)],
 );

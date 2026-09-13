@@ -5,6 +5,7 @@ import { addAccountCommands } from './commands/account';
 import { addAuthCommands } from './commands/auth';
 import { addConfigCommands } from './commands/config';
 import { addResourceCommands } from './commands/resource';
+import { addStatusCommands } from './commands/status';
 import type { CliContext } from './context';
 import { CliError, printError, resolveMode } from './output';
 
@@ -34,6 +35,7 @@ export async function runCli(
   addAuthCommands(program, ctx);
   addConfigCommands(program, ctx);
   addResourceCommands(program, ctx);
+  addStatusCommands(program, ctx);
 
   try {
     await program.parseAsync(argv, { from: 'user' });

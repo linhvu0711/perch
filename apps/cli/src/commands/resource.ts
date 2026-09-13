@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import {
   firstMarkdownHeading,
+  resourceSchema,
   RESOURCE_TYPES,
   type Resource,
   type ResourcePatch,
@@ -11,8 +12,9 @@ import {
 import type { Command } from 'commander';
 
 import { createApi } from '../api';
-import { resolveServerUrl, resolveToken } from '../config';
+import { resolveMirrorDir, resolveServerUrl, resolveToken } from '../config';
 import type { CliContext } from '../context';
+import { applyMirror } from '../mirror';
 import { CliError, formatTable, printResult, resolveMode } from '../output';
 
 interface GlobalOptions {
@@ -54,6 +56,24 @@ function printResource(
     return;
   }
 
+  if (resource.type === 'image') {
+    ctx.stdout.write(
+      `${formatTable({
+        id: resource.id,
+        type: resource.type,
+        title: resource.title,
+        notes: resource.notes,
+        created: resource.created_at,
+        path: resource.path,
+        mime: resource.mime,
+        bytes: resource.bytes,
+        width: resource.width,
+        height: resource.height,
+      })}\n`,
+    );
+    return;
+  }
+
   ctx.stdout.write(
     `${formatTable({
       id: resource.id,
@@ -68,9 +88,9 @@ function printResource(
 export function addResourceCommands(program: Command, ctx: CliContext): void {
   const resource = program.command('resource').description('Manage resources');
 
-  resource
-    .command('add')
-    .description('Add a resource')
+  const add = resource.command('add').description('Add a resource');
+
+  add
     .command('md <path...>')
     .description('Add Markdown notes')
     .option('--title <title>')
@@ -120,6 +140,106 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
             }),
           );
           results.push({ path: inputPath, ok: true, resource: created });
+        } catch (error) {
+          if (
+            error instanceof CliError &&
+            (error.code === 'unreachable' || error.code === 'unauthorized')
+          ) {
+            throw error;
+          }
+          results.push({
+            path: inputPath,
+            ok: false,
+            error: {
+              code: error instanceof CliError ? error.code : 'internal',
+              message: error instanceof Error ? error.message : String(error),
+            },
+          });
+        }
+      }
+
+      if (mode === 'json') {
+        printResult(ctx, mode, results);
+      } else {
+        printResult(
+          ctx,
+          mode,
+          results.map((result) => ({
+            path: result.path,
+            id: result.ok ? result.resource.id : '',
+            title: result.ok ? result.resource.title : '',
+            error: result.ok ? '' : result.error.message,
+          })),
+        );
+      }
+
+      const failed = results.filter((result) => !result.ok).length;
+      if (failed > 0) throw new BatchFailure(failed, results.length);
+    });
+
+  add
+    .command('image <path...>')
+    .description('Add image files')
+    .option('--title <title>')
+    .action(async (paths: string[], commandOptions: { title?: string }) => {
+      const options = program.opts<GlobalOptions>();
+      const mode = resolveMode(options, ctx.isTTY);
+      if (commandOptions.title !== undefined && paths.length !== 1) {
+        throw new CliError('bad_args', '--title needs exactly one path');
+      }
+      if (paths.includes('-')) {
+        throw new CliError('bad_args', 'stdin (-) is not supported for images');
+      }
+
+      const api = apiFor(program, ctx);
+      const results: Array<
+        | { path: string; ok: true; resource: Resource }
+        | { path: string; ok: false; error: { code: string; message: string } }
+      > = [];
+
+      for (const inputPath of paths) {
+        let bytes: Uint8Array;
+        try {
+          bytes = fs.readFileSync(inputPath);
+        } catch (error) {
+          results.push({
+            path: inputPath,
+            ok: false,
+            error: {
+              code: 'read_failed',
+              message: error instanceof Error ? error.message : String(error),
+            },
+          });
+          continue;
+        }
+
+        try {
+          const response = await api.call(
+            api.client.api.resources.images.$post({
+              form: {
+                files: new File(
+                  [bytes.slice().buffer as ArrayBuffer],
+                  path.basename(inputPath),
+                ),
+                ...(commandOptions.title !== undefined
+                  ? { title: commandOptions.title }
+                  : {}),
+              },
+            }),
+          );
+          const one = response.results[0];
+          if (one?.ok) {
+            results.push({ path: inputPath, ok: true, resource: one.resource });
+          } else {
+            results.push({
+              path: inputPath,
+              ok: false,
+              error: one?.error ?? {
+                code: 'internal',
+                message: 'No result returned',
+              },
+            });
+          }
         } catch (error) {
           if (
             error instanceof CliError &&
@@ -310,6 +430,9 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
           current = await api.call(
             api.client.api.resources[':id'].$get({ param: { id: String(id) } }),
           );
+          if (current.type !== 'md') {
+            throw new CliError('bad_args', 'Only notes have a body');
+          }
           patch.body = await ctx.editText(current.body);
           if (
             patch.body === current.body &&
@@ -376,5 +499,38 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
 
       const failed = response.results.filter((result) => !result.ok).length;
       if (failed > 0) throw new BatchFailure(failed, response.results.length);
+    });
+
+  resource
+    .command('pull')
+    .description('Copy every Resource into the Mirror')
+    .option('--dir <path>')
+    .action(async (commandOptions: { dir?: string }) => {
+      const options = program.opts<GlobalOptions>();
+      const mode = resolveMode(options, ctx.isTTY);
+      const serverUrl = resolveServerUrl(ctx, options.server);
+      const dir = resolveMirrorDir(ctx, commandOptions.dir);
+      const api = apiFor(program, ctx);
+      const text = await api.callText(api.client.api.resources.export.$get());
+      const resources: Resource[] = [];
+      for (const line of text.split('\n')) {
+        if (line === '') continue;
+        try {
+          resources.push(resourceSchema.parse(JSON.parse(line)));
+        } catch {
+          throw new CliError(
+            'bad_response',
+            `Server at ${serverUrl} sent an invalid export line`,
+          );
+        }
+      }
+      const result = applyMirror(dir, resources, ctx.now());
+      printResult(ctx, mode, {
+        dir,
+        added: result.added,
+        updated: result.updated,
+        removed: result.removed,
+        pulled_at: result.pulled_at,
+      });
     });
 }

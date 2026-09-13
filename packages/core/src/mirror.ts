@@ -1,0 +1,59 @@
+import { z } from 'zod';
+
+import type { Resource } from './resources';
+
+export function slugify(title: string): string {
+  return (
+    title
+      .normalize('NFKD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[đĐ]/g, 'd')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60)
+      .replace(/-+$/, '') || 'untitled'
+  );
+}
+
+export function mirrorFileName(
+  r: Pick<Resource, 'id' | 'title' | 'created_at'>,
+): string {
+  return `${r.created_at.slice(0, 10)}-${r.id}-${slugify(r.title)}.md`;
+}
+
+export function mirrorFrontMatter(r: Resource): string {
+  const lines = [
+    '---',
+    `id: ${r.id}`,
+    `type: ${JSON.stringify(r.type)}`,
+    `title: ${JSON.stringify(r.title)}`,
+    `created_at: ${JSON.stringify(r.created_at)}`,
+    'tags: []',
+  ];
+  if (r.notes === '') {
+    lines.push('notes: ""');
+  } else {
+    lines.push('notes: |', ...r.notes.split('\n').map((line) => `  ${line}`));
+  }
+  lines.push('---');
+  return `${lines.join('\n')}\n`;
+}
+
+export function mirrorFile(
+  r: Resource,
+): { path: string; content: string } | null {
+  if (r.type !== 'md') return null;
+  return {
+    path: `notes/${mirrorFileName(r)}`,
+    content:
+      mirrorFrontMatter(r) + r.body + (r.body.endsWith('\n') ? '' : '\n'),
+  };
+}
+
+export const MIRROR_MANIFEST_FILE = 'manifest.json';
+export const mirrorManifestSchema = z.object({
+  pulled_at: z.string().nullable(),
+  paths: z.array(z.string()),
+});
+export type MirrorManifest = z.infer<typeof mirrorManifestSchema>;

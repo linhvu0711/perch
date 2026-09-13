@@ -20,6 +20,7 @@ export interface AppDeps {
   token: string;
   secureCookies: boolean;
   webDist: string;
+  uploadDir: string;
   clock: Clock;
   accounts: XAccountService;
 }

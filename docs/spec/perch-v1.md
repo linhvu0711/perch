@@ -185,6 +185,9 @@ Build Perch v1: a single-user tool that keeps my Resources (Tweet Resources, Ima
 140. As an AI agent, I want `perch open post <id>` and `perch open resource <id>` to print and open the web URL, so that I can hand a Post to the User for review.
 141. As a User, I want `perch config get|set` for server-url, token, timezone, and char-limit, so that setup is scriptable.
 142. As a User, I want the CLI built as a single binary, so that installing it is copying one file.
+148. As an AI agent, I want to pull every Resource into a Mirror of local Markdown files, so that I can read them with file tools.
+149. As an AI agent, I want nothing written to the Mirror when the download fails, so that a bad server never corrupts my copy.
+150. As an AI agent, I want `perch status` to show the Mirror path and last pull time, so that I know where to read and how fresh it is.
 
 ### Operations
 
