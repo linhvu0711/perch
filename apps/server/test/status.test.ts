@@ -465,6 +465,24 @@ describe('post status', () => {
     });
   });
 
+  test('creates official only after its media copies', async () => {
+    // Given: an image resource
+    await uploadImage('a.png');
+
+    // When: creating an official post linked to it
+    const created = await request('/api/posts', {
+      method: 'POST',
+      body: JSON.stringify({ text: 'Live', official: true, from: [1] }),
+    });
+
+    // Then: the post is official with the media already attached
+    expect(created.status).toBe(201);
+    const post = (await created.json()) as Post;
+    expect(post.status).toBe('official');
+    expect(post.media.map((media) => media.position)).toEqual([1]);
+    expect(fs.readdirSync(mediaDir(post.id))).toHaveLength(1);
+  });
+
   test('get carries the ready checklist', async () => {
     // Given: a draft with one image and no account
     await uploadImage('a.png');
