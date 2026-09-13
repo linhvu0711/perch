@@ -14,6 +14,7 @@ import { Outlet, useNavigate } from 'react-router';
 import { Empty } from '@/components/Empty';
 import { IconButton } from '@/components/IconButton';
 import { PostRow } from '@/components/PostRow';
+import { TagFilter } from '@/components/TagFilter';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { errorMessage } from '@/lib/api';
 import { POSTS_PAGE_SIZE, usePosts } from '@/lib/queries';
@@ -34,6 +35,7 @@ const STATUS_TABS: Array<{
 export function Posts() {
   const navigate = useNavigate();
   const [status, setStatus] = useState<PostStatus | undefined>();
+  const [tag, setTag] = useState<string | undefined>();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -46,8 +48,9 @@ export function Posts() {
     () => ({
       ...(status !== undefined ? { status } : {}),
       ...(debouncedSearch !== '' ? { search: debouncedSearch } : {}),
+      ...(tag !== undefined ? { tag: [tag] } : {}),
     }),
-    [status, debouncedSearch],
+    [status, debouncedSearch, tag],
   );
   const posts = usePosts(filters);
   const items = posts.data?.pages.flatMap((page) => page.items) ?? [];
@@ -122,6 +125,7 @@ export function Posts() {
             </Tooltip>
           ))}
         </div>
+        <TagFilter value={tag} kind="post" onChange={setTag} />
         <div className="search right">
           <Search size={16} strokeWidth={1.75} />
           <input

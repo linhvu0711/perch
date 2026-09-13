@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { formatDateTime, formatDayMonth } from '@/lib/format';
 
 import { StatusPill } from './StatusPill';
+import { TagChips } from './TagChips';
 
 export function PostRow({ post }: { post: Post }) {
   const time = post.scheduled_at ?? post.published_at;
@@ -28,6 +29,7 @@ export function PostRow({ post }: { post: Post }) {
         )}
         {post.title === '' && firstLine === '' && <span className="faint">Empty post</span>}
       </div>
+      <TagChips tags={post.tags} />
       <span className="pid">#{post.id}</span>
       <StatusPill status={post.status} />
     </Link>

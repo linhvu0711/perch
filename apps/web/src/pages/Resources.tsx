@@ -16,6 +16,7 @@ import { AuthorFilter } from '@/components/AuthorFilter';
 import { Empty } from '@/components/Empty';
 import { IconButton } from '@/components/IconButton';
 import { ResourceCard } from '@/components/ResourceCard';
+import { TagFilter } from '@/components/TagFilter';
 import { UploadImagesModal } from '@/components/UploadImagesModal';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { errorMessage } from '@/lib/api';
@@ -27,6 +28,7 @@ export function Resources() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [author, setAuthor] = useState<string | undefined>();
+  const [tag, setTag] = useState<string | undefined>();
   const [sort, setSort] = useState<'newest' | 'oldest' | 'most' | 'least'>('newest');
   const [uploadOpen, setUploadOpen] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -46,10 +48,11 @@ export function Resources() {
       ...(type !== undefined ? { type } : {}),
       ...(debouncedSearch !== '' ? { search: debouncedSearch } : {}),
       ...(author !== undefined ? { author } : {}),
+      ...(tag !== undefined ? { tag: [tag] } : {}),
       sort: sort === 'most' || sort === 'least' ? ('used' as const) : ('created' as const),
       order: sort === 'oldest' || sort === 'least' ? ('asc' as const) : ('desc' as const),
     }),
-    [author, type, debouncedSearch, sort],
+    [author, tag, type, debouncedSearch, sort],
   );
   const resources = useResources(filters);
   const items = resources.data?.pages.flatMap((page) => page.items) ?? [];
@@ -181,6 +184,7 @@ export function Resources() {
             <TooltipContent>Notes</TooltipContent>
           </Tooltip>
         </div>
+        <TagFilter value={tag} kind="resource" onChange={setTag} />
         <AuthorFilter
           value={author}
           disabled={type !== undefined && type !== 'tweet'}

@@ -5,6 +5,8 @@ import { Link } from 'react-router';
 
 import { formatBytes, formatDayMonth, noteExcerpt } from '@/lib/format';
 
+import { TagChips } from './TagChips';
+
 export function ResourceCard({ resource }: { resource: Resource }): JSX.Element {
   const isImage = resource.type === 'image';
   const isTweet = resource.type === 'tweet';
@@ -45,6 +47,7 @@ export function ResourceCard({ resource }: { resource: Resource }): JSX.Element 
         excerpt && <div className="body">{excerpt}</div>
       )}
       <div className="foot">
+        <TagChips tags={resource.tags} />
         <span className="uses">
           {!resource.used_by
             ? 'not used'
