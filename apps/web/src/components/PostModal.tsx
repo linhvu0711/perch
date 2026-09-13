@@ -156,18 +156,34 @@ export function PostModal(): JSX.Element | null {
     return queueRef.current;
   }, [currentId, ensureCreated, updatePost]);
 
+  const drain = useCallback(async (): Promise<boolean> => {
+    let ok = await flush();
+    while (
+      ok &&
+      (pendingRef.current.title !== undefined ||
+        pendingRef.current.text !== undefined)
+    ) {
+      ok = await flush();
+    }
+    return ok;
+  }, [flush]);
+
   const requestClose = useCallback(() => {
     closedRef.current = true;
     if (timerRef.current !== undefined) window.clearTimeout(timerRef.current);
-    void flush().then((ok) => {
+    void (async () => {
+      const ok = await drain();
       if (!ok) {
         closedRef.current = false;
         return;
       }
       if (savedRef.current) toast('Saved');
       navigate('/posts');
+    })().catch((error: unknown) => {
+      closedRef.current = false;
+      toast(errorMessage(error), 'warn');
     });
-  }, [flush, navigate]);
+  }, [drain, navigate]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -209,11 +225,12 @@ export function PostModal(): JSX.Element | null {
   const openResource = useCallback(
     (to: string) => {
       if (timerRef.current !== undefined) window.clearTimeout(timerRef.current);
-      void flush().then((ok) => {
+      void (async () => {
+        const ok = await drain();
         if (ok) navigate(to);
-      });
+      })().catch((error: unknown) => toast(errorMessage(error), 'warn'));
     },
-    [flush, navigate],
+    [drain, navigate],
   );
 
   async function confirmDelete() {
