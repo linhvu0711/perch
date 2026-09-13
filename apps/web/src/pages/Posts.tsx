@@ -11,7 +11,7 @@ import {
   Search,
   ShieldCheck,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type JSX, useEffect, useMemo, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router';
 
 import { Empty } from '@/components/Empty';
@@ -61,8 +61,7 @@ export function Posts() {
   const items = posts.data?.pages.flatMap((page) => page.items) ?? [];
   const total = Math.max(posts.data?.pages[0]?.total ?? 0, items.length);
 
-  // biome-ignore lint/suspicious/noImplicitAnyLet: assigned in every branch below
-  let content;
+  let content: JSX.Element;
   if (posts.isPending) {
     content = <div className="countline">Loading…</div>;
   } else if (posts.isError) {
@@ -113,8 +112,7 @@ export function Posts() {
         />
       </div>
       <div className="filters">
-        {/* biome-ignore lint/a11y/useSemanticElements: styled segmented control, not a form group */}
-        <div className="seg icons" role="group" aria-label="Status">
+        <fieldset className="seg icons" aria-label="Status">
           {STATUS_TABS.map((tab) => (
             <Tooltip key={tab.dataStatus}>
               <TooltipTrigger asChild>
@@ -131,7 +129,7 @@ export function Posts() {
               <TooltipContent>{tab.label}</TooltipContent>
             </Tooltip>
           ))}
-        </div>
+        </fieldset>
         <TagFilter value={tag} kind="post" onChange={setTag} />
         {/* biome-ignore lint/a11y/useSemanticElements: mirrors the Status filter group above */}
         <div className="seg icons" role="group" aria-label="Scheduled">

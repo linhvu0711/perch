@@ -87,7 +87,7 @@ export function Sidebar() {
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              className="collapse"
+              className="sidecollapse"
               type="button"
               aria-label="Collapse sidebar"
               onClick={(event) => {

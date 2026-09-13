@@ -130,8 +130,7 @@ export function Resources() {
         />
       </div>
       <div className="filters">
-        {/* biome-ignore lint/a11y/useSemanticElements: styled segmented control, not a form group */}
-        <div className="seg icons" role="group" aria-label="Type">
+        <fieldset className="seg icons" aria-label="Type">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -184,7 +183,7 @@ export function Resources() {
             </TooltipTrigger>
             <TooltipContent>Notes</TooltipContent>
           </Tooltip>
-        </div>
+        </fieldset>
         <TagFilter value={tag} kind="resource" onChange={setTag} />
         <AuthorFilter
           value={author}

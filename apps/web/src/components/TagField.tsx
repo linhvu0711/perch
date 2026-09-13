@@ -11,8 +11,7 @@ export function TagField(props: {
 }): JSX.Element {
   return (
     <div className="field">
-      {/* biome-ignore lint/a11y/noLabelWithoutControl: chips + picker act as the control */}
-      <label>Tags</label>
+      <div className="flabel">Tags</div>
       <div className="tagbox">
         {props.tags.map((name) => (
           <span key={name} className="tag">

@@ -33,13 +33,13 @@ import {
   useDemotePosts,
   useDetachMedia,
   usePost,
-  useTagPosts,
   usePromotePosts,
   useSchedulePost,
   useSettings,
+  useTagPosts,
   useUnlinkResources,
-  useUntagPosts,
   useUnschedulePosts,
+  useUntagPosts,
   useUpdatePost,
 } from '@/lib/queries';
 

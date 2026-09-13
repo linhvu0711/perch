@@ -139,7 +139,13 @@ export function addTagCommands(program: Command, ctx: CliContext): void {
       const list = await api.call(api.client.api.tags.$get());
       const byName = new Map(list.items.map((item) => [item.name.toLowerCase(), item.id]));
       const known = names.filter((name) => byName.has(name.toLowerCase()));
-      const ids = [...new Set(known.map((n) => byName.get(n.toLowerCase())!))];
+      const ids = [
+        ...new Set(
+          known
+            .map((n) => byName.get(n.toLowerCase()))
+            .filter((id): id is number => id !== undefined),
+        ),
+      ];
 
       const deleted = new Map<number, { id: number; ok: boolean }>();
       if (ids.length > 0) {

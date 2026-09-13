@@ -162,7 +162,7 @@ export function ResourceModal(): JSX.Element | null {
       if (saved) proceed();
       else reset();
     });
-  }, [blocker.state, dirty, saveNotes, blocker]);
+  }, [blocker, dirty, saveNotes]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -216,6 +216,7 @@ export function ResourceModal(): JSX.Element | null {
         setIsEditing(false);
         allowNavigationRef.current = true;
         navigate(`/resources/${data.id}`, { replace: true });
+        allowNavigationRef.current = false;
       } else if (parsedId !== null) {
         await updateResource.mutateAsync({
           id: parsedId,
@@ -412,8 +413,7 @@ export function ResourceModal(): JSX.Element | null {
               </div>
               <div className="rside">
                 <div className="field">
-                  {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the details list */}
-                  <label>Details</label>
+                  <div className="flabel">Details</div>
                   <div className="kv">
                     <b>author</b>
                     <span>@{resource.author_username}</span>
@@ -424,10 +424,9 @@ export function ResourceModal(): JSX.Element | null {
                   </div>
                 </div>
                 <div className="field">
-                  {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the used-by list */}
-                  <label>
+                  <div className="flabel">
                     Used in {usedByTotal} post{usedByTotal === 1 ? '' : 's'}
-                  </label>
+                  </div>
                   <div className="linked">
                     {usedByPosts.length === 0 ? (
                       <span className="note">Not linked to any post yet.</span>
@@ -468,9 +467,9 @@ export function ResourceModal(): JSX.Element | null {
                   />
                 )}
                 <div className="field">
-                  {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for private notes */}
-                  <label>Private notes</label>
+                  <label htmlFor="resource-notes">Private notes</label>
                   <textarea
+                    id="resource-notes"
                     aria-label="Private notes"
                     placeholder="Why you saved this"
                     value={notesDraft}
@@ -644,8 +643,7 @@ export function ResourceModal(): JSX.Element | null {
             </div>
             <div className="rside">
               <div className="field">
-                {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the details list */}
-                <label>Details</label>
+                <div className="flabel">Details</div>
                 <div className="kv">
                   {isImage ? (
                     <>
@@ -670,10 +668,9 @@ export function ResourceModal(): JSX.Element | null {
               </div>
               {!isNew && (
                 <div className="field">
-                  {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the used-by list */}
-                  <label>
+                  <div className="flabel">
                     Used by {usedByTotal} post{usedByTotal === 1 ? '' : 's'}
-                  </label>
+                  </div>
                   <div className="linked">
                     {usedByPosts.length === 0 ? (
                       <span className="note">Not linked to any post yet.</span>
@@ -715,9 +712,9 @@ export function ResourceModal(): JSX.Element | null {
                 />
               )}
               <div className="field">
-                {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for private notes */}
-                <label>Private notes</label>
+                <label htmlFor="resource-notes">Private notes</label>
                 <textarea
+                  id="resource-notes"
                   aria-label="Private notes"
                   placeholder="Why you saved this"
                   value={notesDraft}

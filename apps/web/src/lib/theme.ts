@@ -23,7 +23,7 @@ export function applyTheme(theme: Theme): void {
     // Theme still applies for this page when storage is unavailable.
   }
   current = theme;
-  listeners.forEach((listener) => listener());
+  for (const listener of listeners) listener();
 }
 
 function subscribe(listener: () => void): () => void {

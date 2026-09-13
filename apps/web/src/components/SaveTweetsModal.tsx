@@ -64,10 +64,11 @@ export function SaveTweetsModal(): JSX.Element {
         </div>
         <div className="sbody">
           <div className="field">
-            <label>
+            <label htmlFor="tweet-urls">
               Tweet URLs <span className="faint">one per line</span>
             </label>
             <textarea
+              id="tweet-urls"
               className="urls"
               aria-label="Tweet URLs"
               placeholder="https://x.com/user/status/123…"
