@@ -10,6 +10,7 @@ import {
   readyChecks,
   weightedLength,
 } from '@perch/core';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowDown,
   ArrowUp,
@@ -93,6 +94,7 @@ export function PostModal(): JSX.Element | null {
       : null;
   const invalidId = !isNew && parsedId === null;
 
+  const queryClient = useQueryClient();
   const postQuery = usePost(isNew || invalidId ? null : parsedId);
   const account = useAccount();
   const settings = useSettings();
@@ -136,6 +138,13 @@ export function PostModal(): JSX.Element | null {
   useEffect(() => {
     if (invalidId) navigate('/posts', { replace: true });
   }, [invalidId, navigate]);
+
+  // the scheduler may have sent or missed the open post while the modal was up
+  useEffect(() => {
+    return () => {
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
+    };
+  }, [queryClient]);
 
   useEffect(() => {
     if (postQuery.error instanceof ApiError && postQuery.error.status === 404) {

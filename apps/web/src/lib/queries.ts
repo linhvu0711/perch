@@ -276,6 +276,8 @@ export function usePosts(filters: PostFilters, enabled = true) {
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor ?? undefined,
+    // missed/published rows change with the scheduler clock, so poll on the tick cadence
+    refetchInterval: 30_000,
     enabled,
   });
 }
