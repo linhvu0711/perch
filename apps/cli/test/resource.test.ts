@@ -72,10 +72,7 @@ describe('resource add', () => {
 
     const explicit = makeCtx(server);
     expect(
-      await runCli(
-        ['resource', 'add', 'md', ideas, '--title', 'Given', '--json'],
-        explicit.ctx,
-      ),
+      await runCli(['resource', 'add', 'md', ideas, '--title', 'Given', '--json'], explicit.ctx),
     ).toBe(0);
     expect(JSON.parse(explicit.out())[0].resource.title).toBe('Given');
   });
@@ -84,9 +81,7 @@ describe('resource add', () => {
     const valid = write('valid.md', '# Valid');
     const missing = path.join(server.dir, 'missing.md');
     const capture = makeCtx(server);
-    expect(
-      await runCli(['resource', 'add', 'md', valid, missing, '--json'], capture.ctx),
-    ).toBe(1);
+    expect(await runCli(['resource', 'add', 'md', valid, missing, '--json'], capture.ctx)).toBe(1);
     const results = JSON.parse(capture.out());
     expect(results[0].ok).toBe(true);
     expect(results[1]).toMatchObject({ ok: false, error: { code: 'read_failed' } });
@@ -95,9 +90,7 @@ describe('resource add', () => {
 
   test('rejects stdin more than once before making requests', async () => {
     const capture = makeCtx(server, { stdin: '# One' });
-    expect(
-      await runCli(['resource', 'add', 'md', '-', '-', '--json'], capture.ctx),
-    ).toBe(1);
+    expect(await runCli(['resource', 'add', 'md', '-', '-', '--json'], capture.ctx)).toBe(1);
     expect(JSON.parse(capture.err()).code).toBe('bad_args');
     const response = await server.app.request('/api/resources', {
       headers: { Authorization: `Bearer ${server.token}` },
@@ -129,9 +122,7 @@ describe('resource list and show', () => {
     ]);
 
     const search = makeCtx(server);
-    expect(
-      await runCli(['resource', 'list', '--search', 'banana', '--json'], search.ctx),
-    ).toBe(0);
+    expect(await runCli(['resource', 'list', '--search', 'banana', '--json'], search.ctx)).toBe(0);
     expect(JSON.parse(search.out()).items.map((item: Resource) => item.id)).toEqual([a.id]);
 
     const first = makeCtx(server);
@@ -149,9 +140,7 @@ describe('resource list and show', () => {
     expect(JSON.parse(second.out()).items[0].id).toBe(b.id);
 
     const tweets = makeCtx(server);
-    expect(
-      await runCli(['resource', 'list', '--type', 'tweet', '--json'], tweets.ctx),
-    ).toBe(0);
+    expect(await runCli(['resource', 'list', '--type', 'tweet', '--json'], tweets.ctx)).toBe(0);
     expect(JSON.parse(tweets.out())).toMatchObject({ items: [], total: 0 });
   });
 
@@ -178,9 +167,7 @@ describe('resource list and show', () => {
     // Given: a test server
     // When: --limit exceeds the core maximum
     const capture = makeCtx(server);
-    expect(
-      await runCli(['resource', 'list', '--limit', '101', '--json'], capture.ctx),
-    ).toBe(2);
+    expect(await runCli(['resource', 'list', '--limit', '101', '--json'], capture.ctx)).toBe(2);
     // Then
     expect(JSON.parse(capture.err())).toEqual({
       code: 'usage',
@@ -192,9 +179,7 @@ describe('resource list and show', () => {
     // Given: a test server
     // When: --limit is not a number
     const capture = makeCtx(server);
-    expect(
-      await runCli(['resource', 'list', '--limit', 'abc', '--json'], capture.ctx),
-    ).toBe(2);
+    expect(await runCli(['resource', 'list', '--limit', 'abc', '--json'], capture.ctx)).toBe(2);
     // Then
     expect(JSON.parse(capture.err()).code).toBe('usage');
   });
@@ -203,9 +188,7 @@ describe('resource list and show', () => {
     // Given: a test server with no resources
     // When: --limit equals the core maximum
     const capture = makeCtx(server);
-    expect(
-      await runCli(['resource', 'list', '--limit', '100', '--json'], capture.ctx),
-    ).toBe(0);
+    expect(await runCli(['resource', 'list', '--limit', '100', '--json'], capture.ctx)).toBe(0);
     // Then
     expect(JSON.parse(capture.out())).toMatchObject({ items: [], total: 0 });
   });
@@ -213,9 +196,7 @@ describe('resource list and show', () => {
   test('shows a resource and validates ids', async () => {
     const resource = await create('# Show me');
     const shown = makeCtx(server);
-    expect(
-      await runCli(['resource', 'show', String(resource.id), '--json'], shown.ctx),
-    ).toBe(0);
+    expect(await runCli(['resource', 'show', String(resource.id), '--json'], shown.ctx)).toBe(0);
     expect(JSON.parse(shown.out())).toEqual(resource);
 
     const missing = makeCtx(server);
@@ -276,15 +257,13 @@ describe('resource edit', () => {
     const resource = await create('# Original');
 
     const noTty = makeCtx(server, { isTTY: false });
-    expect(
-      await runCli(['resource', 'edit', String(resource.id), '-e', '--json'], noTty.ctx),
-    ).toBe(1);
+    expect(await runCli(['resource', 'edit', String(resource.id), '-e', '--json'], noTty.ctx)).toBe(
+      1,
+    );
     expect(JSON.parse(noTty.err()).code).toBe('no_tty');
 
     const noFlags = makeCtx(server);
-    expect(
-      await runCli(['resource', 'edit', String(resource.id), '--json'], noFlags.ctx),
-    ).toBe(1);
+    expect(await runCli(['resource', 'edit', String(resource.id), '--json'], noFlags.ctx)).toBe(1);
     expect(JSON.parse(noFlags.err()).code).toBe('bad_args');
 
     const both = makeCtx(server);
@@ -302,9 +281,9 @@ describe('resource delete', () => {
   test('requires confirmation outside a TTY and reports mixed batches', async () => {
     const resource = await create('# Delete me');
     const refused = makeCtx(server);
-    expect(
-      await runCli(['resource', 'delete', String(resource.id), '--json'], refused.ctx),
-    ).toBe(1);
+    expect(await runCli(['resource', 'delete', String(resource.id), '--json'], refused.ctx)).toBe(
+      1,
+    );
     expect(JSON.parse(refused.err()).code).toBe('confirm_required');
     expect((await get(resource.id)).status).toBe(200);
 
@@ -324,10 +303,7 @@ describe('resource delete', () => {
     const second = await create('# Second');
     const success = makeCtx(server);
     expect(
-      await runCli(
-        ['resource', 'delete', String(second.id), '--yes', '--json'],
-        success.ctx,
-      ),
+      await runCli(['resource', 'delete', String(second.id), '--yes', '--json'], success.ctx),
     ).toBe(0);
   });
 
@@ -350,9 +326,7 @@ describe('resource delete', () => {
       stdinIsTTY: true,
       confirmAnswer: false,
     });
-    expect(
-      await runCli(['resource', 'delete', String(kept.id), '--json'], cancelled.ctx),
-    ).toBe(0);
+    expect(await runCli(['resource', 'delete', String(kept.id), '--json'], cancelled.ctx)).toBe(0);
     expect(cancelled.out()).toBe('');
     expect(cancelled.err()).toContain('Cancelled');
     expect((await get(kept.id)).status).toBe(200);
@@ -378,9 +352,7 @@ describe('resource add image', () => {
     const d = writeBytes('d.gif', GIF_4X3);
     const capture = makeCtx(server);
 
-    expect(
-      await runCli(['resource', 'add', 'image', a, d, '--json'], capture.ctx),
-    ).toBe(0);
+    expect(await runCli(['resource', 'add', 'image', a, d, '--json'], capture.ctx)).toBe(0);
     const rows = JSON.parse(capture.out());
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({
@@ -413,12 +385,9 @@ describe('resource add image', () => {
     const okPng = writeBytes('ok.png', PNG_3X2);
     const capture = makeCtx(server);
 
-    expect(
-      await runCli(
-        ['resource', 'add', 'image', notesTxt, okPng, '--json'],
-        capture.ctx,
-      ),
-    ).toBe(1);
+    expect(await runCli(['resource', 'add', 'image', notesTxt, okPng, '--json'], capture.ctx)).toBe(
+      1,
+    );
     expect(capture.err()).toBe('');
     const rows = JSON.parse(capture.out());
     expect(rows[0]).toEqual({
@@ -436,19 +405,13 @@ describe('resource add image', () => {
 
     const single = makeCtx(server);
     expect(
-      await runCli(
-        ['resource', 'add', 'image', a, '--title', 'Beach', '--json'],
-        single.ctx,
-      ),
+      await runCli(['resource', 'add', 'image', a, '--title', 'Beach', '--json'], single.ctx),
     ).toBe(0);
     expect(JSON.parse(single.out())[0].resource.title).toBe('Beach');
 
     const many = makeCtx(server);
     expect(
-      await runCli(
-        ['resource', 'add', 'image', a, b, '--title', 'X', '--json'],
-        many.ctx,
-      ),
+      await runCli(['resource', 'add', 'image', a, b, '--title', 'X', '--json'], many.ctx),
     ).toBe(1);
     expect(JSON.parse(many.err())).toMatchObject({
       code: 'bad_args',
@@ -456,9 +419,7 @@ describe('resource add image', () => {
     });
 
     const stdin = makeCtx(server);
-    expect(
-      await runCli(['resource', 'add', 'image', '-', '--json'], stdin.ctx),
-    ).toBe(1);
+    expect(await runCli(['resource', 'add', 'image', '-', '--json'], stdin.ctx)).toBe(1);
     expect(JSON.parse(stdin.err())).toMatchObject({
       code: 'bad_args',
       message: 'stdin (-) is not supported for images',
