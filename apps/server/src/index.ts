@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { systemClock } from './clock';
 import { buildServer } from './server';
+import { createRealXClient } from './x/real';
 
 export { buildServer } from './server';
 export type { AppType } from './app';
@@ -42,7 +43,7 @@ if (import.meta.main) {
     dbPath,
     uploadDir,
     clock: systemClock,
-    xClient: {},
+    xClient: createRealXClient({ clientId: '', clientSecret: '' }),
     token,
     secureCookies: secureCookiesValue === 'true',
     webDist,

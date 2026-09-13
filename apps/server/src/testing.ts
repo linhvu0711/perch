@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { fixedClock } from './clock';
 import { buildServer, type PerchServer } from './server';
-import { fakeXClient, type FakeXClient } from './x/client';
+import { fakeXClient, type FakeXClient } from './x/fake';
 
 export interface TestServer extends PerchServer {
   token: string;
