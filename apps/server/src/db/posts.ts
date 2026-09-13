@@ -412,7 +412,7 @@ function tagFilterConditions(db: Db, userId: number, tagNames: string[]): SQL[] 
 function postsFromRows(
   db: Db,
   userId: number,
-  rows: PostRow[],
+  rows: PostJoinRow[],
 ): { items: Post[]; accountConnected: boolean } {
   const limit = postLimit(db, userId);
   const accountConnected = getConnectedAccount(db, userId) !== null;
@@ -458,8 +458,13 @@ export function calendarDays(
   ];
 
   const rows = db
-    .select()
+    .select({
+      ...getTableColumns(posts),
+      username: xAccounts.username,
+      missed: sql<number>`${missedSql(userId, now)}`,
+    })
     .from(posts)
+    .leftJoin(xAccounts, eq(xAccounts.id, posts.xAccountId))
     .where(and(...conditions))
     .orderBy(asc(sortTime), asc(posts.id))
     .all();

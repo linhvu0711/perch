@@ -7,6 +7,7 @@ import { fixedClock } from './clock';
 import { openDb } from './db';
 import { xAccounts } from './db/schema';
 import { disconnectAccount, getConnectedAccount } from './db/xAccounts';
+import { type FakeR2Client, fakeR2Client } from './r2/fake';
 import { buildServer, type PerchServer } from './server';
 import { type FakeXClient, fakeXClient } from './x/fake';
 
@@ -14,6 +15,8 @@ export interface TestServer extends PerchServer {
   token: string;
   clock: ReturnType<typeof fixedClock>;
   xClient: FakeXClient;
+  r2: FakeR2Client;
+  errors: unknown[];
   dir: string;
   webDist: string;
   cleanup(): void;
@@ -23,6 +26,7 @@ export async function createTestServer(opts?: {
   indexHtml?: string;
   now?: Date;
   secureCookies?: boolean;
+  timezone?: string;
   xOAuthConfigured?: boolean;
 }): Promise<TestServer> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'perch-test-'));
@@ -37,6 +41,8 @@ export async function createTestServer(opts?: {
 
   const clock = fixedClock(opts?.now ?? new Date('2026-09-04T10:00:00Z'));
   const xClient = fakeXClient();
+  const r2 = fakeR2Client();
+  const errors: unknown[] = [];
   const token = 'test-token';
   const server = await buildServer({
     dbPath,
@@ -46,6 +52,11 @@ export async function createTestServer(opts?: {
     token,
     secureCookies: opts?.secureCookies ?? false,
     webDist,
+    timezone: opts?.timezone ?? 'UTC',
+    r2,
+    logError: (error) => {
+      errors.push(error);
+    },
     xOAuth:
       opts?.xOAuthConfigured === false
         ? null
@@ -61,6 +72,8 @@ export async function createTestServer(opts?: {
     token,
     clock,
     xClient,
+    r2,
+    errors,
     dir,
     webDist,
     cleanup() {

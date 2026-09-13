@@ -31,7 +31,7 @@ import {
 } from '../db/resources';
 import { tagResources, untagResources } from '../db/tags';
 import { ApiError, validationHook } from '../errors';
-import { inspectImage, removeImage, storeImage } from '../images';
+import { copyToR2, inspectImage, removeImage, storeImage } from '../images';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -117,6 +117,7 @@ export function resourcesRoutes(deps: AppDeps) {
           continue;
         }
         const rel = await storeImage(deps.uploadDir, c.get('user').id, bytes, inspected.ext);
+        await copyToR2(deps.r2, rel, bytes, deps.logError);
         let resource: Resource;
         try {
           resource = createImage(
