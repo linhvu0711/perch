@@ -1,6 +1,7 @@
 import { DEFAULT_TIMEZONE, foldPreview, type Post, previewSegments } from '@perch/core';
 import { useState } from 'react';
 
+import { formatDateTime } from '@/lib/format';
 import { useSettings } from '@/lib/queries';
 
 function Segments({ text }: { text: string }) {
@@ -76,17 +77,7 @@ export function PostPreview({ post }: { post: Post }) {
           </div>
         )}
         <div className="meta">
-          {post.scheduled_at
-            ? new Date(post.scheduled_at).toLocaleString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false,
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-                timeZone,
-              })
-            : 'Not scheduled'}
+          {post.scheduled_at ? formatDateTime(post.scheduled_at, timeZone) : 'Not scheduled'}
         </div>
       </div>
     </div>
