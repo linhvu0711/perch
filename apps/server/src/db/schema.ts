@@ -72,6 +72,7 @@ export const posts = sqliteTable(
     xPostId: text('x_post_id'),
     lastError: text('last_error'),
     retryCount: integer('retry_count').notNull().default(0),
+    nextAttemptAt: integer('next_attempt_at', { mode: 'timestamp_ms' }),
     parentPostId: integer('parent_post_id'),
     position: integer('position').notNull().default(0),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),

@@ -1,0 +1,1 @@
+ALTER TABLE `posts` ADD `next_attempt_at` integer;

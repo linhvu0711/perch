@@ -437,6 +437,27 @@ export function getPostRow(db: Db, userId: number, id: number): PostRow | undefi
     .get();
 }
 
+function accountConnectedAtSql(userId: number | typeof posts.userId, at: SQL): SQL {
+  return sql`EXISTS (select 1 from x_accounts where x_accounts.user_id = ${userId} and x_accounts.connected_at <= ${at} and (x_accounts.disconnected_at is null or x_accounts.disconnected_at > ${at}))`;
+}
+
+/** Official posts due to be sent at `now`, oldest schedule time first. */
+export function duePosts(db: Db, now: Date): PostRow[] {
+  return db
+    .select()
+    .from(posts)
+    .where(
+      and(
+        eq(posts.status, 'official'),
+        isNotNull(posts.scheduledAt),
+        sql`coalesce(${posts.nextAttemptAt}, ${posts.scheduledAt}) <= ${now.getTime()}`,
+        accountConnectedAtSql(posts.userId, sql`${posts.scheduledAt}`),
+      ),
+    )
+    .orderBy(asc(posts.scheduledAt), asc(posts.id))
+    .all();
+}
+
 function resourceExists(db: Db, userId: number, resourceId: number): boolean {
   return (
     db

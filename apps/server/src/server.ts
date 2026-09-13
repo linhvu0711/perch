@@ -71,6 +71,7 @@ export async function buildServer(options: BuildServerOptions): Promise<PerchSer
     clock: options.clock,
     xClient: options.xClient,
     accounts,
+    publisher,
   });
 
   return {

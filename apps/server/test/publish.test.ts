@@ -5,13 +5,14 @@ import { eq } from 'drizzle-orm';
 
 import { openDb } from '../src/db';
 import { posts } from '../src/db/schema';
-import { XError } from '../src/x/client';
 import {
   connectTestAccount,
   createTestServer,
+  disconnectTestAccount,
   PNG_3X2,
   type TestServer,
 } from '../src/testing';
+import { XError } from '../src/x/client';
 
 let server: TestServer;
 
@@ -283,8 +284,183 @@ describe('publish', () => {
       message: 'Post 1 is being sent',
     });
     expect(firstResponse.status).toBe(200);
-    expect(
-      server.xClient.calls.filter((call) => call.name === 'createPost'),
-    ).toHaveLength(1);
+    expect(server.xClient.calls.filter((call) => call.name === 'createPost')).toHaveLength(1);
+  });
+});
+
+describe('scheduler tick', () => {
+  test('sends a due official post and leaves a due draft alone', async () => {
+    // Given: a connected account, a due draft, and a due official post
+    connectTestAccount(server);
+    await createPost({ text: 'One' });
+    await createPost({ text: 'Two', official: true });
+    setPost(1, { scheduledAt: new Date('2026-09-04T10:30:00Z') });
+    setPost(2, { scheduledAt: new Date('2026-09-04T10:30:00Z') });
+
+    // When: the tick runs after the time
+    await server.tick(new Date('2026-09-04T10:30:05Z'));
+
+    // Then: the official post is published and the draft is untouched
+    expect(await getPost(2)).toMatchObject({
+      status: 'published',
+      x_post_id: '2',
+      published_at: '2026-09-04T10:30:05.000Z',
+      scheduled_at: null,
+    });
+    expect(await getPost(1)).toMatchObject({
+      status: 'draft',
+      scheduled_at: '2026-09-04T10:30:00.000Z',
+    });
+    expect(server.xClient.calls.map((call) => call.name)).toEqual(['createPost']);
+    expect(server.xClient.calls[0]?.args[1]).toEqual({ text: 'Two' });
+  });
+
+  test('does not send before the schedule time', async () => {
+    // Given: a connected account and an official post scheduled ahead
+    connectTestAccount(server);
+    await createPost({ text: 'Two', official: true });
+    setPost(1, { scheduledAt: new Date('2026-09-04T10:30:00Z') });
+
+    // When: the tick runs one second early
+    await server.tick(new Date('2026-09-04T10:29:59Z'));
+
+    // Then: nothing was sent
+    expect(server.xClient.calls).toEqual([]);
+    expect((await getPost(1)).status).toBe('official');
+  });
+
+  test('leaves a due post alone while no account is connected now', async () => {
+    // Given: a post whose account was connected at its time but is gone now
+    connectTestAccount(server);
+    await createPost({ text: 'One', official: true });
+    setPost(1, { scheduledAt: new Date('2026-09-04T10:30:00Z') });
+    disconnectTestAccount(server, new Date('2026-09-04T10:31:00Z'));
+
+    // When: the tick runs after the disconnect
+    await server.tick(new Date('2026-09-04T10:32:00Z'));
+
+    // Then: nothing was sent and the row is unchanged
+    expect(server.xClient.calls).toEqual([]);
+    expect(await getPost(1)).toMatchObject({
+      status: 'official',
+      retry_count: 0,
+      last_error: null,
+    });
+  });
+
+  test("never sends a due post whose time fell outside the account's connected window", async () => {
+    // Given: a post scheduled before the account was connected
+    connectTestAccount(server);
+    await createPost({ text: 'One', official: true });
+    setPost(1, { scheduledAt: new Date('2026-09-04T09:00:00Z') });
+
+    // When: the tick runs after the account connected
+    await server.tick(new Date('2026-09-04T10:05:00Z'));
+
+    // Then: nothing was sent
+    expect(server.xClient.calls).toEqual([]);
+    expect((await getPost(1)).status).toBe('official');
+  });
+
+  test('retries at +1, +5, +15 from the schedule time, then fails with the error and keeps the time', async () => {
+    // Given: a connected account, a due official post, and a send that always fails
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    setPost(1, { scheduledAt: new Date('2026-09-04T10:30:00Z') });
+    server.xClient.createPostError = new XError('http', 503, 'Service Unavailable');
+
+    // When: ticks run at the schedule time and around each retry offset
+    const createPostCalls = () =>
+      server.xClient.calls.filter((call) => call.name === 'createPost').length;
+    await server.tick(new Date('2026-09-04T10:30:00Z'));
+    expect(createPostCalls()).toBe(1);
+    await server.tick(new Date('2026-09-04T10:30:30Z'));
+    expect(createPostCalls()).toBe(1);
+    await server.tick(new Date('2026-09-04T10:31:00Z'));
+    expect(createPostCalls()).toBe(2);
+    await server.tick(new Date('2026-09-04T10:34:59Z'));
+    expect(createPostCalls()).toBe(2);
+    await server.tick(new Date('2026-09-04T10:35:00Z'));
+    expect(createPostCalls()).toBe(3);
+    await server.tick(new Date('2026-09-04T10:45:00Z'));
+    expect(createPostCalls()).toBe(4);
+
+    // Then: the post is failed with the error and its schedule time kept
+    expect(await getPost(1)).toMatchObject({
+      status: 'failed',
+      last_error: 'Service Unavailable',
+      retry_count: 4,
+      scheduled_at: '2026-09-04T10:30:00.000Z',
+    });
+    expect(await monthCostUsd()).toBe(0);
+  });
+
+  test('a retry that succeeds publishes the post', async () => {
+    // Given: a due official post whose first send fails
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    setPost(1, { scheduledAt: new Date('2026-09-04T10:30:00Z') });
+    server.xClient.createPostError = new XError('http', 503, 'Service Unavailable');
+
+    // When: the first attempt fails and the retry at +1 succeeds
+    await server.tick(new Date('2026-09-04T10:30:00Z'));
+    server.xClient.createPostError = null;
+    await server.tick(new Date('2026-09-04T10:31:00Z'));
+
+    // Then: the post is published and the count keeps the failed try
+    expect(await getPost(1)).toMatchObject({
+      status: 'published',
+      retry_count: 1,
+      scheduled_at: null,
+      last_error: null,
+    });
+    expect(server.xClient.calls.filter((call) => call.name === 'createPost')).toHaveLength(2);
+  });
+
+  test('never touches published or failed posts', async () => {
+    // Given: a connected account, a published post, and a failed post, both timed
+    connectTestAccount(server);
+    await createPost({ text: 'One' });
+    await createPost({ text: 'Two' });
+    setPost(1, { status: 'published', scheduledAt: new Date('2026-09-04T10:30:00Z') });
+    setPost(2, {
+      status: 'failed',
+      scheduledAt: new Date('2026-09-04T10:30:00Z'),
+      retryCount: 4,
+      lastError: 'old',
+    });
+
+    // When: the tick runs past the time
+    await server.tick(new Date('2026-09-04T10:31:00Z'));
+
+    // Then: nothing was sent and both rows are unchanged
+    expect(server.xClient.calls).toEqual([]);
+    expect(await getPost(2)).toMatchObject({
+      status: 'failed',
+      retry_count: 4,
+      last_error: 'old',
+    });
+    expect((await getPost(1)).status).toBe('published');
+  });
+
+  test('does not send a post claimed by an overlapping tick', async () => {
+    // Given: a connected account, a due official post, and a send that waits on a gate
+    connectTestAccount(server);
+    await createPost({ text: 'One', official: true });
+    setPost(1, { scheduledAt: new Date('2026-09-04T10:30:00Z') });
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+
+    // When: two ticks overlap on the same due post
+    const first = server.tick(new Date('2026-09-04T10:31:00Z'));
+    await server.tick(new Date('2026-09-04T10:31:00Z'));
+    release();
+    await first;
+
+    // Then: the send happened once and the post is published
+    expect(server.xClient.calls.filter((call) => call.name === 'createPost')).toHaveLength(1);
+    expect((await getPost(1)).status).toBe('published');
   });
 });

@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import {
   estimateCost,
+  nextAttemptAt,
   type Post,
   PUBLISH_FROM,
   X_COSTS_USD,
@@ -14,7 +15,7 @@ import type { Clock } from '../clock';
 import type { Db } from '../db';
 import { logApiCall } from '../db/apiCalls';
 import { mediaRowsForPost } from '../db/postMedia';
-import { getPost, getPostRow, PostStatusError, promotePosts } from '../db/posts';
+import { duePosts, getPost, getPostRow, PostStatusError, promotePosts } from '../db/posts';
 import { posts } from '../db/schema';
 import type { XAccountRow } from '../db/xAccounts';
 import { ApiError } from '../errors';
@@ -24,6 +25,7 @@ import type { XClient } from './client';
 
 export interface PublishService {
   publishNow(userId: number, id: number): Promise<Post | null>;
+  sendDue(now: Date): Promise<void>;
 }
 
 type SendResult = { ok: true } | { ok: false; message: string };
@@ -74,6 +76,7 @@ export function createPublishService(deps: {
             xAccountId: account.id,
             xPostId: created.id,
             scheduledAt: null,
+            nextAttemptAt: null,
             lastError: null,
             updatedAt: now,
           })
@@ -136,6 +139,41 @@ export function createPublishService(deps: {
         return getPost(deps.db, userId, id);
       } finally {
         inFlight.delete(id);
+      }
+    },
+
+    async sendDue(now) {
+      for (const row of duePosts(deps.db, now)) {
+        if (inFlight.has(row.id)) continue;
+        inFlight.add(row.id);
+        try {
+          let account: XAccountRow;
+          let accessToken: string;
+          try {
+            ({ account, accessToken } = await deps.accounts.accessTokenFor(row.userId));
+          } catch (error) {
+            if (error instanceof ApiError) continue;
+            throw error;
+          }
+          const sent = await send(row, account, accessToken, now);
+          if (!sent.ok) {
+            const failedAttempts = row.retryCount + 1;
+            const next = nextAttemptAt(row.scheduledAt!, failedAttempts);
+            deps.db
+              .update(posts)
+              .set({
+                retryCount: failedAttempts,
+                lastError: sent.message,
+                nextAttemptAt: next,
+                updatedAt: now,
+                ...(next === null ? { status: 'failed' as const } : {}),
+              })
+              .where(eq(posts.id, row.id))
+              .run();
+          }
+        } finally {
+          inFlight.delete(row.id);
+        }
       }
     },
   };
