@@ -28,6 +28,7 @@ import { toast } from './Toast';
 const DRAWER_PAGE_SIZE = 20;
 
 function insertableText(resource: Resource): string {
+  if (resource.type !== 'md') return '';
   return resource.body
     .replace(/^# .*\n+/, '')
     .replace(/[#*`>]/g, '')
@@ -44,6 +45,7 @@ export function ResourcesDrawer(props: {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [type, setType] = useState<'all' | 'md'>('all');
   const [viewId, setViewId] = useState<number | null>(null);
 
 
@@ -55,6 +57,7 @@ export function ResourcesDrawer(props: {
       setViewId(null);
       setSearch('');
       setDebouncedSearch('');
+      setType('all');
     }
   }, [props.open]);
 
@@ -66,9 +69,10 @@ export function ResourcesDrawer(props: {
   const filters = useMemo(
     () => ({
       ...(debouncedSearch !== '' ? { search: debouncedSearch } : {}),
+      ...(type === 'md' ? { type: 'md' as const } : {}),
       order: 'desc' as const,
     }),
-    [debouncedSearch],
+    [debouncedSearch, type],
   );
   const resources = useResources(filters, DRAWER_PAGE_SIZE);
   const items = resources.data?.pages.flatMap((page) => page.items) ?? [];
@@ -185,7 +189,7 @@ export function ResourcesDrawer(props: {
             {viewed && (
               <>
                 <div className="body">
-                  <Markdown body={viewed.body} />
+                  <Markdown body={viewed.type === 'md' ? viewed.body : ''} />
                   {viewed.notes !== '' && (
                     <div className="note" style={{ marginTop: 10 }}>
                       <b>Your note.</b> {viewed.notes}
@@ -217,15 +221,21 @@ export function ResourcesDrawer(props: {
               />
             </div>
             <div className="seg icons" role="group" aria-label="Type">
-              <button type="button" aria-label="All" title="All" aria-pressed>
+              <button
+                type="button"
+                aria-label="All"
+                title="All"
+                aria-pressed={type === 'all'}
+                onClick={() => setType('all')}
+              >
                 <LayoutGrid size={16} strokeWidth={1.75} />
               </button>
               <button
                 type="button"
                 aria-label="Notes"
                 title="Notes"
-                aria-pressed={false}
-                disabled
+                aria-pressed={type === 'md'}
+                onClick={() => setType('md')}
               >
                 <FileText size={16} strokeWidth={1.75} />
               </button>

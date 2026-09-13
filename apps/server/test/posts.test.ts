@@ -4,7 +4,7 @@ import type { Post, PostList, Resource } from '@perch/core';
 import { eq } from 'drizzle-orm';
 
 import { openDb } from '../src/db';
-import { postLinks, posts } from '../src/db/schema';
+import { postLinks, posts, xAccounts } from '../src/db/schema';
 import { createTestServer, type TestServer } from '../src/testing';
 
 let server: TestServer;
@@ -372,6 +372,27 @@ describe('posts', () => {
       body: JSON.stringify({ text: 'changed' }),
     });
     expect(patched.status).toBe(400);
+  });
+
+  test('reports the connected Premium plan limit', async () => {
+    await createPost({ text: 'hi' });
+    const { db, sqlite } = openDb(path.join(server.dir, 'perch.db'));
+    db.insert(xAccounts)
+      .values({
+        userId: 1,
+        xUserId: '1000',
+        username: 'perchtester',
+        subscriptionType: 'Premium',
+        accessToken: 'a',
+        refreshToken: 'r',
+        expiresAt: new Date('2027-01-01T00:00:00Z'),
+        connectedAt: new Date('2026-09-04T10:00:00Z'),
+      })
+      .run();
+    sqlite.close();
+
+    const post = await request('/api/posts/1');
+    expect((await post.json()).limit).toBe(25_000);
   });
 
   test('rejects link changes on published posts', async () => {

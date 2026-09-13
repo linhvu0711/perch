@@ -119,28 +119,34 @@ export function PostModal(): JSX.Element | null {
     return createRef.current;
   }, [createPost, navigate]);
 
-  const flush = useCallback(async () => {
-    const patch = pendingRef.current;
-    pendingRef.current = {};
-    let id = currentId;
-    if (id === undefined) {
+  const queueRef = useRef<Promise<void>>(Promise.resolve());
+
+  const flush = useCallback((): Promise<void> => {
+    queueRef.current = queueRef.current.then(async () => {
+      const patch = pendingRef.current;
       const hasChanges =
         patch.title !== undefined || patch.text !== undefined;
-      if (!hasChanges && createRef.current === null) return;
-      try {
-        id = (await ensureCreated()).id;
-      } catch (error) {
-        toast(errorMessage(error), 'warn');
-        return;
+      let id = currentId;
+      if (id === undefined) {
+        if (!hasChanges && createRef.current === null) return;
+        try {
+          id = (await ensureCreated()).id;
+        } catch (error) {
+          toast(errorMessage(error), 'warn');
+          return;
+        }
       }
-    }
-    if (patch.title === undefined && patch.text === undefined) return;
-    try {
-      await updatePost.mutateAsync({ id, patch });
-      savedRef.current = true;
-    } catch (error) {
-      toast(errorMessage(error), 'warn');
-    }
+      if (!hasChanges) return;
+      pendingRef.current = {};
+      try {
+        await updatePost.mutateAsync({ id, patch });
+        savedRef.current = true;
+      } catch (error) {
+        pendingRef.current = { ...patch, ...pendingRef.current };
+        toast(errorMessage(error), 'warn');
+      }
+    });
+    return queueRef.current;
   }, [currentId, ensureCreated, updatePost]);
 
   const requestClose = useCallback(() => {
@@ -154,11 +160,16 @@ export function PostModal(): JSX.Element | null {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') requestClose();
+      if (event.key !== 'Escape') return;
+      if (confirm !== null) {
+        setConfirm(null);
+        return;
+      }
+      requestClose();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [requestClose]);
+  }, [confirm, requestClose]);
 
   const scheduleSave = useCallback(
     (patch: { title?: string; text?: string }) => {

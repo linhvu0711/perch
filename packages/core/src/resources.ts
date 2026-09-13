@@ -19,7 +19,7 @@ export const noteResourceSchema = z.object({
   notes: z.string(),
   created_at: z.string(),
   body: z.string(),
-  used_by: z.number().int().nonnegative(),
+  used_by: z.number().int().nonnegative().optional(),
 });
 export const IMAGE_MIME_TYPES = [
   'image/png',

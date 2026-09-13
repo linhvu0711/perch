@@ -1,6 +1,6 @@
 import {
-  CHAR_LIMIT_DEFAULT,
   dayBoundsUtc,
+  effectiveCharLimit,
   estimateCost,
   postListTitle,
   previewSegments,
@@ -20,6 +20,7 @@ import { and, asc, count, desc, eq, inArray, or, sql, type SQL } from 'drizzle-o
 import { decodePostCursor, encodePostCursor } from './cursor';
 import type { Db } from './index';
 import { getSettings } from './settings';
+import { getConnectedAccount } from './xAccounts';
 import { postLinks, posts, resources } from './schema';
 
 export class InvalidPostCursorError extends Error {}
@@ -61,7 +62,10 @@ function toPost(row: PostRow, links: PostLink[], limit: number): Post {
 }
 
 function postLimit(db: Db, userId: number): number {
-  return getSettings(db, userId).char_limit_override ?? CHAR_LIMIT_DEFAULT;
+  return effectiveCharLimit(
+    getSettings(db, userId).char_limit_override,
+    getConnectedAccount(db, userId)?.subscriptionType ?? null,
+  );
 }
 
 function linksForPosts(db: Db, postIds: number[]): Map<number, PostLink[]> {

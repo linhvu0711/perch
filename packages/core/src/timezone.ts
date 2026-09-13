@@ -35,6 +35,18 @@ function zoneOffsetMs(instant: Date, timeZone: string): number {
   return asUtc - instant.getTime();
 }
 
+function localDay(instant: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(instant);
+  const get = (type: string) =>
+    parts.find((part) => part.type === type)!.value;
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
 /** UTC bounds [start, end] of a `YYYY-MM-DD` calendar day in `timeZone`, inclusive. */
 export function dayBoundsUtc(
   day: string,
@@ -44,6 +56,13 @@ export function dayBoundsUtc(
     const guess = new Date(Date.UTC(y, m - 1, d));
     let start = new Date(guess.getTime() - zoneOffsetMs(guess, timeZone));
     start = new Date(guess.getTime() - zoneOffsetMs(start, timeZone));
+    // Zones whose clocks jump at local midnight have no 00:00; walk forward
+    // to the first instant that actually falls on the requested day.
+    const wanted = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    let guard = 0;
+    while (localDay(start, timeZone) < wanted && guard++ < 1500) {
+      start = new Date(start.getTime() + 60_000);
+    }
     return start;
   };
 
