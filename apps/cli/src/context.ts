@@ -27,7 +27,7 @@ export interface CliContext {
 
 export function realContext(
   argv: string[],
-  env: Record<string, string | undefined> = process.env,
+  env: Record<string, string | undefined>,
 ): CliContext {
   const parsed = parseCliEnv(env);
   return {

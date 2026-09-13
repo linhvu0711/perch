@@ -7,7 +7,7 @@ import { CliError } from './output';
 if (import.meta.main) {
   const argv = process.argv.slice(2);
   try {
-    const code = await runCli(argv, realContext(argv));
+    const code = await runCli(argv, realContext(argv, process.env));
     process.exit(code);
   } catch (error) {
     if (error instanceof CliError) {
