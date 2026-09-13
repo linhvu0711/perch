@@ -29,10 +29,15 @@ export function applyMirror(
   const manifestPath = path.join(dir, MIRROR_MANIFEST_FILE);
   let old: MirrorManifest = { pulled_at: null, paths: [] };
   if (fs.existsSync(manifestPath)) {
-    const parsed = mirrorManifestSchema.safeParse(
-      JSON.parse(fs.readFileSync(manifestPath, 'utf8')),
-    );
-    if (!parsed.success) {
+    let parsed: ReturnType<typeof mirrorManifestSchema.safeParse> | null = null;
+    try {
+      parsed = mirrorManifestSchema.safeParse(
+        JSON.parse(fs.readFileSync(manifestPath, 'utf8')),
+      );
+    } catch {
+      // syntax or read error: treated as an invalid manifest below
+    }
+    if (!parsed?.success) {
       throw new CliError(
         'bad_manifest',
         `Manifest at ${manifestPath} is not valid; delete it to start over`,
@@ -78,9 +83,11 @@ export function applyMirror(
     else added += 1;
   }
 
+  const root = path.resolve(dir);
   for (const p of old.paths) {
     if (nextPaths.includes(p)) continue;
-    const full = path.join(dir, p);
+    const full = path.resolve(root, p);
+    if (!full.startsWith(`${root}${path.sep}`)) continue;
     if (fs.existsSync(full)) {
       fs.rmSync(full);
       removed += 1;

@@ -24,10 +24,14 @@ export function addStatusCommands(program: Command, ctx: CliContext): void {
       let manifest: MirrorManifest | null = null;
       const manifestPath = path.join(dir, MIRROR_MANIFEST_FILE);
       if (fs.existsSync(manifestPath)) {
-        const parsed = mirrorManifestSchema.safeParse(
-          JSON.parse(fs.readFileSync(manifestPath, 'utf8')),
-        );
-        manifest = parsed.success ? parsed.data : null;
+        try {
+          const parsed = mirrorManifestSchema.safeParse(
+            JSON.parse(fs.readFileSync(manifestPath, 'utf8')),
+          );
+          manifest = parsed.success ? parsed.data : null;
+        } catch {
+          manifest = null;
+        }
       }
 
       printResult(ctx, mode, {
