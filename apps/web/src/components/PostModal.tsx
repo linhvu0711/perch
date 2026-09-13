@@ -227,11 +227,9 @@ export function PostModal(): JSX.Element | null {
     [currentId, detachMedia],
   );
 
-  const mediaCaption = useCallback(
+  const mediaTitle = useCallback(
     (media: PostMedia): string =>
-      media.from_resource_id !== null
-        ? `From ${linkTitle(media.from_resource_id)}`
-        : 'Uploaded file',
+      media.from_resource_id !== null ? linkTitle(media.from_resource_id) : 'Uploaded file',
     [linkTitle],
   );
 
@@ -427,7 +425,7 @@ export function PostModal(): JSX.Element | null {
                         </button>
                       );
                     }
-                    const caption = mediaCaption(media);
+                    const caption = mediaTitle(media);
                     return (
                       // biome-ignore lint/a11y/useSemanticElements: holds a nested remove button
                       <div
@@ -435,7 +433,11 @@ export function PostModal(): JSX.Element | null {
                         className="slot filled"
                         role="button"
                         tabIndex={0}
-                        title={`${caption}. Click to view.`}
+                        title={
+                          media.from_resource_id !== null
+                            ? `From ${caption}. Click to view.`
+                            : 'Uploaded file. Click to view.'
+                        }
                         onClick={() => setLightbox(media)}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter') setLightbox(media);
@@ -450,7 +452,7 @@ export function PostModal(): JSX.Element | null {
                             type="button"
                             className="x"
                             title="Remove"
-                            aria-label="Remove image"
+                            aria-label={`Remove image ${media.position}`}
                             onClick={(event) => {
                               event.stopPropagation();
                               if (media.from_resource_id !== null) {
@@ -581,7 +583,7 @@ export function PostModal(): JSX.Element | null {
       {lightbox !== null && (
         <Lightbox
           src={`/api/posts/${viewPost.id}/media/${lightbox.id}/file`}
-          caption={mediaCaption(lightbox)}
+          caption={mediaTitle(lightbox)}
           onClose={() => setLightbox(null)}
         />
       )}

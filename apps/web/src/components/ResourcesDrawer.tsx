@@ -1,4 +1,5 @@
 import type { Post, Resource } from '@perch/core';
+import { IMAGE_BYTES_MAX, IMAGE_MIME_TYPES } from '@perch/core';
 import {
   ArrowLeft,
   ExternalLink,
@@ -33,6 +34,14 @@ import { toast } from './Toast';
 
 const DRAWER_PAGE_SIZE = 20;
 
+function precheck(file: File): string | null {
+  if (file.size > IMAGE_BYTES_MAX) return 'Over 5 MB';
+  if (!(IMAGE_MIME_TYPES as readonly string[]).includes(file.type)) {
+    return 'Only PNG, JPG, WebP, or GIF';
+  }
+  return null;
+}
+
 function insertableText(resource: Resource): string {
   if (resource.type !== 'md') return '';
   return resource.body
@@ -44,7 +53,7 @@ function insertableText(resource: Resource): string {
 export function ResourcesDrawer(props: {
   post: Post | null;
   open: boolean;
-  initialType?: 'all' | 'image';
+  initialType?: 'all' | 'md' | 'image';
   onClose(): void;
   onInsertText(text: string): void;
   ensurePostId?(): Promise<number | null>;
@@ -118,26 +127,61 @@ export function ResourcesDrawer(props: {
 
   const attach = (resource: Resource) => {
     void (async () => {
-      if (mediaCount >= 4) {
-        toast('4 images max', 'warn');
-        return;
-      }
       const postId = props.post?.id ?? (await props.ensurePostId?.());
       if (postId === undefined || postId === null) return;
-      act(() => attachMedia.mutateAsync({ id: postId, resource_ids: [resource.id] }), 'Attached');
+      try {
+        const response = await attachMedia.mutateAsync({
+          id: postId,
+          resource_ids: [resource.id],
+        });
+        const result = response.results[0];
+        if (result !== undefined && result.ok) {
+          toast(`Attached ${resource.title}`);
+        } else if (result !== undefined && !result.ok) {
+          toast(result.error.message, 'warn');
+        }
+      } catch (error) {
+        toast(errorMessage(error), 'warn');
+      }
     })();
   };
 
-  const uploadToPost = (files: FileList | null) => {
+  const uploadToPost = (incoming: FileList | null) => {
     void (async () => {
-      if (!files || files.length === 0) return;
-      if (mediaCount + files.length > 4) {
-        toast('4 images max', 'warn');
-        return;
+      if (!incoming || incoming.length === 0) return;
+      const files: File[] = [];
+      let overflow = false;
+      for (const file of incoming) {
+        const bad = precheck(file);
+        if (bad !== null) {
+          toast(`${file.name}: ${bad}`, 'warn');
+          continue;
+        }
+        if (mediaCount + files.length >= 4) {
+          overflow = true;
+          break;
+        }
+        files.push(file);
       }
+      if (overflow) toast('4 images max', 'warn');
+      if (files.length === 0) return;
       const postId = props.post?.id ?? (await props.ensurePostId?.());
       if (postId === undefined || postId === null) return;
-      act(() => attachFiles.mutateAsync({ id: postId, files: [...files] }), 'Image uploaded');
+      try {
+        const response = await attachFiles.mutateAsync({ id: postId, files });
+        const failed = response.results.filter((result) => !result.ok);
+        const okCount = response.results.length - failed.length;
+        if (okCount === 1) {
+          const ok = response.results.find((result) => result.ok);
+          if (ok !== undefined) toast(`Attached ${ok.name}`);
+        } else if (okCount > 1) {
+          toast(`Attached ${okCount} images`);
+        }
+        const first = failed[0];
+        if (first !== undefined && !first.ok) toast(first.error.message, 'warn');
+      } catch (error) {
+        toast(errorMessage(error), 'warn');
+      }
     })();
   };
 
