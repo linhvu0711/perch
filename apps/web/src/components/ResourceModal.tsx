@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { firstMarkdownHeading, noteTitle } from '@perch/core';
-import { Check, FileText, Pencil, Trash2, Undo2, X } from 'lucide-react';
+import { Check, FileText, Image, Pencil, Trash2, Undo2, X } from 'lucide-react';
 import { useBlocker, useNavigate, useParams } from 'react-router';
 
 import { ApiError, errorMessage } from '@/lib/api';
-import { formatDateTime, wordCount } from '@/lib/format';
+import { formatBytes, formatDateTime, wordCount } from '@/lib/format';
 import {
   useCreateNote,
   useDeleteResources,
@@ -184,7 +184,8 @@ export function ResourceModal(): JSX.Element | null {
 
   async function save(): Promise<void> {
     if (saving) return;
-    const title = noteTitle(bodyDraft, titleDraft);
+    const isImage = !isNew && resource?.type === 'image';
+    const title = isImage ? titleDraft : noteTitle(bodyDraft, titleDraft);
     try {
       if (isNew) {
         const data = await createNote.mutateAsync({
@@ -199,9 +200,9 @@ export function ResourceModal(): JSX.Element | null {
       } else if (parsedId !== null) {
         await updateResource.mutateAsync({
           id: parsedId,
-          patch: { title, body: bodyDraft },
+          patch: isImage ? { title } : { title, body: bodyDraft },
         });
-        toast('Note saved');
+        toast(isImage ? 'Image saved' : 'Note saved');
         setIsEditing(false);
       }
     } catch (error) {
@@ -292,8 +293,10 @@ export function ResourceModal(): JSX.Element | null {
 
   if (!isNew && !resource) return null;
 
+  const isImage = resource?.type === 'image';
   const displayedBody = isEditing ? bodyDraft : resource?.type === 'md' ? resource.body : '';
   const displayedTitle = isEditing ? titleDraft : resource?.title ?? '';
+  const editingNote = isEditing && resource?.type === 'md';
 
   return (
     <>
@@ -305,13 +308,25 @@ export function ResourceModal(): JSX.Element | null {
           className="modal"
           role="dialog"
           aria-modal="true"
-          aria-label={displayedTitle || 'Note'}
+          aria-label={displayedTitle || (isImage ? 'Image' : 'Note')}
           tabIndex={-1}
           ref={modalRef}
         >
           <div className="mhead">
             <span className="id">{isNew ? 'new' : `#${parsedId}`}</span>
-            <span className="kind"><FileText />Note</span>
+            <span className="kind">
+              {isImage ? (
+                <>
+                  <Image />
+                  Image
+                </>
+              ) : (
+                <>
+                  <FileText />
+                  Note
+                </>
+              )}
+            </span>
             {isEditing ? (
               <input
                 className="rtitle"
@@ -338,7 +353,7 @@ export function ResourceModal(): JSX.Element | null {
                     onClick={requestDiscard}
                   />
                   <IconButton
-                    label="Save note"
+                    label={isImage ? 'Save image' : 'Save note'}
                     icon={Check}
                     variant="primary"
                     size="sm"
@@ -349,7 +364,12 @@ export function ResourceModal(): JSX.Element | null {
                 </>
               ) : (
                 <>
-                  <IconButton label="Edit note" icon={Pencil} size="sm" onClick={startEditing} />
+                  <IconButton
+                    label={isImage ? 'Edit title' : 'Edit note'}
+                    icon={Pencil}
+                    size="sm"
+                    onClick={startEditing}
+                  />
                   <IconButton
                     label="Delete resource"
                     icon={Trash2}
@@ -365,7 +385,7 @@ export function ResourceModal(): JSX.Element | null {
           </div>
           <div className="rbody">
             <div
-              className={isEditing ? 'rmain editing' : 'rmain'}
+              className={editingNote ? 'rmain editing' : 'rmain'}
               onKeyDown={(event) => {
                 if (isEditing && event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                   event.preventDefault();
@@ -373,7 +393,13 @@ export function ResourceModal(): JSX.Element | null {
                 }
               }}
             >
-              {isEditing ? (
+              {isImage ? (
+                <img
+                  className="bigimg"
+                  src={`/api/resources/${parsedId}/file`}
+                  alt={displayedTitle}
+                />
+              ) : editingNote ? (
                 <NoteEditor body={bodyDraft} onChange={changeBody} />
               ) : displayedBody === '' ? (
                 <div className="muted">Empty note.</div>
@@ -385,7 +411,17 @@ export function ResourceModal(): JSX.Element | null {
               <div className="field">
                 <label>Details</label>
                 <div className="kv">
-                  <b>Words</b><span>{wordCount(displayedBody)}</span>
+                  {isImage ? (
+                    <>
+                      <b>File</b><span>{resource.title}</span>
+                      <b>Size</b><span>{formatBytes(resource.bytes)}</span>
+                      <b>Pixels</b><span>{resource.width} × {resource.height}</span>
+                      <b>Type</b><span>{resource.mime}</span>
+                    </>
+                  ) : (
+                    <b>Words</b>
+                  )}
+                  {!isImage && <span>{wordCount(displayedBody)}</span>}
                   <b>Saved</b><span>{isNew ? '—' : formatDateTime(resource!.created_at)}</span>
                   <b>Used in</b><span>0 posts</span>
                 </div>
