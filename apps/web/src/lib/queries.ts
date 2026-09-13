@@ -211,6 +211,8 @@ export function useDeleteResources() {
               queryKey: ['resources', 'detail', result.id],
               refetchType: 'none',
             })
+            // A dropped invalidation leaves stale detail data that refetches
+            // (and 404-redirects) on next view, so silence is acceptable here.
             .catch(() => undefined);
         }
       }
@@ -302,6 +304,8 @@ export function useDeletePosts() {
               queryKey: ['posts', 'detail', result.id],
               refetchType: 'none',
             })
+            // Same tradeoff as resource detail: a missed invalidation surfaces
+            // as a one-time 404 redirect on next view.
             .catch(() => undefined);
         }
       }
