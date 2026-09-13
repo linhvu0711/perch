@@ -1,5 +1,5 @@
-import { useSyncExternalStore } from 'react';
 import { Check, TriangleAlert } from 'lucide-react';
+import { useSyncExternalStore } from 'react';
 
 type ToastValue = { message: string; icon: 'check' | 'warn'; id: number } | null;
 

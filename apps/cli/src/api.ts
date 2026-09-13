@@ -11,19 +11,13 @@ interface JsonResponse<T> {
   json(): Promise<T>;
 }
 
-export function createApi(
-  ctx: CliContext,
-  serverUrl: string,
-  token: string | undefined,
-) {
+export function createApi(ctx: CliContext, serverUrl: string, token: string | undefined) {
   const client = hc<AppType>(serverUrl, {
     fetch: ctx.fetch,
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 
-  async function resolve<R extends { ok: boolean }>(
-    responsePromise: Promise<R>,
-  ): Promise<R> {
+  async function resolve<R extends { ok: boolean }>(responsePromise: Promise<R>): Promise<R> {
     try {
       return await responsePromise;
     } catch (error) {
@@ -59,10 +53,7 @@ export function createApi(
         try {
           return await response.json();
         } catch {
-          throw new CliError(
-            'bad_response',
-            `Server at ${serverUrl} did not return JSON`,
-          );
+          throw new CliError('bad_response', `Server at ${serverUrl} did not return JSON`);
         }
       }
 

@@ -5,11 +5,7 @@ import type { Db } from './index';
 import { settings } from './schema';
 
 export function getSettings(db: Db, userId: number): Settings {
-  const row = db
-    .select()
-    .from(settings)
-    .where(eq(settings.userId, userId))
-    .get();
+  const row = db.select().from(settings).where(eq(settings.userId, userId)).get();
 
   if (!row) throw new Error('settings row missing');
 
@@ -19,11 +15,7 @@ export function getSettings(db: Db, userId: number): Settings {
   };
 }
 
-export function updateSettings(
-  db: Db,
-  userId: number,
-  patch: SettingsPatch,
-): Settings {
+export function updateSettings(db: Db, userId: number, patch: SettingsPatch): Settings {
   db.update(settings)
     .set({
       ...(patch.timezone !== undefined ? { timezone: patch.timezone } : {}),

@@ -1,5 +1,5 @@
-import type { ButtonHTMLAttributes } from 'react';
 import type { LucideIcon } from 'lucide-react';
+import type { ButtonHTMLAttributes } from 'react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';

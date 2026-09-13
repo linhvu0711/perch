@@ -22,8 +22,7 @@ function zoneOffsetMs(instant: Date, timeZone: string): number {
     minute: '2-digit',
     second: '2-digit',
   }).formatToParts(instant);
-  const get = (type: string) =>
-    Number(parts.find((part) => part.type === type)!.value);
+  const get = (type: string) => Number(parts.find((part) => part.type === type)!.value);
   const asUtc = Date.UTC(
     get('year'),
     get('month') - 1,
@@ -42,16 +41,12 @@ function localDay(instant: Date, timeZone: string): string {
     month: '2-digit',
     day: '2-digit',
   }).formatToParts(instant);
-  const get = (type: string) =>
-    parts.find((part) => part.type === type)!.value;
+  const get = (type: string) => parts.find((part) => part.type === type)!.value;
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
 /** UTC bounds [start, end] of a `YYYY-MM-DD` calendar day in `timeZone`, inclusive. */
-export function dayBoundsUtc(
-  day: string,
-  timeZone: string,
-): { start: Date; end: Date } {
+export function dayBoundsUtc(day: string, timeZone: string): { start: Date; end: Date } {
   const dayStart = (y: number, m: number, d: number): Date => {
     const guess = new Date(Date.UTC(y, m - 1, d));
     let start = new Date(guess.getTime() - zoneOffsetMs(guess, timeZone));
@@ -69,6 +64,8 @@ export function dayBoundsUtc(
   const [y, m, d] = day.split('-').map(Number) as [number, number, number];
   const start = dayStart(y, m, d);
   const next = new Date(Date.UTC(y, m - 1, d + 1));
-  const end = new Date(dayStart(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate()).getTime() - 1);
+  const end = new Date(
+    dayStart(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate()).getTime() - 1,
+  );
   return { start, end };
 }

@@ -1,26 +1,36 @@
-import type { MouseEvent, ReactNode } from 'react';
 import {
   Calendar,
   Feather,
   Folder,
   LayoutDashboard,
+  type LucideIcon,
   PanelLeft,
   PenLine,
   Settings,
-  type LucideIcon,
 } from 'lucide-react';
+import type { MouseEvent, ReactNode } from 'react';
 import { NavLink } from 'react-router';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAccount, useCounts } from '@/lib/queries';
 import { useSidebarCollapsed } from '@/lib/sidebar';
 
-function CollapsedTip({ collapsed, label, children }: { collapsed: boolean; label: string; children: ReactNode }) {
+function CollapsedTip({
+  collapsed,
+  label,
+  children,
+}: {
+  collapsed: boolean;
+  label: string;
+  children: ReactNode;
+}) {
   if (!collapsed) return children;
   return (
     <Tooltip>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side="right" sideOffset={8}>{label}</TooltipContent>
+      <TooltipContent side="right" sideOffset={8}>
+        {label}
+      </TooltipContent>
     </Tooltip>
   );
 }
@@ -47,7 +57,11 @@ function NavigationItem({
       {count !== undefined && <span className="count">{count}</span>}
     </NavLink>
   );
-  return <CollapsedTip collapsed={collapsed} label={label}>{link}</CollapsedTip>;
+  return (
+    <CollapsedTip collapsed={collapsed} label={label}>
+      {link}
+    </CollapsedTip>
+  );
 }
 
 export function Sidebar() {
@@ -66,7 +80,9 @@ export function Sidebar() {
   return (
     <aside className="side" onClick={expandFromSidebar}>
       <div className="brand">
-        <span className="logo"><Feather size={16} strokeWidth={1.75} /></span>
+        <span className="logo">
+          <Feather size={16} strokeWidth={1.75} />
+        </span>
         <span className="name">Perch</span>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -87,8 +103,20 @@ export function Sidebar() {
       </div>
 
       <NavigationItem to="/" end label="Dashboard" icon={LayoutDashboard} collapsed={collapsed} />
-      <NavigationItem to="/posts" label="Posts" icon={PenLine} count={counts.posts} collapsed={collapsed} />
-      <NavigationItem to="/resources" label="Resources" icon={Folder} count={counts.resources} collapsed={collapsed} />
+      <NavigationItem
+        to="/posts"
+        label="Posts"
+        icon={PenLine}
+        count={counts.posts}
+        collapsed={collapsed}
+      />
+      <NavigationItem
+        to="/resources"
+        label="Resources"
+        icon={Folder}
+        count={counts.resources}
+        collapsed={collapsed}
+      />
       <NavigationItem to="/calendar" label="Calendar" icon={Calendar} collapsed={collapsed} />
       <NavigationItem to="/settings" label="Settings" icon={Settings} collapsed={collapsed} />
 
@@ -109,7 +137,9 @@ export function Sidebar() {
         ) : (
           <>
             <span className="avatar none" />
-            <div className="who">No X account<small>Connect in Settings</small></div>
+            <div className="who">
+              No X account<small>Connect in Settings</small>
+            </div>
           </>
         )}
       </div>

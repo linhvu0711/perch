@@ -40,10 +40,7 @@ export function writeConfig(configPath: string, config: LocalConfig): void {
   fs.renameSync(temporaryPath, configPath);
 }
 
-export function resolveServerUrl(
-  ctx: CliContext,
-  flagValue?: string,
-): string {
+export function resolveServerUrl(ctx: CliContext, flagValue?: string): string {
   const value =
     flagValue ??
     ctx.env.PERCH_SERVER_URL ??
@@ -56,10 +53,7 @@ export function resolveToken(ctx: CliContext): string | undefined {
   return ctx.env.PERCH_TOKEN ?? readConfig(ctx.configPath).token;
 }
 
-export function resolveMirrorDir(
-  ctx: CliContext,
-  flagValue?: string,
-): string {
+export function resolveMirrorDir(ctx: CliContext, flagValue?: string): string {
   return (
     flagValue ??
     readConfig(ctx.configPath)['mirror-dir'] ??

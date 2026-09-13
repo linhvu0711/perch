@@ -52,11 +52,7 @@ export function addAuthCommands(program: Command, ctx: CliContext): void {
         });
       } catch (error) {
         if (error instanceof CliError && error.code === 'unauthorized') {
-          throw new CliError(
-            'unauthorized',
-            `Token is not valid for ${serverUrl}`,
-            3,
-          );
+          throw new CliError('unauthorized', `Token is not valid for ${serverUrl}`, 3);
         }
         throw error;
       }

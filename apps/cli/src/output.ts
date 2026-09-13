@@ -19,10 +19,7 @@ export class BatchFailure extends CliError {
 
 export type OutputMode = 'json' | 'table';
 
-export function resolveMode(
-  opts: { json?: boolean; table?: boolean },
-  isTTY: boolean,
-): OutputMode {
+export function resolveMode(opts: { json?: boolean; table?: boolean }, isTTY: boolean): OutputMode {
   if (opts.json) return 'json';
   if (opts.table) return 'table';
   return isTTY ? 'table' : 'json';
@@ -65,33 +62,20 @@ export function formatTable(value: unknown): string {
     const entries = Object.entries(value);
     const maxKeyLength = Math.max(0, ...entries.map(([key]) => key.length));
     return entries
-      .map(
-        ([key, entryValue]) =>
-          `${key.padEnd(maxKeyLength + 2)}${formatValue(entryValue)}`,
-      )
+      .map(([key, entryValue]) => `${key.padEnd(maxKeyLength + 2)}${formatValue(entryValue)}`)
       .join('\n');
   }
 
   return formatValue(value);
 }
 
-export function printResult(
-  ctx: CliContext,
-  mode: OutputMode,
-  value: unknown,
-): void {
+export function printResult(ctx: CliContext, mode: OutputMode, value: unknown): void {
   ctx.stdout.write(
-    mode === 'json'
-      ? `${JSON.stringify(value, null, 2)}\n`
-      : `${formatTable(value)}\n`,
+    mode === 'json' ? `${JSON.stringify(value, null, 2)}\n` : `${formatTable(value)}\n`,
   );
 }
 
-export function printError(
-  ctx: CliContext,
-  mode: OutputMode,
-  error: CliError,
-): void {
+export function printError(ctx: CliContext, mode: OutputMode, error: CliError): void {
   if (mode === 'json') {
     const body = error.errors
       ? { code: error.code, message: error.message, errors: error.errors }
@@ -100,8 +84,6 @@ export function printError(
     return;
   }
 
-  const details = error.errors?.map(
-    ({ path, message }) => `  ${path}: ${message}`,
-  ) ?? [];
+  const details = error.errors?.map(({ path, message }) => `  ${path}: ${message}`) ?? [];
   ctx.stderr.write([`Error: ${error.message}`, ...details].join('\n') + '\n');
 }

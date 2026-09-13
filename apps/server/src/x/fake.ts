@@ -15,8 +15,7 @@ export interface FakeXClient extends XClient {
 }
 
 export function fakeXClient(): FakeXClient {
-  const scope =
-    'tweet.read tweet.write users.read media.write offline.access';
+  const scope = 'tweet.read tweet.write users.read media.write offline.access';
   const fake: FakeXClient = {
     calls: [],
     me: {

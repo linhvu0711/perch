@@ -2,7 +2,7 @@ import { Database } from 'bun:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { drizzle, type BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
+import { type BunSQLiteDatabase, drizzle } from 'drizzle-orm/bun-sqlite';
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator';
 
 import * as schema from './schema';
@@ -25,10 +25,7 @@ export function migrateDb(db: Db): void {
 }
 
 export function seedDb(db: Db, now: Date): void {
-  db.insert(schema.users)
-    .values({ id: 1, createdAt: now })
-    .onConflictDoNothing()
-    .run();
+  db.insert(schema.users).values({ id: 1, createdAt: now }).onConflictDoNothing().run();
   db.insert(schema.settings)
     .values({ userId: 1, timezone: 'UTC', charLimitOverride: null })
     .onConflictDoNothing()

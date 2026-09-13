@@ -65,10 +65,7 @@ export function getUser(request: Request, token: string): User | null {
 
 export function authMiddleware(token: string): MiddlewareHandler<AuthEnv> {
   return async (c, next) => {
-    if (
-      c.req.path === '/api/auth/login' ||
-      c.req.path === '/api/auth/logout'
-    ) {
+    if (c.req.path === '/api/auth/login' || c.req.path === '/api/auth/logout') {
       await next();
       return;
     }

@@ -47,22 +47,16 @@ describe('account', () => {
 
     const body = await res.json();
     const url = new URL(body.authorize_url);
-    expect(url.origin + url.pathname).toBe(
-      'https://x.com/i/oauth2/authorize',
-    );
+    expect(url.origin + url.pathname).toBe('https://x.com/i/oauth2/authorize');
     expect(url.searchParams.get('response_type')).toBe('code');
     expect(url.searchParams.get('client_id')).toBe('test-client-id');
-    expect(url.searchParams.get('redirect_uri')).toBe(
-      'http://127.0.0.1:3000/auth/x/callback',
-    );
+    expect(url.searchParams.get('redirect_uri')).toBe('http://127.0.0.1:3000/auth/x/callback');
     expect(url.searchParams.get('scope')).toBe(
       'tweet.read tweet.write users.read media.write offline.access',
     );
     expect(url.searchParams.get('code_challenge_method')).toBe('S256');
     expect(url.searchParams.get('state')!.length).toBeGreaterThanOrEqual(32);
-    expect(
-      url.searchParams.get('code_challenge')!.length,
-    ).toBeGreaterThanOrEqual(32);
+    expect(url.searchParams.get('code_challenge')!.length).toBeGreaterThanOrEqual(32);
     expect(server.xClient.calls).toEqual([]);
   });
 
@@ -71,9 +65,7 @@ describe('account', () => {
     const { authorize_url } = await start.json();
     const state = new URL(authorize_url).searchParams.get('state')!;
 
-    const callback = await server.app.request(
-      `/auth/x/callback?code=abc&state=${state}`,
-    );
+    const callback = await server.app.request(`/auth/x/callback?code=abc&state=${state}`);
     expect(callback.status).toBe(302);
     expect(callback.headers.get('Location')).toBe('/settings?connected=1');
 
@@ -96,10 +88,7 @@ describe('account', () => {
       month_cost_usd: 0.01,
     });
 
-    expect(server.xClient.calls.map((c) => c.name)).toEqual([
-      'exchangeCode',
-      'getMe',
-    ]);
+    expect(server.xClient.calls.map((c) => c.name)).toEqual(['exchangeCode', 'getMe']);
     expect(server.xClient.calls[0]!.args[0]).toEqual({
       code: 'abc',
       codeVerifier: expect.stringMatching(/.{32,}/),
@@ -108,45 +97,27 @@ describe('account', () => {
   });
 
   test('redirects callback failures and stores nothing', async () => {
-    const unknown = await server.app.request(
-      '/auth/x/callback?code=abc&state=nope',
-    );
-    expect(unknown.headers.get('Location')).toBe(
-      '/settings?connect_error=expired',
-    );
+    const unknown = await server.app.request('/auth/x/callback?code=abc&state=nope');
+    expect(unknown.headers.get('Location')).toBe('/settings?connect_error=expired');
 
     const deniedStart = await request('/api/account/connect', {
       method: 'POST',
     });
-    const state1 = new URL((await deniedStart.json()).authorize_url)
-      .searchParams.get('state')!;
+    const state1 = new URL((await deniedStart.json()).authorize_url).searchParams.get('state')!;
 
-    const denied = await server.app.request(
-      `/auth/x/callback?error=access_denied&state=${state1}`,
-    );
-    expect(denied.headers.get('Location')).toBe(
-      '/settings?connect_error=denied',
-    );
+    const denied = await server.app.request(`/auth/x/callback?error=access_denied&state=${state1}`);
+    expect(denied.headers.get('Location')).toBe('/settings?connect_error=denied');
 
-    const replayed = await server.app.request(
-      `/auth/x/callback?code=abc&state=${state1}`,
-    );
-    expect(replayed.headers.get('Location')).toBe(
-      '/settings?connect_error=expired',
-    );
+    const replayed = await server.app.request(`/auth/x/callback?code=abc&state=${state1}`);
+    expect(replayed.headers.get('Location')).toBe('/settings?connect_error=expired');
 
     const failedStart = await request('/api/account/connect', {
       method: 'POST',
     });
-    const state2 = new URL((await failedStart.json()).authorize_url)
-      .searchParams.get('state')!;
+    const state2 = new URL((await failedStart.json()).authorize_url).searchParams.get('state')!;
     server.xClient.exchangeError = new XError('http', 500, 'boom');
-    const failed = await server.app.request(
-      `/auth/x/callback?code=abc&state=${state2}`,
-    );
-    expect(failed.headers.get('Location')).toBe(
-      '/settings?connect_error=failed',
-    );
+    const failed = await server.app.request(`/auth/x/callback?code=abc&state=${state2}`);
+    expect(failed.headers.get('Location')).toBe('/settings?connect_error=failed');
 
     const account = await request('/api/account');
     expect(await account.json()).toEqual({
@@ -170,8 +141,7 @@ describe('account', () => {
       accessToken: 'access-b',
       refreshToken: 'refresh-b',
       expiresIn: 7200,
-      scope:
-        'tweet.read tweet.write users.read media.write offline.access',
+      scope: 'tweet.read tweet.write users.read media.write offline.access',
     };
     server.clock.set(new Date('2026-09-04T11:00:00Z'));
     await connect();
@@ -214,14 +184,10 @@ describe('account', () => {
     await connect();
 
     await server.tick(new Date('2026-09-04T11:49:00Z'));
-    expect(
-      server.xClient.calls.filter((c) => c.name === 'refreshToken'),
-    ).toHaveLength(0);
+    expect(server.xClient.calls.filter((c) => c.name === 'refreshToken')).toHaveLength(0);
 
     await server.tick(new Date('2026-09-04T11:51:00Z'));
-    let refreshes = server.xClient.calls.filter(
-      (c) => c.name === 'refreshToken',
-    );
+    let refreshes = server.xClient.calls.filter((c) => c.name === 'refreshToken');
     expect(refreshes).toHaveLength(1);
     expect(refreshes[0]!.args[0]).toBe('refresh-1');
 
@@ -229,13 +195,10 @@ describe('account', () => {
       accessToken: 'access-3',
       refreshToken: 'refresh-3',
       expiresIn: 7200,
-      scope:
-        'tweet.read tweet.write users.read media.write offline.access',
+      scope: 'tweet.read tweet.write users.read media.write offline.access',
     };
     await server.tick(new Date('2026-09-04T13:51:00Z'));
-    refreshes = server.xClient.calls.filter(
-      (c) => c.name === 'refreshToken',
-    );
+    refreshes = server.xClient.calls.filter((c) => c.name === 'refreshToken');
     expect(refreshes).toHaveLength(2);
     expect(refreshes[1]!.args[0]).toBe('refresh-2');
 
@@ -253,28 +216,14 @@ describe('account', () => {
     expect(res.status).toBe(200);
 
     const calls = server.xClient.calls;
-    const afterGetMe = calls.slice(
-      calls.map((c) => c.name).lastIndexOf('getMe') + 1,
-    );
-    expect(afterGetMe.map((c) => c.name)).toEqual([
-      'refreshToken',
-      'revokeToken',
-      'revokeToken',
-    ]);
-    expect(afterGetMe.map((c) => c.args[0])).toEqual([
-      'refresh-1',
-      'refresh-2',
-      'access-2',
-    ]);
+    const afterGetMe = calls.slice(calls.map((c) => c.name).lastIndexOf('getMe') + 1);
+    expect(afterGetMe.map((c) => c.name)).toEqual(['refreshToken', 'revokeToken', 'revokeToken']);
+    expect(afterGetMe.map((c) => c.args[0])).toEqual(['refresh-1', 'refresh-2', 'access-2']);
   });
 
   test('marks an invalid grant as reconnect required and stops retrying', async () => {
     await connect();
-    server.xClient.refreshError = new XError(
-      'invalid_grant',
-      400,
-      'expired',
-    );
+    server.xClient.refreshError = new XError('invalid_grant', 400, 'expired');
 
     await server.tick(new Date('2026-09-04T11:51:00Z'));
 
@@ -284,9 +233,7 @@ describe('account', () => {
     expect(body.account.username).toBe('perchtester');
 
     await server.tick(new Date('2026-09-04T11:52:00Z'));
-    expect(
-      server.xClient.calls.filter((c) => c.name === 'refreshToken'),
-    ).toHaveLength(1);
+    expect(server.xClient.calls.filter((c) => c.name === 'refreshToken')).toHaveLength(1);
 
     server.xClient.refreshError = null;
     await connect();
@@ -341,11 +288,7 @@ describe('account', () => {
 
   test('disconnects a reconnect-required account using stored tokens', async () => {
     await connect();
-    server.xClient.refreshError = new XError(
-      'invalid_grant',
-      400,
-      'expired',
-    );
+    server.xClient.refreshError = new XError('invalid_grant', 400, 'expired');
     await server.tick(new Date('2026-09-04T11:51:00Z'));
 
     const res = await request('/api/account/disconnect', {
@@ -355,28 +298,14 @@ describe('account', () => {
     expect(await res.json()).toEqual({ account: null, char_limit: 280 });
 
     const calls = server.xClient.calls;
-    const afterGetMe = calls.slice(
-      calls.map((c) => c.name).lastIndexOf('getMe') + 1,
-    );
-    expect(afterGetMe.map((c) => c.name)).toEqual([
-      'refreshToken',
-      'revokeToken',
-      'revokeToken',
-    ]);
-    expect(afterGetMe.map((c) => c.args[0])).toEqual([
-      'refresh-1',
-      'refresh-1',
-      'access-1',
-    ]);
+    const afterGetMe = calls.slice(calls.map((c) => c.name).lastIndexOf('getMe') + 1);
+    expect(afterGetMe.map((c) => c.name)).toEqual(['refreshToken', 'revokeToken', 'revokeToken']);
+    expect(afterGetMe.map((c) => c.args[0])).toEqual(['refresh-1', 'refresh-1', 'access-1']);
   });
 
   test('demand-path refresh failure surfaces reconnect_required', async () => {
     await connect();
-    server.xClient.refreshError = new XError(
-      'invalid_grant',
-      400,
-      'expired',
-    );
+    server.xClient.refreshError = new XError('invalid_grant', 400, 'expired');
     server.clock.set(new Date('2026-09-04T11:55:00Z'));
 
     const res = await request('/api/account/disconnect', {
@@ -387,9 +316,7 @@ describe('account', () => {
       code: 'reconnect_required',
       message: 'X account needs to be reconnected',
     });
-    expect(
-      server.xClient.calls.filter((c) => c.name === 'revokeToken'),
-    ).toHaveLength(0);
+    expect(server.xClient.calls.filter((c) => c.name === 'revokeToken')).toHaveLength(0);
   });
 
   test('coalesces concurrent refreshes into one call', async () => {
@@ -401,9 +328,7 @@ describe('account', () => {
       request('/api/account/disconnect', { method: 'POST' }),
     ]);
     expect([a.status, b.status]).toEqual([200, 200]);
-    expect(
-      server.xClient.calls.filter((c) => c.name === 'refreshToken'),
-    ).toHaveLength(1);
+    expect(server.xClient.calls.filter((c) => c.name === 'refreshToken')).toHaveLength(1);
   });
 
   test('override beats the plan limit', async () => {
@@ -432,8 +357,7 @@ describe('account', () => {
     expect(res.status).toBe(503);
     expect(await res.json()).toEqual({
       code: 'not_configured',
-      message:
-        'X OAuth is not configured. Set PERCH_X_CLIENT_ID and PERCH_X_CLIENT_SECRET.',
+      message: 'X OAuth is not configured. Set PERCH_X_CLIENT_ID and PERCH_X_CLIENT_SECRET.',
     });
   });
 });

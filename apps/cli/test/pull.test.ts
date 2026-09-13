@@ -51,19 +51,12 @@ describe('resource pull', () => {
       removed: 0,
       pulled_at: '2026-09-04T10:00:00.000Z',
     });
-    expect(
-      fs.readFileSync(path.join(dir, 'notes/2026-09-04-1-hello.md'), 'utf8'),
-    ).toBe(
+    expect(fs.readFileSync(path.join(dir, 'notes/2026-09-04-1-hello.md'), 'utf8')).toBe(
       '---\nid: 1\ntype: "md"\ntitle: "Hello"\ncreated_at: "2026-09-04T10:00:00.000Z"\ntags: []\nnotes: |\n  why\n---\n# Hello\n\ntext\n',
     );
-    expect(
-      JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8')),
-    ).toEqual({
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'))).toEqual({
       pulled_at: '2026-09-04T10:00:00.000Z',
-      paths: [
-        'notes/2026-09-04-1-hello.md',
-        'notes/2026-09-04-2-second.md',
-      ],
+      paths: ['notes/2026-09-04-1-hello.md', 'notes/2026-09-04-2-second.md'],
     });
     expect(fs.readdirSync(dir).sort()).toEqual(['manifest.json', 'notes']);
   });
@@ -112,15 +105,9 @@ describe('resource pull', () => {
     });
     expect(fs.statSync(file1).mtimeMs).toBe(mtime1);
     expect(fs.readFileSync(file2, 'utf8')).toContain('notes: |\n  changed\n');
-    expect(fs.existsSync(path.join(dir, 'notes/2026-09-04-3-third.md'))).toBe(
-      false,
-    );
-    expect(
-      fs.readFileSync(path.join(dir, 'notes/mine.md'), 'utf8'),
-    ).toBe('foreign');
-    expect(
-      JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8')).paths,
-    ).toEqual([
+    expect(fs.existsSync(path.join(dir, 'notes/2026-09-04-3-third.md'))).toBe(false);
+    expect(fs.readFileSync(path.join(dir, 'notes/mine.md'), 'utf8')).toBe('foreign');
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8')).paths).toEqual([
       'notes/2026-09-04-1-hello.md',
       'notes/2026-09-04-2-second.md',
     ]);
@@ -133,30 +120,17 @@ describe('resource pull', () => {
     const dirB = path.join(server.dir, 'b');
 
     await runCli(['config', 'set', 'mirror-dir', dirB], ctx);
-    expect(
-      await runCli(['resource', 'pull', '--dir', dirA, '--json'], ctx),
-    ).toBe(0);
+    expect(await runCli(['resource', 'pull', '--dir', dirA, '--json'], ctx)).toBe(0);
     expect(await runCli(['resource', 'pull', '--json'], ctx)).toBe(0);
     const other = makeCtx(server, {
       configPath: path.join(server.dir, 'other-config.json'),
     });
     expect(await runCli(['resource', 'pull', '--json'], other.ctx)).toBe(0);
 
+    expect(fs.existsSync(path.join(dirA, 'notes/2026-09-04-1-hello.md'))).toBe(true);
+    expect(fs.existsSync(path.join(dirB, 'notes/2026-09-04-1-hello.md'))).toBe(true);
     expect(
-      fs.existsSync(path.join(dirA, 'notes/2026-09-04-1-hello.md')),
-    ).toBe(true);
-    expect(
-      fs.existsSync(path.join(dirB, 'notes/2026-09-04-1-hello.md')),
-    ).toBe(true);
-    expect(
-      fs.existsSync(
-        path.join(
-          server.dir,
-          '.perch',
-          'resources',
-          'notes/2026-09-04-1-hello.md',
-        ),
-      ),
+      fs.existsSync(path.join(server.dir, '.perch', 'resources', 'notes/2026-09-04-1-hello.md')),
     ).toBe(true);
     const mark2 = out().length;
     await runCli(['resource', 'pull', '--json'], ctx);
@@ -172,13 +146,9 @@ describe('resource pull', () => {
     });
     const bad = makeCtx(server, { env: { PERCH_TOKEN: 'wrong' } });
 
-    expect(
-      await runCli(['resource', 'pull', '--dir', dir], down.ctx),
-    ).toBe(1);
+    expect(await runCli(['resource', 'pull', '--dir', dir], down.ctx)).toBe(1);
     expect(JSON.parse(down.err())).toMatchObject({ code: 'unreachable' });
-    expect(
-      await runCli(['resource', 'pull', '--dir', dir], bad.ctx),
-    ).toBe(3);
+    expect(await runCli(['resource', 'pull', '--dir', dir], bad.ctx)).toBe(3);
     expect(JSON.parse(bad.err())).toMatchObject({ code: 'unauthorized' });
     expect(fs.existsSync(dir)).toBe(false);
   });
@@ -199,17 +169,10 @@ describe('resource pull', () => {
       errors: [{ path: 'notes/2026-09-04-1-hello.md', message: 'written' }],
     });
     expect(error.message).toMatch(/^Disk error at notes\/2026-09-04-2-second\.md: /);
-    expect(
-      fs.existsSync(path.join(dir, 'notes/2026-09-04-1-hello.md')),
-    ).toBe(true);
-    expect(
-      JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8')),
-    ).toEqual({
+    expect(fs.existsSync(path.join(dir, 'notes/2026-09-04-1-hello.md'))).toBe(true);
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'))).toEqual({
       pulled_at: null,
-      paths: [
-        'notes/2026-09-04-1-hello.md',
-        'notes/2026-09-04-2-second.md',
-      ],
+      paths: ['notes/2026-09-04-1-hello.md', 'notes/2026-09-04-2-second.md'],
     });
   });
 

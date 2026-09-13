@@ -1,3 +1,4 @@
+import { zValidator } from '@hono/zod-validator';
 import {
   postCreateSchema,
   postDeleteBodySchema,
@@ -5,7 +6,6 @@ import {
   postListQuerySchema,
   postPatchSchema,
 } from '@perch/core';
-import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -43,75 +43,49 @@ function immutable(error: unknown): ApiError {
 
 export function postsRoutes(deps: AppDeps) {
   return new Hono<AppEnv>()
-    .get(
-      '/',
-      zValidator('query', postListQuerySchema, validationHook),
-      (c) => {
-        try {
-          const userId = c.get('user').id;
-          return c.json(
-            listPosts(
-              deps.db,
-              userId,
-              c.req.valid('query'),
-              getSettings(deps.db, userId).timezone,
-            ),
-            200,
-          );
-        } catch (error) {
-          if (error instanceof InvalidPostCursorError) {
-            throw new ApiError(400, 'validation', 'Invalid request', [
-              { path: 'cursor', message: 'Invalid cursor' },
-            ]);
-          }
-          throw error;
+    .get('/', zValidator('query', postListQuerySchema, validationHook), (c) => {
+      try {
+        const userId = c.get('user').id;
+        return c.json(
+          listPosts(deps.db, userId, c.req.valid('query'), getSettings(deps.db, userId).timezone),
+          200,
+        );
+      } catch (error) {
+        if (error instanceof InvalidPostCursorError) {
+          throw new ApiError(400, 'validation', 'Invalid request', [
+            { path: 'cursor', message: 'Invalid cursor' },
+          ]);
         }
-      },
-    )
-    .post(
-      '/',
-      zValidator('json', postCreateSchema, validationHook),
-      (c) => {
-        try {
-          return c.json(
-            createPost(
-              deps.db,
-              c.get('user').id,
-              c.req.valid('json'),
-              deps.clock.now(),
-            ),
-            201,
-          );
-        } catch (error) {
-          if (error instanceof MissingResourceError) {
-            throw new ApiError(400, 'validation', 'Invalid request', [
-              { path: 'from', message: `Resource ${error.resourceId} not found` },
-            ]);
-          }
-          throw error;
+        throw error;
+      }
+    })
+    .post('/', zValidator('json', postCreateSchema, validationHook), (c) => {
+      try {
+        return c.json(
+          createPost(deps.db, c.get('user').id, c.req.valid('json'), deps.clock.now()),
+          201,
+        );
+      } catch (error) {
+        if (error instanceof MissingResourceError) {
+          throw new ApiError(400, 'validation', 'Invalid request', [
+            { path: 'from', message: `Resource ${error.resourceId} not found` },
+          ]);
         }
-      },
-    )
-    .get(
-      '/:id',
-      zValidator('param', idParamSchema, validationHook),
-      (c) => {
-        const { id } = c.req.valid('param');
-        const post = getPost(deps.db, c.get('user').id, id);
-        if (!post) throw notFound(id);
-        return c.json(post, 200);
-      },
-    )
-    .get(
-      '/:id/preview',
-      zValidator('param', idParamSchema, validationHook),
-      (c) => {
-        const { id } = c.req.valid('param');
-        const preview = previewPost(deps.db, c.get('user').id, id);
-        if (!preview) throw notFound(id);
-        return c.json(preview, 200);
-      },
-    )
+        throw error;
+      }
+    })
+    .get('/:id', zValidator('param', idParamSchema, validationHook), (c) => {
+      const { id } = c.req.valid('param');
+      const post = getPost(deps.db, c.get('user').id, id);
+      if (!post) throw notFound(id);
+      return c.json(post, 200);
+    })
+    .get('/:id/preview', zValidator('param', idParamSchema, validationHook), (c) => {
+      const { id } = c.req.valid('param');
+      const preview = previewPost(deps.db, c.get('user').id, id);
+      if (!preview) throw notFound(id);
+      return c.json(preview, 200);
+    })
     .patch(
       '/:id',
       zValidator('param', idParamSchema, validationHook),
@@ -173,13 +147,7 @@ export function postsRoutes(deps: AppDeps) {
         }
       },
     )
-    .delete(
-      '/',
-      zValidator('json', postDeleteBodySchema, validationHook),
-      (c) =>
-        c.json(
-          deletePosts(deps.db, c.get('user').id, c.req.valid('json').ids),
-          200,
-        ),
+    .delete('/', zValidator('json', postDeleteBodySchema, validationHook), (c) =>
+      c.json(deletePosts(deps.db, c.get('user').id, c.req.valid('json').ids), 200),
     );
 }

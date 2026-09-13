@@ -29,9 +29,7 @@ export function logApiCall(
 }
 
 export function monthCostUsd(db: Db, userId: number, now: Date): number {
-  const monthStart = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
-  );
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const row = db
     .select({ total: sql<number>`coalesce(sum(${apiCalls.costUsd}), 0)` })
     .from(apiCalls)

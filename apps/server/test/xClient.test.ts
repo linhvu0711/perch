@@ -75,9 +75,7 @@ describe('real X client', () => {
 
     const tokens = await client.refreshToken('r0');
 
-    expect(stub.calls[0]!.init?.body).toBe(
-      'grant_type=refresh_token&refresh_token=r0',
-    );
+    expect(stub.calls[0]!.init?.body).toBe('grant_type=refresh_token&refresh_token=r0');
     expect(tokens).toEqual({
       accessToken: 'a',
       refreshToken: 'r',
@@ -127,19 +125,14 @@ describe('real X client', () => {
       name: 'Perch Tester',
       subscriptionType: 'Premium',
     });
-    expect(stub.calls[0]!.url).toBe(
-      'https://api.x.com/2/users/me?user.fields=subscription_type',
-    );
+    expect(stub.calls[0]!.url).toBe('https://api.x.com/2/users/me?user.fields=subscription_type');
     const headers = stub.calls[0]!.init?.headers as Record<string, string>;
     expect(headers['Authorization']).toBe('Bearer a');
   });
 
   test('maps a 400 from the token endpoint to invalid_grant', async () => {
     const stub = recordingFetch(
-      Response.json(
-        { error: 'invalid_grant', error_description: 'expired' },
-        { status: 400 },
-      ),
+      Response.json({ error: 'invalid_grant', error_description: 'expired' }, { status: 400 }),
     );
     const client = createRealXClient({
       clientId: 'id',

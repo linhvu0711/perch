@@ -1,4 +1,3 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PostStatus } from '@perch/core';
 import {
   CircleAlert,
@@ -9,6 +8,7 @@ import {
   Search,
   ShieldCheck,
 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router';
 
 import { Empty } from '@/components/Empty';
@@ -53,22 +53,15 @@ export function Posts() {
   const items = posts.data?.pages.flatMap((page) => page.items) ?? [];
   const total = Math.max(posts.data?.pages[0]?.total ?? 0, items.length);
 
-
   let content;
   if (posts.isPending) {
     content = <div className="countline">Loading…</div>;
   } else if (posts.isError) {
-    content = (
-      <Empty title="Could not load posts" text={errorMessage(posts.error)} />
-    );
+    content = <Empty title="Could not load posts" text={errorMessage(posts.error)} />;
   } else if (total === 0 && status === undefined && search === '') {
-    content = (
-      <Empty title="No posts yet" text="Create one with the New post button." />
-    );
+    content = <Empty title="No posts yet" text="Create one with the New post button." />;
   } else if (total === 0) {
-    content = (
-      <Empty title="No posts match" text="Change a filter or the search." />
-    );
+    content = <Empty title="No posts match" text="Change a filter or the search." />;
   } else {
     const left = total - items.length;
     content = (
@@ -87,10 +80,14 @@ export function Posts() {
             >
               Load more
             </button>
-            <span>· {Math.min(POSTS_PAGE_SIZE, left)} of {left} left</span>
+            <span>
+              · {Math.min(POSTS_PAGE_SIZE, left)} of {left} left
+            </span>
           </div>
         )}
-        <div className="countline">{items.length} of {total} posts</div>
+        <div className="countline">
+          {items.length} of {total} posts
+        </div>
       </>
     );
   }

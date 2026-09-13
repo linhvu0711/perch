@@ -1,9 +1,9 @@
 import {
+  type AccountStatus,
+  type ConnectStart,
   effectiveCharLimit,
   X_COSTS_USD,
   X_ENDPOINTS,
-  type AccountStatus,
-  type ConnectStart,
 } from '@perch/core';
 
 import type { Clock } from '../clock';
@@ -21,13 +21,8 @@ import {
   type XAccountRow,
 } from '../db/xAccounts';
 import { ApiError } from '../errors';
-import { XError, type XClient, type XMe, type XTokens } from './client';
-import {
-  buildAuthorizeUrl,
-  createPkce,
-  createStateStore,
-  type XOAuthConfig,
-} from './oauth';
+import { type XClient, XError, type XMe, type XTokens } from './client';
+import { buildAuthorizeUrl, createPkce, createStateStore, type XOAuthConfig } from './oauth';
 
 export interface XAccountService {
   status(userId: number): AccountStatus;
@@ -36,13 +31,9 @@ export interface XAccountService {
     code?: string;
     state?: string;
     error?: string;
-  }): Promise<
-    { ok: true } | { ok: false; reason: 'denied' | 'expired' | 'failed' }
-  >;
+  }): Promise<{ ok: true } | { ok: false; reason: 'denied' | 'expired' | 'failed' }>;
   refreshDue(now: Date): Promise<void>;
-  accessTokenFor(
-    userId: number,
-  ): Promise<{ account: XAccountRow; accessToken: string }>;
+  accessTokenFor(userId: number): Promise<{ account: XAccountRow; accessToken: string }>;
   disconnect(userId: number): Promise<AccountStatus>;
 }
 
@@ -63,10 +54,7 @@ export function createXAccountService(deps: {
       const settings = getSettings(deps.db, userId);
       return {
         account: row ? toXAccount(row) : null,
-        char_limit: effectiveCharLimit(
-          settings.char_limit_override,
-          row?.subscriptionType ?? null,
-        ),
+        char_limit: effectiveCharLimit(settings.char_limit_override, row?.subscriptionType ?? null),
       };
     },
 
@@ -145,10 +133,7 @@ export function createXAccountService(deps: {
     },
 
     async refreshDue(now) {
-      const due = accountsDueForRefresh(
-        deps.db,
-        new Date(now.getTime() + REFRESH_MARGIN_MS),
-      );
+      const due = accountsDueForRefresh(deps.db, new Date(now.getTime() + REFRESH_MARGIN_MS));
       for (const row of due) {
         await refreshRow(row);
       }
@@ -160,24 +145,13 @@ export function createXAccountService(deps: {
         throw new ApiError(404, 'not_found', 'No X account connected');
       }
       if (row.reconnectRequired) {
-        throw new ApiError(
-          409,
-          'reconnect_required',
-          'X account needs to be reconnected',
-        );
+        throw new ApiError(409, 'reconnect_required', 'X account needs to be reconnected');
       }
-      if (
-        row.expiresAt.getTime() <=
-        deps.clock.now().getTime() + REFRESH_MARGIN_MS
-      ) {
+      if (row.expiresAt.getTime() <= deps.clock.now().getTime() + REFRESH_MARGIN_MS) {
         await refreshRow(row);
         const fresh = getConnectedAccount(deps.db, userId);
         if (!fresh || fresh.reconnectRequired) {
-          throw new ApiError(
-            409,
-            'reconnect_required',
-            'X account needs to be reconnected',
-          );
+          throw new ApiError(409, 'reconnect_required', 'X account needs to be reconnected');
         }
         row = fresh;
       }

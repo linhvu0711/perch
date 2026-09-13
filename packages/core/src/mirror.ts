@@ -16,9 +16,7 @@ export function slugify(title: string): string {
   );
 }
 
-export function mirrorFileName(
-  r: Pick<Resource, 'id' | 'title' | 'created_at'>,
-): string {
+export function mirrorFileName(r: Pick<Resource, 'id' | 'title' | 'created_at'>): string {
   return `${r.created_at.slice(0, 10)}-${r.id}-${slugify(r.title)}.md`;
 }
 
@@ -40,14 +38,11 @@ export function mirrorFrontMatter(r: Resource): string {
   return `${lines.join('\n')}\n`;
 }
 
-export function mirrorFile(
-  r: Resource,
-): { path: string; content: string } | null {
+export function mirrorFile(r: Resource): { path: string; content: string } | null {
   if (r.type !== 'md') return null;
   return {
     path: `notes/${mirrorFileName(r)}`,
-    content:
-      mirrorFrontMatter(r) + r.body + (r.body.endsWith('\n') ? '' : '\n'),
+    content: mirrorFrontMatter(r) + r.body + (r.body.endsWith('\n') ? '' : '\n'),
   };
 }
 

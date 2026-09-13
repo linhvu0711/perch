@@ -109,9 +109,11 @@ describe('resources', () => {
     expect((await patch({ title: 'Changed' })).title).toBe('Changed');
     expect((await patch({ notes: 'Private' })).notes).toBe('Private');
     expect((await patch({ body: 'New body' })).body).toBe('New body');
-    expect(
-      await patch({ title: 'Together', notes: 'N', body: 'Everything' }),
-    ).toMatchObject({ title: 'Together', notes: 'N', body: 'Everything' });
+    expect(await patch({ title: 'Together', notes: 'N', body: 'Everything' })).toMatchObject({
+      title: 'Together',
+      notes: 'N',
+      body: 'Everything',
+    });
 
     const empty = await request(`/api/resources/${resource.id}`, {
       method: 'PATCH',
@@ -138,11 +140,7 @@ describe('resources', () => {
     const c = await create({ title: 'Gamma', body: 'plain' });
 
     expect((await list()).items.map((item) => item.id)).toEqual([c.id, b.id, a.id]);
-    expect((await list('?order=asc')).items.map((item) => item.id)).toEqual([
-      a.id,
-      b.id,
-      c.id,
-    ]);
+    expect((await list('?order=asc')).items.map((item) => item.id)).toEqual([a.id, b.id, c.id]);
     expect((await list('?search=banana')).items.map((item) => item.id)).toEqual([a.id]);
     expect((await list('?search=BETA')).items.map((item) => item.id)).toEqual([b.id]);
     expect((await list('?search=%25')).items).toEqual([]);
@@ -248,9 +246,7 @@ describe('resources', () => {
 
     const page1 = await list('?sort=used&order=desc&limit=1');
     expect(page1.items.map((i) => i.id)).toEqual([2]);
-    const page2 = await list(
-      `?sort=used&order=desc&limit=1&cursor=${page1.next_cursor}`,
-    );
+    const page2 = await list(`?sort=used&order=desc&limit=1&cursor=${page1.next_cursor}`);
     expect(page2.items.map((i) => i.id)).toEqual([1]);
   });
 

@@ -52,11 +52,7 @@ const listDateSchema = z
   .regex(/^\d{4}-\d{2}-\d{2}$/)
   .refine(
     (value) => {
-      const [year, month, day] = value.split('-').map(Number) as [
-        number,
-        number,
-        number,
-      ];
+      const [year, month, day] = value.split('-').map(Number) as [number, number, number];
       const parsed = new Date(Date.UTC(year, month - 1, day));
       return (
         parsed.getUTCFullYear() === year &&
@@ -73,12 +69,7 @@ export const postListQuerySchema = z.object({
   from: listDateSchema.optional(),
   to: listDateSchema.optional(),
   resource_id: z.coerce.number().int().positive().optional(),
-  limit: z.coerce
-    .number()
-    .int()
-    .min(1)
-    .max(POST_LIST_LIMIT_MAX)
-    .default(POST_LIST_LIMIT_DEFAULT),
+  limit: z.coerce.number().int().min(1).max(POST_LIST_LIMIT_MAX).default(POST_LIST_LIMIT_DEFAULT),
   cursor: z.string().min(1).optional(),
 });
 export type PostListQuery = z.infer<typeof postListQuerySchema>;

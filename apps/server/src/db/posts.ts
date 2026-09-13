@@ -2,26 +2,26 @@ import {
   dayBoundsUtc,
   effectiveCharLimit,
   estimateCost,
-  postListTitle,
-  previewSegments,
-  weightedLength,
   type Post,
   type PostCreate,
-  type PostLink,
   type PostDeleteResponse,
+  type PostLink,
   type PostLinksResponse,
   type PostList,
   type PostListQuery,
   type PostPatch,
   type PostPreview,
+  postListTitle,
+  previewSegments,
+  weightedLength,
 } from '@perch/core';
-import { and, asc, count, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
 
 import { decodePostCursor, encodePostCursor } from './cursor';
 import type { Db } from './index';
+import { postLinks, posts, resources } from './schema';
 import { getSettings } from './settings';
 import { getConnectedAccount } from './xAccounts';
-import { postLinks, posts, resources } from './schema';
 
 export class InvalidPostCursorError extends Error {}
 
@@ -93,12 +93,7 @@ function linksForPosts(db: Db, postIds: number[]): Map<number, PostLink[]> {
   return result;
 }
 
-export function createPost(
-  db: Db,
-  userId: number,
-  input: PostCreate,
-  now: Date,
-): Post {
+export function createPost(db: Db, userId: number, input: PostCreate, now: Date): Post {
   for (const resourceId of input.from ?? []) {
     const resource = db
       .select({ id: resources.id })
@@ -124,10 +119,7 @@ export function createPost(
     if (!inserted) throw new Error('post insert failed');
 
     for (const resourceId of input.from ?? []) {
-      tx.insert(postLinks)
-        .values({ postId: inserted.id, resourceId })
-        .onConflictDoNothing()
-        .run();
+      tx.insert(postLinks).values({ postId: inserted.id, resourceId }).onConflictDoNothing().run();
     }
     return inserted;
   });
@@ -174,9 +166,7 @@ export function listPosts(
     );
   }
   if (query.to !== undefined) {
-    filterConditions.push(
-      sql`${sortTime} <= ${dayBoundsUtc(query.to, timeZone).end.getTime()}`,
-    );
+    filterConditions.push(sql`${sortTime} <= ${dayBoundsUtc(query.to, timeZone).end.getTime()}`);
   }
   if (query.resource_id !== undefined) {
     filterConditions.push(
@@ -237,9 +227,7 @@ export function listPosts(
     items,
     total: totalRow?.value ?? 0,
     next_cursor:
-      hasNextPage && last
-        ? encodePostCursor({ time: sortTimeOf(last), id: last.id })
-        : null,
+      hasNextPage && last ? encodePostCursor({ time: sortTimeOf(last), id: last.id }) : null,
   };
 }
 
@@ -303,10 +291,7 @@ export function linkResources(
           error: { code: 'not_found', message: `Resource ${id} not found` },
         };
       }
-      db.insert(postLinks)
-        .values({ postId, resourceId: id })
-        .onConflictDoNothing()
-        .run();
+      db.insert(postLinks).values({ postId, resourceId: id }).onConflictDoNothing().run();
       return { id, ok: true as const };
     }),
   };
