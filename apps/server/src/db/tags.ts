@@ -3,7 +3,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import type { Db } from './index';
 import { TagExistsError } from './posts';
-import { resourceTags, resources, tags } from './schema';
+import { resources, resourceTags, tags } from './schema';
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 

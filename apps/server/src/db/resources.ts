@@ -157,7 +157,11 @@ export function findTweetByXId(db: Db, userId: number, xId: string): TweetResour
     )
     .get();
   return row
-    ? (toResource(row, row.usedBy, tagsForResources(db, [row.id]).get(row.id) ?? []) as TweetResource)
+    ? (toResource(
+        row,
+        row.usedBy,
+        tagsForResources(db, [row.id]).get(row.id) ?? [],
+      ) as TweetResource)
     : null;
 }
 
@@ -273,9 +277,7 @@ export function getResource(db: Db, userId: number, id: number): Resource | null
     .where(and(eq(resources.id, id), eq(resources.userId, userId)))
     .get();
 
-  return row
-    ? toResource(row, row.usedBy, tagsForResources(db, [row.id]).get(row.id) ?? [])
-    : null;
+  return row ? toResource(row, row.usedBy, tagsForResources(db, [row.id]).get(row.id) ?? []) : null;
 }
 
 export function updateResource(
