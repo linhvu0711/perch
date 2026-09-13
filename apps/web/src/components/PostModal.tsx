@@ -5,6 +5,7 @@ import {
   COST_POST_WITH_URL_USD,
   estimateCost,
   formatCost,
+  POST_MEDIA_MAX,
   weightedLength,
 } from '@perch/core';
 import { FileText, FolderOpen, Plus, Trash2, X } from 'lucide-react';
@@ -405,7 +406,7 @@ export function PostModal(): JSX.Element | null {
                   Images <span className="faint">{viewPost.media.length} of 4</span>
                 </label>
                 <div className="slots">
-                  {[0, 1, 2, 3].map((index) => {
+                  {[0, 1, 2, 3].slice(0, POST_MEDIA_MAX).map((index) => {
                     const media = viewPost.media[index];
                     if (media === undefined) {
                       return (

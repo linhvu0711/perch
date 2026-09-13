@@ -1,5 +1,5 @@
 import type { Post, Resource } from '@perch/core';
-import { IMAGE_BYTES_MAX, IMAGE_MIME_TYPES } from '@perch/core';
+import { IMAGE_BYTES_MAX, IMAGE_MIME_TYPES, POST_MEDIA_MAX } from '@perch/core';
 import {
   ArrowLeft,
   ExternalLink,
@@ -157,7 +157,7 @@ export function ResourcesDrawer(props: {
           toast(`${file.name}: ${bad}`, 'warn');
           continue;
         }
-        if (mediaCount + files.length >= 4) {
+        if (mediaCount + files.length >= POST_MEDIA_MAX) {
           overflow = true;
           break;
         }
@@ -206,7 +206,7 @@ export function ResourcesDrawer(props: {
         <IconButton
           label="Attach to post"
           icon={Paperclip}
-          disabled={mediaCount >= 4}
+          disabled={mediaCount >= POST_MEDIA_MAX}
           onClick={() => attach(resource)}
         />
       ) : (
@@ -348,7 +348,7 @@ export function ResourcesDrawer(props: {
                   <IconButton
                     label="Upload and attach"
                     icon={Upload}
-                    disabled={mediaCount >= 4}
+                    disabled={mediaCount >= POST_MEDIA_MAX}
                     onClick={() => fileInputRef.current?.click()}
                   />
                 </div>

@@ -387,7 +387,12 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
       }
 
       const api = apiFor(program, ctx);
-      const results: Array<{ ok: boolean }> = [];
+      const results: Array<{
+        name?: string;
+        id?: number;
+        ok: boolean;
+        error?: { code: string; message: string };
+      }> = [];
       if (resourceIds.length > 0) {
         const response = await api.call(
           api.client.api.posts[':id'].media.$post({
@@ -398,21 +403,33 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
         results.push(...response.results);
       }
       if (files.length > 0) {
-        const response = await api.call(
-          api.client.api.posts[':id'].media.files.$post({
-            param: { id: String(id) },
-            form: {
-              files: files.map(
-                (filePath) =>
-                  new File(
-                    [fs.readFileSync(filePath).slice().buffer as ArrayBuffer],
-                    path.basename(filePath),
-                  ),
-              ),
-            },
-          }),
-        );
-        results.push(...response.results);
+        const readable: File[] = [];
+        for (const filePath of files) {
+          const name = path.basename(filePath);
+          try {
+            readable.push(
+              new File([fs.readFileSync(filePath).slice().buffer as ArrayBuffer], name),
+            );
+          } catch (error) {
+            results.push({
+              name,
+              ok: false,
+              error: {
+                code: 'read_failed',
+                message: error instanceof Error ? error.message : 'Cannot read file',
+              },
+            });
+          }
+        }
+        if (readable.length > 0) {
+          const response = await api.call(
+            api.client.api.posts[':id'].media.files.$post({
+              param: { id: String(id) },
+              form: { files: readable },
+            }),
+          );
+          results.push(...response.results);
+        }
       }
 
       printResult(ctx, mode, results);
