@@ -2,8 +2,8 @@ import type { Tag, TagList } from '@perch/core';
 import { and, eq, sql } from 'drizzle-orm';
 
 import type { Db } from './index';
-import { postTags, resourceTags, tags } from './schema';
 import { TagExistsError } from './posts';
+import { tags } from './schema';
 
 export function listTags(db: Db, userId: number): TagList {
   const items = db
