@@ -3,6 +3,7 @@ import {
   dayBoundsUtc,
   estimateCost,
   postListTitle,
+  previewSegments,
   weightedLength,
   type Post,
   type PostCreate,
@@ -12,6 +13,7 @@ import {
   type PostList,
   type PostListQuery,
   type PostPatch,
+  type PostPreview,
 } from '@perch/core';
 import { and, asc, count, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 
@@ -340,5 +342,17 @@ export function deletePosts(db: Db, userId: number, ids: number[]): PostDeleteRe
             error: { code: 'not_found', message: `Post ${id} not found` },
           };
     }),
+  };
+}
+
+export function previewPost(db: Db, userId: number, id: number): PostPreview | null {
+  const row = getPostRow(db, userId, id);
+  if (!row) return null;
+
+  return {
+    segments: previewSegments(row.text),
+    character_count: weightedLength(row.text),
+    limit: postLimit(db, userId),
+    estimated_cost: estimateCost(row.text),
   };
 }

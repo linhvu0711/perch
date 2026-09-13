@@ -362,4 +362,27 @@ describe('posts', () => {
 
     expect(server.xClient.calls).toEqual([]);
   });
+
+  test('previews as segments', async () => {
+    await createPost({ text: 'Check https://x.com @bob #news' });
+
+    const preview = await request('/api/posts/1/preview');
+    expect(preview.status).toBe(200);
+    expect(await preview.json()).toEqual({
+      segments: [
+        { kind: 'text', text: 'Check ' },
+        { kind: 'url', text: 'https://x.com' },
+        { kind: 'text', text: ' ' },
+        { kind: 'mention', text: '@bob' },
+        { kind: 'text', text: ' ' },
+        { kind: 'hashtag', text: '#news' },
+      ],
+      character_count: 40,
+      limit: 280,
+      estimated_cost: 0.2,
+    });
+
+    const missing = await request('/api/posts/999/preview');
+    expect(missing.status).toBe(404);
+  });
 });

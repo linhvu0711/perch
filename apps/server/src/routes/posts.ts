@@ -18,6 +18,7 @@ import {
   linkResources,
   listPosts,
   MissingResourceError,
+  previewPost,
   unlinkResources,
   updatePost,
 } from '../db/posts';
@@ -89,6 +90,16 @@ export function postsRoutes(deps: AppDeps) {
         const post = getPost(deps.db, c.get('user').id, id);
         if (!post) throw notFound(id);
         return c.json(post, 200);
+      },
+    )
+    .get(
+      '/:id/preview',
+      zValidator('param', idParamSchema, validationHook),
+      (c) => {
+        const { id } = c.req.valid('param');
+        const preview = previewPost(deps.db, c.get('user').id, id);
+        if (!preview) throw notFound(id);
+        return c.json(preview, 200);
       },
     )
     .patch(

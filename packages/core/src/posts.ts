@@ -119,6 +119,19 @@ export const postDeleteResponseSchema = z.object({
 });
 export type PostDeleteResponse = z.infer<typeof postDeleteResponseSchema>;
 
+export const previewSegmentSchema = z.object({
+  kind: z.enum(['text', 'url', 'mention', 'hashtag']),
+  text: z.string(),
+});
+
+export const postPreviewSchema = z.object({
+  segments: z.array(previewSegmentSchema),
+  character_count: z.number().int(),
+  limit: z.number().int(),
+  estimated_cost: z.number(),
+});
+export type PostPreview = z.infer<typeof postPreviewSchema>;
+
 /** Title shown in lists: the stored title, else the first line of the text. */
 export function postListTitle(title: string, text: string): string {
   if (title !== '') return title;
