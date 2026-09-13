@@ -44,7 +44,7 @@ import {
 import { decodePostCursor, encodePostCursor } from './cursor';
 import type { Db } from './index';
 import { type MediaFiles, mediaForPosts } from './postMedia';
-import { postLinks, postMedia, posts, postTags, resources, tags } from './schema';
+import { postLinks, postMedia, posts, postTags, resources } from './schema';
 import { getSettings } from './settings';
 import { addPostTags, tagIdsByName, tagsForPosts, tagsForResources } from './tags';
 import { getConnectedAccount } from './xAccounts';
@@ -311,19 +311,18 @@ export function listPosts(
   const tagNames = query.tag ?? [];
   if (tagNames.length > 0) {
     const byName = tagIdsByName(db, userId);
-    const tagIds = tagNames.map((name) => byName.get(name.toLowerCase()));
-    if (tagIds.some((id) => id === undefined)) {
-      return { items: [], total: 0, next_cursor: null };
-    }
-    for (const tagId of tagIds as number[]) {
+    for (const name of tagNames) {
+      const tagId = byName.get(name.toLowerCase());
       filterConditions.push(
-        inArray(
-          posts.id,
-          db
-            .select({ postId: postTags.postId })
-            .from(postTags)
-            .where(and(eq(postTags.userId, userId), eq(postTags.tagId, tagId))),
-        ),
+        tagId === undefined
+          ? inArray(posts.id, [])
+          : inArray(
+              posts.id,
+              db
+                .select({ postId: postTags.postId })
+                .from(postTags)
+                .where(and(eq(postTags.userId, userId), eq(postTags.tagId, tagId))),
+            ),
       );
     }
   }

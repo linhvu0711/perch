@@ -481,5 +481,11 @@ describe('posts', () => {
     const res = await (await request('/api/posts?tag=x')).json();
     expect(res.total).toBe(1);
     expect(res.items.map((i: { id: number }) => i.id)).toEqual([1]);
+
+    const none = await (await request('/api/posts?tag=none')).json();
+    expect(none.total).toBe(0);
+
+    const badCursor = await request('/api/posts?tag=none&cursor=garbage');
+    expect(badCursor.status).toBe(400);
   });
 });

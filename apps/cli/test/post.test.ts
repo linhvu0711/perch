@@ -426,6 +426,18 @@ describe('post tag', () => {
     const removed = makeCtx(server);
     expect(await runCli(['post', 'tag', '1', '--remove', 'a', '--json'], removed.ctx)).toBe(0);
     expect(JSON.parse(removed.out())).toEqual([{ id: 1, ok: true, tags: [] }]);
+
+    const merged = makeCtx(server);
+    expect(
+      await runCli(
+        ['post', 'tag', '1', '99', '--add', 'b', '--remove', 'a', '--json'],
+        merged.ctx,
+      ),
+    ).toBe(1);
+    expect(JSON.parse(merged.out())).toEqual([
+      { id: 1, ok: true, tags: ['b'] },
+      { id: 99, ok: false, error: { code: 'not_found', message: 'Post 99 not found' } },
+    ]);
   });
 
   test('creates a post with --tag', async () => {

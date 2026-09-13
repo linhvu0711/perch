@@ -331,5 +331,8 @@ describe('resources', () => {
     const none = await (await request('/api/resources?tag=none')).json();
     expect(none.items).toEqual([]);
     expect(none.total).toBe(0);
+
+    const badCursor = await request('/api/resources?tag=none&cursor=garbage');
+    expect(badCursor.status).toBe(400);
   });
 });

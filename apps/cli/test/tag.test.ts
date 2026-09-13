@@ -102,4 +102,15 @@ describe('tag', () => {
     const confirmed = makeCtx(server);
     expect(await runCli(['tag', 'delete', 'a', '--yes', '--json'], confirmed.ctx)).toBe(0);
   });
+
+  test('deletes duplicate name spellings once', async () => {
+    await createNote('# One', ['a']);
+
+    const capture = makeCtx(server);
+    expect(await runCli(['tag', 'delete', 'a', 'A', '--yes', '--json'], capture.ctx)).toBe(0);
+    expect(JSON.parse(capture.out())).toEqual([
+      { name: 'a', ok: true },
+      { name: 'A', ok: true },
+    ]);
+  });
 });

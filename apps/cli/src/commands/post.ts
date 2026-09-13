@@ -17,7 +17,7 @@ import type { Command } from 'commander';
 import { createApi } from '../api';
 import { resolveServerUrl, resolveToken } from '../config';
 import type { CliContext } from '../context';
-import { BatchFailure, CliError, formatTable, printResult, resolveMode } from '../output';
+import { BatchFailure, CliError, formatTable, mergeItemTagResults, printResult, resolveMode } from '../output';
 
 interface GlobalOptions {
   json?: boolean;
@@ -409,31 +409,30 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
       }
 
       const api = apiFor(program, ctx);
-      const results = new Map<number, ItemTagsResponse['results'][number]>();
+      const batches: ItemTagsResponse['results'][] = [];
       if (commandOptions.add !== undefined) {
-        for (const result of (
-          await api.call(
-            api.client.api.posts.tags.$post({
-              json: { ids, tags: commandOptions.add },
-            }),
-          )
-        ).results) {
-          results.set(result.id, result);
-        }
+        batches.push(
+          (
+            await api.call(
+              api.client.api.posts.tags.$post({
+                json: { ids, tags: commandOptions.add },
+              }),
+            )
+          ).results,
+        );
       }
       if (commandOptions.remove !== undefined) {
-        for (const result of (
-          await api.call(
-            api.client.api.posts.tags.$delete({
-              json: { ids, tags: commandOptions.remove },
-            }),
-          )
-        ).results) {
-          const added = results.get(result.id);
-          if (added === undefined || added.ok) results.set(result.id, result);
-        }
+        batches.push(
+          (
+            await api.call(
+              api.client.api.posts.tags.$delete({
+                json: { ids, tags: commandOptions.remove },
+              }),
+            )
+          ).results,
+        );
       }
-      const merged = [...results.values()];
+      const merged = mergeItemTagResults(...batches);
 
       const mode = resolveMode(program.opts<GlobalOptions>(), ctx.isTTY);
       if (mode === 'json') {

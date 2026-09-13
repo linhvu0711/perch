@@ -607,6 +607,22 @@ describe('resource tag', () => {
     expect(bare.err()).toContain('Give --add or --remove');
   });
 
+  test('reports add and remove failures together', async () => {
+    await create('# One');
+
+    const capture = makeCtx(server);
+    expect(
+      await runCli(
+        ['resource', 'tag', '1', '99', '--add', 'a', '--remove', 'b', '--json'],
+        capture.ctx,
+      ),
+    ).toBe(1);
+    const results = JSON.parse(capture.out());
+    expect(results).toHaveLength(2);
+    expect(results[0]).toEqual({ id: 1, ok: true, tags: ['a'] });
+    expect(results[1]).toMatchObject({ id: 99, ok: false });
+  });
+
   test('adds a note with --tag', async () => {
     const file = write('hello.md', '# Hello\n\nbody');
     const capture = makeCtx(server);

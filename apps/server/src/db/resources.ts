@@ -31,7 +31,7 @@ import {
 
 import { decodeCursor, encodeCursor } from './cursor';
 import type { Db } from './index';
-import { postLinks, resources, resourceTags, tags } from './schema';
+import { postLinks, resources, resourceTags } from './schema';
 import { getSettings } from './settings';
 import { addResourceTags, tagIdsByName, tagsForResources } from './tags';
 
@@ -375,19 +375,18 @@ export function listResources(db: Db, userId: number, query: ResourceListQuery):
   const tagNames = query.tag ?? [];
   if (tagNames.length > 0) {
     const byName = tagIdsByName(db, userId);
-    const tagIds = tagNames.map((name) => byName.get(name.toLowerCase()));
-    if (tagIds.some((id) => id === undefined)) {
-      return { items: [], total: 0, next_cursor: null };
-    }
-    for (const tagId of tagIds as number[]) {
+    for (const name of tagNames) {
+      const tagId = byName.get(name.toLowerCase());
       filterConditions.push(
-        inArray(
-          resources.id,
-          db
-            .select({ resourceId: resourceTags.resourceId })
-            .from(resourceTags)
-            .where(and(eq(resourceTags.userId, userId), eq(resourceTags.tagId, tagId))),
-        ),
+        tagId === undefined
+          ? inArray(resources.id, [])
+          : inArray(
+              resources.id,
+              db
+                .select({ resourceId: resourceTags.resourceId })
+                .from(resourceTags)
+                .where(and(eq(resourceTags.userId, userId), eq(resourceTags.tagId, tagId))),
+            ),
       );
     }
   }
