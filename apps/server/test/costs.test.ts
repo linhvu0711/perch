@@ -1,11 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { CostHistory, CostSummary, Status } from '@perch/core';
 
-import {
-  createTestServer,
-  insertTestApiCall,
-  type TestServer,
-} from '../src/testing';
+import { createTestServer, insertTestApiCall, type TestServer } from '../src/testing';
 
 let server: TestServer;
 
