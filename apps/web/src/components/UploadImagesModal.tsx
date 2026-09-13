@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type JSX } from 'react';
-import { IMAGE_BYTES_MAX, IMAGE_MIME_TYPES } from '@perch/core';
+import { IMAGE_BYTES_MAX, IMAGE_MIME_TYPES, RESOURCE_BATCH_MAX } from '@perch/core';
 import { Upload, X } from 'lucide-react';
 
 import { IconButton } from './IconButton';
@@ -9,6 +9,7 @@ import { formatBytes } from '@/lib/format';
 import { useUploadImages } from '@/lib/queries';
 
 interface ChosenFile {
+  id: number;
   file: File;
   bad: string | null;
   outcome: 'pending' | 'uploaded' | string;
@@ -28,6 +29,7 @@ export function UploadImagesModal(props: {
 }): JSX.Element | null {
   const titleId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  const nextId = useRef(0);
   const [files, setFiles] = useState<ChosenFile[]>([]);
   const upload = useUploadImages();
 
@@ -49,39 +51,59 @@ export function UploadImagesModal(props: {
   if (!props.open) return null;
 
   const addFiles = (incoming: Iterable<File>) => {
-    setFiles((current) => [
-      ...current,
-      ...[...incoming].map((file) => ({
-        file,
-        bad: precheck(file),
-        outcome: 'pending' as const,
-      })),
-    ]);
+    setFiles((current) => {
+      let readyCount = current.filter((entry) => entry.bad === null).length;
+      const added = [...incoming].map((file) => {
+        let bad = precheck(file);
+        if (bad === null) {
+          if (readyCount >= RESOURCE_BATCH_MAX) bad = 'At most 100 files';
+          else readyCount += 1;
+        }
+        return {
+          id: nextId.current++,
+          file,
+          bad,
+          outcome: 'pending' as const,
+        };
+      });
+      return [...current, ...added];
+    });
   };
 
-  const ready = files.filter((entry) => entry.bad === null);
+  const ready = files.filter(
+    (entry) => entry.bad === null && entry.outcome === 'pending',
+  );
 
   const onUpload = () => {
+    const submitting = ready;
     upload.mutate(
-      ready.map((entry) => entry.file),
+      submitting.map((entry) => entry.file),
       {
         onSuccess: (data) => {
-          const byName = new Map(data.results.map((r) => [r.name, r]));
-          const next = files.map((entry) => {
-            if (entry.bad !== null) return entry;
-            const result = byName.get(entry.file.name);
-            if (!result) return entry;
-            return {
-              ...entry,
-              outcome: result.ok ? ('uploaded' as const) : result.error.message,
-            };
-          });
-          setFiles(next);
+          const byId = new Map(
+            submitting.map((entry, index) => [entry.id, data.results[index]]),
+          );
+          setFiles((current) =>
+            current.map((entry) => {
+              const result = byId.get(entry.id);
+              if (!result) return entry;
+              return {
+                ...entry,
+                outcome: result.ok ? ('uploaded' as const) : result.error.message,
+              };
+            }),
+          );
           const ok = data.results.filter((r) => r.ok).length;
           if (ok > 0) {
             toast(`${ok} image${ok === 1 ? '' : 's'} uploaded`);
           }
-          if (next.every((entry) => entry.bad === null && entry.outcome === 'uploaded')) {
+          const submitted = new Set(submitting.map((entry) => entry.id));
+          if (
+            data.results.every((r) => r.ok) &&
+            files.every(
+              (entry) => entry.bad !== null || submitted.has(entry.id),
+            )
+          ) {
             props.onClose();
           }
         },
@@ -143,8 +165,8 @@ export function UploadImagesModal(props: {
           />
           {files.length > 0 && (
             <div className="files">
-              {files.map((entry, index) => (
-                <div className="file" key={`${entry.file.name}-${index}`}>
+              {files.map((entry) => (
+                <div className="file" key={entry.id}>
                   <span className="u">{entry.file.name}</span>
                   <span className="sz">{formatBytes(entry.file.size)}</span>
                   {entry.bad !== null ? (

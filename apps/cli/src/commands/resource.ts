@@ -185,6 +185,9 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
       if (commandOptions.title !== undefined && paths.length !== 1) {
         throw new CliError('bad_args', '--title needs exactly one path');
       }
+      if (paths.includes('-')) {
+        throw new CliError('bad_args', 'stdin (-) is not supported for images');
+      }
 
       const api = apiFor(program, ctx);
       const results: Array<
@@ -193,13 +196,6 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
       > = [];
 
       for (const inputPath of paths) {
-        if (inputPath === '-') {
-          throw new CliError(
-            'bad_args',
-            'stdin (-) is not supported for images',
-          );
-        }
-
         let bytes: Uint8Array;
         try {
           bytes = fs.readFileSync(inputPath);

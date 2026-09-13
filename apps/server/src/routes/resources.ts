@@ -8,6 +8,7 @@ import {
   resourceDeleteBodySchema,
   resourceListQuerySchema,
   resourcePatchSchema,
+  type Resource,
 } from '@perch/core';
 import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
@@ -117,22 +118,28 @@ export function resourcesRoutes(deps: AppDeps) {
           continue;
         }
         const rel = await storeImage(deps.uploadDir, c.get('user').id, bytes, inspected.ext);
-        const resource = createImage(
-          deps.db,
-          c.get('user').id,
-          {
-            title:
-              (title ?? file.name).trim().slice(0, RESOURCE_TITLE_MAX) ||
-              NOTE_TITLE_FALLBACK,
-            notes: '',
-            path: rel,
-            mime: inspected.mime,
-            bytes: bytes.length,
-            width: inspected.width,
-            height: inspected.height,
-          },
-          deps.clock.now(),
-        );
+        let resource: Resource;
+        try {
+          resource = createImage(
+            deps.db,
+            c.get('user').id,
+            {
+              title:
+                (title ?? file.name).trim().slice(0, RESOURCE_TITLE_MAX) ||
+                NOTE_TITLE_FALLBACK,
+              notes: '',
+              path: rel,
+              mime: inspected.mime,
+              bytes: bytes.length,
+              width: inspected.width,
+              height: inspected.height,
+            },
+            deps.clock.now(),
+          );
+        } catch (error) {
+          removeImage(deps.uploadDir, rel);
+          throw error;
+        }
         results.push({ name: file.name, ok: true as const, resource });
       }
       return c.json({ results }, 200);
