@@ -46,3 +46,34 @@ export const postCreateSchema = z.object({
   from: z.array(z.number().int().positive()).max(POST_BATCH_MAX).optional(),
 });
 export type PostCreate = z.infer<typeof postCreateSchema>;
+
+const listDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+export const postListQuerySchema = z.object({
+  status: postStatusSchema.optional(),
+  search: z.string().trim().max(200).optional(),
+  from: listDateSchema.optional(),
+  to: listDateSchema.optional(),
+  resource_id: z.coerce.number().int().positive().optional(),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(POST_LIST_LIMIT_MAX)
+    .default(POST_LIST_LIMIT_DEFAULT),
+  cursor: z.string().min(1).optional(),
+});
+export type PostListQuery = z.infer<typeof postListQuerySchema>;
+
+export const postListSchema = z.object({
+  items: z.array(postSchema),
+  total: z.number().int().nonnegative(),
+  next_cursor: z.string().nullable(),
+});
+export type PostList = z.infer<typeof postListSchema>;
+
+/** Title shown in lists: the stored title, else the first line of the text. */
+export function postListTitle(title: string, text: string): string {
+  if (title !== '') return title;
+  return (text.split('\n', 1)[0] ?? '').trim();
+}

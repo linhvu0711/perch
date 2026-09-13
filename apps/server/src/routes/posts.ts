@@ -1,10 +1,17 @@
-import { postCreateSchema } from '@perch/core';
+import { postCreateSchema, postListQuerySchema } from '@perch/core';
 import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppDeps, AppEnv } from '../app';
-import { createPost, getPost, MissingResourceError } from '../db/posts';
+import {
+  createPost,
+  getPost,
+  InvalidPostCursorError,
+  listPosts,
+  MissingResourceError,
+} from '../db/posts';
+import { getSettings } from '../db/settings';
 import { ApiError, validationHook } from '../errors';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
@@ -15,6 +22,31 @@ function notFound(id: number): ApiError {
 
 export function postsRoutes(deps: AppDeps) {
   return new Hono<AppEnv>()
+    .get(
+      '/',
+      zValidator('query', postListQuerySchema, validationHook),
+      (c) => {
+        try {
+          const userId = c.get('user').id;
+          return c.json(
+            listPosts(
+              deps.db,
+              userId,
+              c.req.valid('query'),
+              getSettings(deps.db, userId).timezone,
+            ),
+            200,
+          );
+        } catch (error) {
+          if (error instanceof InvalidPostCursorError) {
+            throw new ApiError(400, 'validation', 'Invalid request', [
+              { path: 'cursor', message: 'Invalid cursor' },
+            ]);
+          }
+          throw error;
+        }
+      },
+    )
     .post(
       '/',
       zValidator('json', postCreateSchema, validationHook),

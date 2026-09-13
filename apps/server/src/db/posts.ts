@@ -1,16 +1,23 @@
 import {
   CHAR_LIMIT_DEFAULT,
+  dayBoundsUtc,
   estimateCost,
+  postListTitle,
   weightedLength,
   type Post,
   type PostCreate,
   type PostLink,
+  type PostList,
+  type PostListQuery,
 } from '@perch/core';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 
+import { decodePostCursor, encodePostCursor } from './cursor';
 import type { Db } from './index';
 import { getSettings } from './settings';
 import { postLinks, posts, resources } from './schema';
+
+export class InvalidPostCursorError extends Error {}
 
 export class MissingResourceError extends Error {
   constructor(public resourceId: number) {
@@ -121,4 +128,99 @@ export function getPost(db: Db, userId: number, id: number): Post | null {
   if (!row) return null;
 
   return toPost(row, linksForPosts(db, [row.id]).get(row.id) ?? [], postLimit(db, userId));
+}
+
+export function listPosts(
+  db: Db,
+  userId: number,
+  query: PostListQuery,
+  timeZone: string,
+): PostList {
+  const sortTime = sql`CASE WHEN ${posts.status} = 'published' THEN ${posts.publishedAt} ELSE ${posts.scheduledAt} END`;
+
+  const filterConditions: SQL[] = [eq(posts.userId, userId)];
+  if (query.status !== undefined) filterConditions.push(eq(posts.status, query.status));
+  if (query.search) {
+    const escaped = query.search.replace(/[\\%_]/g, '\\$&');
+    const pattern = `%${escaped}%`;
+    filterConditions.push(
+      or(
+        sql`${posts.title} LIKE ${pattern} ESCAPE '\\'`,
+        sql`${posts.text} LIKE ${pattern} ESCAPE '\\'`,
+      )!,
+    );
+  }
+  if (query.from !== undefined) {
+    filterConditions.push(
+      sql`${sortTime} >= ${dayBoundsUtc(query.from, timeZone).start.getTime()}`,
+    );
+  }
+  if (query.to !== undefined) {
+    filterConditions.push(
+      sql`${sortTime} <= ${dayBoundsUtc(query.to, timeZone).end.getTime()}`,
+    );
+  }
+  if (query.resource_id !== undefined) {
+    filterConditions.push(
+      sql`EXISTS (select 1 from post_links where post_links.post_id = ${posts.id} and post_links.resource_id = ${query.resource_id})`,
+    );
+  }
+
+  const totalRow = db
+    .select({ value: count() })
+    .from(posts)
+    .where(and(...filterConditions))
+    .get();
+  const pageConditions = [...filterConditions];
+
+  if (query.cursor !== undefined) {
+    const key = decodePostCursor(query.cursor);
+    if (!key) throw new InvalidPostCursorError();
+
+    pageConditions.push(
+      key.time === null
+        ? sql`${sortTime} IS NULL AND ${posts.id} < ${key.id}`
+        : or(
+            sql`${sortTime} < ${key.time}`,
+            sql`${sortTime} = ${key.time} AND ${posts.id} < ${key.id}`,
+            sql`${sortTime} IS NULL`,
+          )!,
+    );
+  }
+
+  const rows = db
+    .select()
+    .from(posts)
+    .where(and(...pageConditions))
+    .orderBy(sql`${sortTime} IS NULL`, desc(sortTime), desc(posts.id))
+    .limit(query.limit + 1)
+    .all();
+
+  const hasNextPage = rows.length > query.limit;
+  const pageRows = hasNextPage ? rows.slice(0, query.limit) : rows;
+  const last = pageRows.at(-1);
+
+  const limit = postLimit(db, userId);
+  const links = linksForPosts(
+    db,
+    pageRows.map((row) => row.id),
+  );
+  const items = pageRows.map((row) => {
+    const post = toPost(row, links.get(row.id) ?? [], limit);
+    return { ...post, title: postListTitle(post.title, post.text) };
+  });
+
+  const sortTimeOf = (row: PostRow): number | null => {
+    const value = row.status === 'published' ? row.publishedAt : row.scheduledAt;
+    return value === null ? null : value.getTime();
+  };
+
+  return {
+    items,
+    total: totalRow?.value ?? 0,
+    next_cursor:
+      hasNextPage && last
+        ? encodePostCursor({ time: sortTimeOf(last), id: last.id })
+        : null,
+  };
 }
