@@ -4,7 +4,7 @@ import type { ItemTagsResponse, TagList } from '@perch/core';
 import { eq } from 'drizzle-orm';
 
 import { openDb } from '../src/db';
-import { posts } from '../src/db/schema';
+import { posts, postTags } from '../src/db/schema';
 import { createTestServer, type TestServer } from '../src/testing';
 
 let server: TestServer;
@@ -235,5 +235,113 @@ describe('tags', () => {
       total: 1,
       next_cursor: null,
     });
+  });
+  test('renames a tag everywhere', async () => {
+    await request('/api/resources/notes', {
+      method: 'POST',
+      body: JSON.stringify({ body: '# One' }),
+    });
+    await request('/api/posts', { method: 'POST', body: JSON.stringify({ text: 'hi' }) });
+    await request('/api/resources/tags', {
+      method: 'POST',
+      body: JSON.stringify({ ids: [1], tags: ['old'] }),
+    });
+    await request('/api/posts/tags', {
+      method: 'POST',
+      body: JSON.stringify({ ids: [1], tags: ['old'] }),
+    });
+
+    const renamed = await request('/api/tags/1', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'new' }),
+    });
+    expect(renamed.status).toBe(200);
+    expect(await renamed.json()).toEqual({
+      id: 1,
+      name: 'new',
+      resource_count: 1,
+      post_count: 1,
+    });
+
+    expect((await (await request('/api/resources/1')).json()).tags).toEqual(['new']);
+    expect((await (await request('/api/posts/1')).json()).tags).toEqual(['new']);
+
+    const missing = await request('/api/tags/999', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'new' }),
+    });
+    expect(missing.status).toBe(404);
+
+    await request('/api/tags', { method: 'POST', body: JSON.stringify({ name: 'other' }) });
+    const conflict = await request('/api/tags/1', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'OTHER' }),
+    });
+    expect(conflict.status).toBe(400);
+    expect(await conflict.json()).toMatchObject({
+      code: 'validation',
+      errors: [{ path: 'name' }],
+    });
+
+    const recase = await request('/api/tags/1', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'New' }),
+    });
+    expect(recase.status).toBe(200);
+    expect((await recase.json()).name).toBe('New');
+  });
+
+  test('deletes tags and removes them from everything', async () => {
+    await request('/api/resources/notes', {
+      method: 'POST',
+      body: JSON.stringify({ body: '# One', tags: ['a', 'b'] }),
+    });
+    await request('/api/posts', {
+      method: 'POST',
+      body: JSON.stringify({ text: 'hi', tags: ['a'] }),
+    });
+
+    const deleted = await request('/api/tags', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids: [1, 999] }),
+    });
+    expect(deleted.status).toBe(200);
+    expect(await deleted.json()).toEqual({
+      results: [
+        { id: 1, ok: true },
+        { id: 999, ok: false, error: { code: 'not_found', message: 'Tag 999 not found' } },
+      ],
+    });
+
+    expect((await (await request('/api/resources/1')).json()).tags).toEqual(['b']);
+    expect((await (await request('/api/posts/1')).json()).tags).toEqual([]);
+    expect((await (await request('/api/tags')).json()).total).toBe(1);
+  });
+
+  test('counts resources and posts per tag', async () => {
+    await request('/api/resources/notes', {
+      method: 'POST',
+      body: JSON.stringify({ body: '# One', tags: ['t'] }),
+    });
+    await request('/api/resources/notes', {
+      method: 'POST',
+      body: JSON.stringify({ body: '# Two', tags: ['t'] }),
+    });
+    await request('/api/posts', {
+      method: 'POST',
+      body: JSON.stringify({ text: 'one', tags: ['t'] }),
+    });
+    await request('/api/posts', { method: 'POST', body: JSON.stringify({ text: 'two' }) });
+
+    const { db, sqlite } = openDb(path.join(server.dir, 'perch.db'));
+    db.update(posts)
+      .set({ status: 'published', publishedAt: new Date('2026-09-01T09:00:00Z') })
+      .where(eq(posts.id, 2))
+      .run();
+    db.insert(postTags).values({ postId: 2, tagId: 1 }).run();
+    sqlite.close();
+
+    const list = (await (await request('/api/tags')).json()) as TagList;
+    expect(list.items[0]).toEqual({ id: 1, name: 't', resource_count: 2, post_count: 2 });
   });
 });

@@ -45,3 +45,21 @@ export const tagFilterSchema = z
   .union([tagNameSchema, z.array(tagNameSchema)])
   .transform((value) => (Array.isArray(value) ? value : [value]))
   .optional();
+
+export const tagRenameSchema = z.object({ name: tagNameSchema });
+export type TagRename = z.infer<typeof tagRenameSchema>;
+
+export const tagDeleteBodySchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(TAG_BATCH_MAX),
+});
+export type TagDeleteBody = z.infer<typeof tagDeleteBodySchema>;
+
+export const tagDeleteResultSchema = z.discriminatedUnion('ok', [
+  z.object({ id: z.number().int(), ok: z.literal(true) }),
+  z.object({ id: z.number().int(), ok: z.literal(false), error: itemTagsErrorSchema }),
+]);
+export type TagDeleteResult = z.infer<typeof tagDeleteResultSchema>;
+export const tagDeleteResponseSchema = z.object({
+  results: z.array(tagDeleteResultSchema),
+});
+export type TagDeleteResponse = z.infer<typeof tagDeleteResponseSchema>;

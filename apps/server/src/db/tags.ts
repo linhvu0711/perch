@@ -1,4 +1,4 @@
-import type { ItemTagsResponse, Tag, TagList } from '@perch/core';
+import type { ItemTagsResponse, Tag, TagDeleteResponse, TagList } from '@perch/core';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import type { Db } from './index';
@@ -273,6 +273,52 @@ export function untagPosts(
       }
       removePostTags(db, userId, id, names);
       return { id, ok: true as const, tags: tagsForPosts(db, [id]).get(id) ?? [] };
+    }),
+  };
+}
+
+export function renameTag(db: Db, userId: number, id: number, name: string): Tag | null {
+  const row = db
+    .select({ id: tags.id, name: tags.name })
+    .from(tags)
+    .where(and(eq(tags.id, id), eq(tags.userId, userId)))
+    .get();
+  if (!row) return null;
+
+  const conflict = db
+    .select({ id: tags.id })
+    .from(tags)
+    .where(and(eq(tags.userId, userId), sql`lower(${tags.name}) = lower(${name})`))
+    .get();
+  if (conflict && conflict.id !== id) throw new TagExistsError(name);
+
+  if (row.name !== name) db.update(tags).set({ name }).where(eq(tags.id, id)).run();
+  return (
+    listTags(db, userId).items.find((item) => item.id === id) ?? {
+      id,
+      name,
+      resource_count: 0,
+      post_count: 0,
+    }
+  );
+}
+
+export function deleteTags(db: Db, userId: number, ids: number[]): TagDeleteResponse {
+  return {
+    results: ids.map((id) => {
+      const deleted = db
+        .delete(tags)
+        .where(and(eq(tags.id, id), eq(tags.userId, userId)))
+        .returning({ id: tags.id })
+        .get();
+
+      return deleted
+        ? { id, ok: true as const }
+        : {
+            id,
+            ok: false as const,
+            error: { code: 'not_found', message: `Tag ${id} not found` },
+          };
     }),
   };
 }
