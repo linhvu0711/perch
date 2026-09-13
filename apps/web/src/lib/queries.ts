@@ -241,7 +241,7 @@ export interface PostFilters {
 
 export const POSTS_PAGE_SIZE = 50;
 
-export function usePosts(filters: PostFilters) {
+export function usePosts(filters: PostFilters, enabled = true) {
   return useInfiniteQuery({
     queryKey: ['posts', 'list', filters],
     queryFn: ({ pageParam }) =>
@@ -260,6 +260,7 @@ export function usePosts(filters: PostFilters) {
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor ?? undefined,
+    enabled,
   });
 }
 

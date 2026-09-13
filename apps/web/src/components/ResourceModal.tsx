@@ -47,7 +47,10 @@ export function ResourceModal(): JSX.Element | null {
   const resourceQuery = useResource(isNew || invalidId ? null : parsedId);
   const createNote = useCreateNote();
   const createPost = useCreatePost();
-  const usedBy = usePosts(parsedId === null ? { resource_id: -1 } : { resource_id: parsedId });
+  const usedBy = usePosts(
+    parsedId === null ? { resource_id: -1 } : { resource_id: parsedId },
+    parsedId !== null,
+  );
   const usedByPosts =
     parsedId === null ? [] : (usedBy.data?.pages.flatMap((page) => page.items) ?? []);
   const usedByTotal = parsedId === null ? 0 : (usedBy.data?.pages[0]?.total ?? usedByPosts.length);
@@ -479,7 +482,7 @@ export function ResourceModal(): JSX.Element | null {
   const isImage = resource?.type === 'image';
   const displayedBody = isEditing ? bodyDraft : resource?.type === 'md' ? resource.body : '';
   const displayedTitle = isEditing ? titleDraft : (resource?.title ?? '');
-  const editingNote = isEditing && resource?.type === 'md';
+  const editingNote = isEditing && (isNew || resource?.type === 'md');
 
   return (
     <>
