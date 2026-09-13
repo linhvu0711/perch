@@ -1,7 +1,9 @@
 import {
   dayBoundsUtc,
+  DEMOTE_FROM,
   effectiveCharLimit,
   estimateCost,
+  parseScheduleTime,
   POST_MEDIA_MAX,
   type Post,
   type PostCreate,
@@ -13,11 +15,31 @@ import {
   type PostMedia,
   type PostPatch,
   type PostPreview,
+  type PostScheduleBody,
+  type PostStatusResponse,
   postListTitle,
+  type PostStatus,
   previewSegments,
+  promoteChecks,
+  PROMOTE_FROM,
+  type Ready,
+  readyChecks,
+  SCHEDULE_FROM,
   weightedLength,
 } from '@perch/core';
-import { and, asc, count, desc, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm';
 
 import { decodePostCursor, encodePostCursor } from './cursor';
 import type { Db } from './index';
@@ -46,9 +68,32 @@ export class MissingResourceError extends Error {
   }
 }
 
+export class PostNotReadyError extends Error {
+  constructor(public errors: Array<{ path: string; message: string }>) {
+    super('Post is not ready');
+  }
+}
+
+export class PostStatusError extends Error {
+  constructor(
+    public postId: number,
+    status: PostStatus,
+  ) {
+    super(`Post ${postId} is ${status}`);
+  }
+}
+
+export class ScheduleTimeError extends Error {}
+
 type PostRow = typeof posts.$inferSelect;
 
-function toPost(row: PostRow, links: PostLink[], media: PostMedia[], limit: number): Post {
+function toPost(
+  row: PostRow,
+  links: PostLink[],
+  media: PostMedia[],
+  limit: number,
+  ready: Ready,
+): Post {
   return {
     id: row.id,
     status: row.status,
@@ -67,6 +112,7 @@ function toPost(row: PostRow, links: PostLink[], media: PostMedia[], limit: numb
     estimated_cost: estimateCost(row.text),
     links,
     media,
+    ready,
   };
 }
 
@@ -124,12 +170,21 @@ export async function createPost(
   );
   if (imageSources.length > POST_MEDIA_MAX) throw new MediaLimitError('from');
 
+  if (input.official) {
+    const checks = promoteChecks({
+      text: input.text ?? '',
+      limit: postLimit(db, userId),
+      media: [],
+    });
+    if (checks.length > 0) throw new PostNotReadyError(checks);
+  }
+
   const row = db.transaction((tx) => {
     const inserted = tx
       .insert(posts)
       .values({
         userId,
-        status: 'draft',
+        status: input.official ? 'official' : 'draft',
         title: input.title ?? '',
         text: input.text ?? '',
         createdAt: now,
@@ -178,11 +233,19 @@ export function getPost(db: Db, userId: number, id: number): Post | null {
     .get();
   if (!row) return null;
 
+  const limit = postLimit(db, userId);
+  const media = mediaForPosts(db, [row.id]).get(row.id) ?? [];
   return toPost(
     row,
     linksForPosts(db, [row.id]).get(row.id) ?? [],
-    mediaForPosts(db, [row.id]).get(row.id) ?? [],
-    postLimit(db, userId),
+    media,
+    limit,
+    readyChecks({
+      text: row.text,
+      limit,
+      mediaCount: media.length,
+      accountConnected: getConnectedAccount(db, userId) !== null,
+    }),
   );
 }
 
@@ -213,6 +276,9 @@ export function listPosts(
   }
   if (query.to !== undefined) {
     filterConditions.push(sql`${sortTime} <= ${dayBoundsUtc(query.to, timeZone).end.getTime()}`);
+  }
+  if (query.scheduled !== undefined) {
+    filterConditions.push(query.scheduled ? isNotNull(posts.scheduledAt) : isNull(posts.scheduledAt));
   }
   if (query.resource_id !== undefined) {
     filterConditions.push(
@@ -255,11 +321,24 @@ export function listPosts(
   const last = pageRows.at(-1);
 
   const limit = postLimit(db, userId);
+  const accountConnected = getConnectedAccount(db, userId) !== null;
   const postIds = pageRows.map((row) => row.id);
   const links = linksForPosts(db, postIds);
   const media = mediaForPosts(db, postIds);
   const items = pageRows.map((row) => {
-    const post = toPost(row, links.get(row.id) ?? [], media.get(row.id) ?? [], limit);
+    const postMedia = media.get(row.id) ?? [];
+    const post = toPost(
+      row,
+      links.get(row.id) ?? [],
+      postMedia,
+      limit,
+      readyChecks({
+        text: row.text,
+        limit,
+        mediaCount: postMedia.length,
+        accountConnected,
+      }),
+    );
     return { ...post, title: postListTitle(post.title, post.text) };
   });
 
@@ -395,6 +474,125 @@ export function deletePosts(
       } catch {
         // leave the directory; the post row is already gone
       }
+      return { id, ok: true as const };
+    }),
+  };
+}
+
+function statusResultError(
+  id: number,
+  code: string,
+  message: string,
+  errors?: Array<{ path: string; message: string }>,
+): { id: number; ok: false; error: { code: string; message: string; errors?: typeof errors } } {
+  return { id, ok: false, error: { code, message, ...(errors ? { errors } : {}) } };
+}
+
+export function promotePosts(
+  db: Db,
+  userId: number,
+  ids: number[],
+  fileExists: (path: string) => boolean,
+  now: Date,
+): PostStatusResponse {
+  return {
+    results: ids.map((id) => {
+      const row = getPostRow(db, userId, id);
+      if (!row) {
+        return statusResultError(id, 'not_found', `Post ${id} not found`);
+      }
+      if (!(PROMOTE_FROM as readonly string[]).includes(row.status)) {
+        return statusResultError(id, 'invalid_status', `Post ${id} is ${row.status}`);
+      }
+      const mediaRows = db
+        .select({ position: postMedia.position, path: postMedia.path })
+        .from(postMedia)
+        .where(eq(postMedia.postId, id))
+        .all();
+      const checks = promoteChecks({
+        text: row.text,
+        limit: postLimit(db, userId),
+        media: mediaRows.map((media) => ({
+          position: media.position,
+          present: fileExists(media.path),
+        })),
+      });
+      if (checks.length > 0) {
+        return statusResultError(id, 'validation', `Post ${id} is not ready`, checks);
+      }
+      db.update(posts)
+        .set({ status: 'official', updatedAt: now })
+        .where(and(eq(posts.id, id), eq(posts.userId, userId)))
+        .run();
+      return { id, ok: true as const };
+    }),
+  };
+}
+
+export function demotePosts(db: Db, userId: number, ids: number[], now: Date): PostStatusResponse {
+  return {
+    results: ids.map((id) => {
+      const row = getPostRow(db, userId, id);
+      if (!row) {
+        return statusResultError(id, 'not_found', `Post ${id} not found`);
+      }
+      if (!(DEMOTE_FROM as readonly string[]).includes(row.status)) {
+        return statusResultError(id, 'invalid_status', `Post ${id} is ${row.status}`);
+      }
+      db.update(posts)
+        .set({ status: 'draft', lastError: null, retryCount: 0, updatedAt: now })
+        .where(and(eq(posts.id, id), eq(posts.userId, userId)))
+        .run();
+      return { id, ok: true as const };
+    }),
+  };
+}
+
+export function schedulePost(
+  db: Db,
+  userId: number,
+  id: number,
+  body: PostScheduleBody,
+  timeZone: string,
+  now: Date,
+): Post | null {
+  const row = getPostRow(db, userId, id);
+  if (!row) return null;
+  if (row.status === 'published') throw new PostImmutableError(id);
+  if (!(SCHEDULE_FROM as readonly string[]).includes(row.status)) {
+    throw new PostStatusError(id, row.status);
+  }
+  const at = parseScheduleTime(body.at, timeZone, now);
+  if (at === null) throw new ScheduleTimeError('Unrecognised time');
+  if (at.getTime() < now.getTime() && body.force !== true) {
+    throw new ScheduleTimeError('Time is in the past');
+  }
+  db.update(posts)
+    .set({ scheduledAt: at, updatedAt: now })
+    .where(and(eq(posts.id, id), eq(posts.userId, userId)))
+    .run();
+  return getPost(db, userId, id);
+}
+
+export function unschedulePosts(
+  db: Db,
+  userId: number,
+  ids: number[],
+  now: Date,
+): PostStatusResponse {
+  return {
+    results: ids.map((id) => {
+      const row = getPostRow(db, userId, id);
+      if (!row) {
+        return statusResultError(id, 'not_found', `Post ${id} not found`);
+      }
+      if (!(SCHEDULE_FROM as readonly string[]).includes(row.status)) {
+        return statusResultError(id, 'invalid_status', `Post ${id} is ${row.status}`);
+      }
+      db.update(posts)
+        .set({ scheduledAt: null, updatedAt: now })
+        .where(and(eq(posts.id, id), eq(posts.userId, userId)))
+        .run();
       return { id, ok: true as const };
     }),
   };

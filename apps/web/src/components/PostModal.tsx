@@ -49,6 +49,7 @@ const EMPTY_POST: Post = {
   estimated_cost: COST_POST_USD,
   links: [],
   media: [],
+  ready: { ok: false, checks: [] },
 };
 
 export function PostModal(): JSX.Element | null {

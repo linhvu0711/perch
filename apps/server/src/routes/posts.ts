@@ -1,14 +1,17 @@
+import fs from 'node:fs';
 import path from 'node:path';
 
 import { zValidator } from '@hono/zod-validator';
 import {
   postCreateSchema,
   postDeleteBodySchema,
+  postIdsBodySchema,
   postLinksBodySchema,
   postListQuerySchema,
   postMediaAttachBodySchema,
   postMediaDetachBodySchema,
   postPatchSchema,
+  postScheduleBodySchema,
 } from '@perch/core';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -25,6 +28,7 @@ import {
 import {
   createPost,
   deletePosts,
+  demotePosts,
   getPost,
   InvalidPostCursorError,
   linkResources,
@@ -32,8 +36,14 @@ import {
   MediaLimitError,
   MissingResourceError,
   PostImmutableError,
+  PostNotReadyError,
+  PostStatusError,
   previewPost,
+  promotePosts,
+  schedulePost,
+  ScheduleTimeError,
   unlinkResources,
+  unschedulePosts,
   updatePost,
 } from '../db/posts';
 import { postMedia, posts } from '../db/schema';
@@ -104,6 +114,9 @@ export function postsRoutes(deps: AppDeps) {
         );
       } catch (error) {
         if (error instanceof MediaLimitError) throw mediaLimit(error);
+        if (error instanceof PostNotReadyError) {
+          throw new ApiError(400, 'validation', 'Invalid request', error.errors);
+        }
         if (error instanceof MissingResourceError) {
           throw new ApiError(400, 'validation', 'Invalid request', [
             { path: 'from', message: `Resource ${error.resourceId} not found` },
@@ -112,6 +125,64 @@ export function postsRoutes(deps: AppDeps) {
         throw error;
       }
     })
+    .post('/promote', zValidator('json', postIdsBodySchema, validationHook), (c) => {
+      const userId = c.get('user').id;
+      return c.json(
+        promotePosts(
+          deps.db,
+          userId,
+          c.req.valid('json').ids,
+          (rel) => fs.existsSync(path.join(deps.uploadDir, rel)),
+          deps.clock.now(),
+        ),
+        200,
+      );
+    })
+    .post('/demote', zValidator('json', postIdsBodySchema, validationHook), (c) => {
+      return c.json(
+        demotePosts(deps.db, c.get('user').id, c.req.valid('json').ids, deps.clock.now()),
+        200,
+      );
+    })
+    .post('/unschedule', zValidator('json', postIdsBodySchema, validationHook), (c) => {
+      return c.json(
+        unschedulePosts(deps.db, c.get('user').id, c.req.valid('json').ids, deps.clock.now()),
+        200,
+      );
+    })
+    .post(
+      '/:id/schedule',
+      zValidator('param', idParamSchema, validationHook),
+      zValidator('json', postScheduleBodySchema, validationHook),
+      (c) => {
+        const { id } = c.req.valid('param');
+        const userId = c.get('user').id;
+        try {
+          const post = schedulePost(
+            deps.db,
+            userId,
+            id,
+            c.req.valid('json'),
+            getSettings(deps.db, userId).timezone,
+            deps.clock.now(),
+          );
+          if (!post) throw notFound(id);
+          return c.json(post, 200);
+        } catch (error) {
+          if (error instanceof ScheduleTimeError) {
+            throw new ApiError(400, 'validation', 'Invalid request', [
+              { path: 'at', message: error.message },
+            ]);
+          }
+          if (error instanceof PostStatusError) {
+            throw new ApiError(400, 'validation', 'Invalid request', [
+              { path: 'status', message: error.message },
+            ]);
+          }
+          throw immutable(error);
+        }
+      },
+    )
     .get('/:id', zValidator('param', idParamSchema, validationHook), (c) => {
       const { id } = c.req.valid('param');
       const post = getPost(deps.db, c.get('user').id, id);
