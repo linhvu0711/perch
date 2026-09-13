@@ -109,7 +109,7 @@ export function Posts() {
         />
       </div>
       <div className="filters">
-        <div className="seg icons" role="group" aria-label="Status">
+        <fieldset className="seg icons" aria-label="Status">
           {STATUS_TABS.map((tab) => (
             <Tooltip key={tab.dataStatus}>
               <TooltipTrigger asChild>
@@ -126,7 +126,7 @@ export function Posts() {
               <TooltipContent>{tab.label}</TooltipContent>
             </Tooltip>
           ))}
-        </div>
+        </fieldset>
         {/* biome-ignore lint/a11y/useSemanticElements: mirrors the Status filter group above */}
         <div className="seg icons" role="group" aria-label="Scheduled">
           <Tooltip>

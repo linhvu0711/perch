@@ -300,8 +300,7 @@ export function ResourcesDrawer(props: {
                 onChange={(event) => setSearch(event.target.value)}
               />
             </div>
-            {/* biome-ignore lint/a11y/useSemanticElements: icon-only segmented control */}
-            <div className="seg icons" role="group" aria-label="Type">
+            <fieldset className="seg icons" aria-label="Type">
               <button
                 type="button"
                 aria-label="All"
@@ -329,7 +328,7 @@ export function ResourcesDrawer(props: {
               >
                 <FileText size={16} strokeWidth={1.75} />
               </button>
-            </div>
+            </fieldset>
             <IconButton label="Close" icon={X} variant="ghost" onClick={props.onClose} />
           </div>
           <div className="dlist">
