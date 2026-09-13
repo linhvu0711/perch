@@ -1,22 +1,36 @@
-import { formatCost } from '@perch/core';
+import { DEFAULT_TIMEZONE, formatCost } from '@perch/core';
 
-export function formatDayMonth(iso: string): string {
+export function formatDayMonth(iso: string, timeZone = DEFAULT_TIMEZONE): string {
   return new Date(iso).toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
+    timeZone,
   });
 }
 
-export function formatDateTime(iso: string): string {
+export function formatDateTime(iso: string, timeZone = DEFAULT_TIMEZONE): string {
   const date = new Date(iso);
   return `${date.toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+    timeZone,
   })} ${date.toLocaleTimeString('en-GB', {
     hour: '2-digit',
     minute: '2-digit',
+    hour12: false,
+    timeZone,
   })}`;
+}
+
+export function formatSchedule(iso: string, timeZone = DEFAULT_TIMEZONE): string {
+  const time = new Date(iso).toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone,
+  });
+  return `${formatDayMonth(iso, timeZone)}, ${time}`;
 }
 
 export function noteExcerpt(body: string): string {

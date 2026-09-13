@@ -1,7 +1,9 @@
 import {
+  DEMOTE_FROM,
   dayBoundsUtc,
   effectiveCharLimit,
   estimateCost,
+  POST_MEDIA_MAX,
   type Post,
   type PostCreate,
   type PostDeleteResponse,
@@ -9,17 +11,40 @@ import {
   type PostLinksResponse,
   type PostList,
   type PostListQuery,
+  type PostMedia,
   type PostPatch,
   type PostPreview,
+  type PostScheduleBody,
+  type PostStatus,
+  type PostStatusResponse,
+  PROMOTE_FROM,
+  parseScheduleTime,
   postListTitle,
   previewSegments,
+  promoteChecks,
+  type Ready,
+  readyChecks,
+  SCHEDULE_FROM,
   weightedLength,
 } from '@perch/core';
-import { and, asc, count, desc, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm';
 
 import { decodePostCursor, encodePostCursor } from './cursor';
 import type { Db } from './index';
-import { postLinks, posts, resources } from './schema';
+import { type MediaFiles, mediaForPosts } from './postMedia';
+import { postLinks, postMedia, posts, resources } from './schema';
 import { getSettings } from './settings';
 import { getConnectedAccount } from './xAccounts';
 
@@ -31,15 +56,44 @@ export class PostImmutableError extends Error {
   }
 }
 
+export class MediaLimitError extends Error {
+  constructor(public path: 'resource_ids' | 'files' | 'from') {
+    super('At most 4 media per post');
+  }
+}
+
 export class MissingResourceError extends Error {
   constructor(public resourceId: number) {
     super(`Resource ${resourceId} not found`);
   }
 }
 
+export class PostNotReadyError extends Error {
+  constructor(public errors: Array<{ path: string; message: string }>) {
+    super('Post is not ready');
+  }
+}
+
+export class PostStatusError extends Error {
+  constructor(
+    public postId: number,
+    status: PostStatus,
+  ) {
+    super(`Post ${postId} is ${status}`);
+  }
+}
+
+export class ScheduleTimeError extends Error {}
+
 type PostRow = typeof posts.$inferSelect;
 
-function toPost(row: PostRow, links: PostLink[], limit: number): Post {
+function toPost(
+  row: PostRow,
+  links: PostLink[],
+  media: PostMedia[],
+  limit: number,
+  ready: Ready,
+): Post {
   return {
     id: row.id,
     status: row.status,
@@ -57,7 +111,8 @@ function toPost(row: PostRow, links: PostLink[], limit: number): Post {
     limit,
     estimated_cost: estimateCost(row.text),
     links,
-    media: [],
+    media,
+    ready,
   };
 }
 
@@ -93,14 +148,35 @@ function linksForPosts(db: Db, postIds: number[]): Map<number, PostLink[]> {
   return result;
 }
 
-export function createPost(db: Db, userId: number, input: PostCreate, now: Date): Post {
-  for (const resourceId of input.from ?? []) {
+export async function createPost(
+  db: Db,
+  userId: number,
+  input: PostCreate,
+  now: Date,
+  files?: MediaFiles,
+): Promise<Post> {
+  const fromResources = (input.from ?? []).map((resourceId) => {
     const resource = db
-      .select({ id: resources.id })
+      .select()
       .from(resources)
       .where(and(eq(resources.id, resourceId), eq(resources.userId, userId)))
       .get();
     if (!resource) throw new MissingResourceError(resourceId);
+    return resource;
+  });
+
+  const imageSources = fromResources.filter(
+    (resource) => resource.type === 'image' && resource.imagePath,
+  );
+  if (imageSources.length > POST_MEDIA_MAX) throw new MediaLimitError('from');
+
+  if (input.official) {
+    const checks = promoteChecks({
+      text: input.text ?? '',
+      limit: postLimit(db, userId),
+      media: [],
+    });
+    if (checks.length > 0) throw new PostNotReadyError(checks);
   }
 
   const row = db.transaction((tx) => {
@@ -124,6 +200,33 @@ export function createPost(db: Db, userId: number, input: PostCreate, now: Date)
     return inserted;
   });
 
+  if (files) {
+    let position = 1;
+    for (const resource of imageSources) {
+      const bytes = await files.read(resource.imagePath!);
+      if (!bytes) continue;
+      const ext = resource.imagePath!.split('.').pop() ?? 'png';
+      const rel = await files.store(row.id, bytes, ext);
+      db.insert(postMedia)
+        .values({
+          postId: row.id,
+          position: position++,
+          path: rel,
+          mime: resource.imageMime ?? 'image/png',
+          bytes: bytes.length,
+          fromResourceId: resource.id,
+        })
+        .run();
+    }
+  }
+
+  if (input.official) {
+    db.update(posts)
+      .set({ status: 'official', updatedAt: now })
+      .where(and(eq(posts.id, row.id), eq(posts.userId, userId)))
+      .run();
+  }
+
   const post = getPost(db, userId, row.id);
   if (!post) throw new Error('post insert failed');
   return post;
@@ -137,7 +240,20 @@ export function getPost(db: Db, userId: number, id: number): Post | null {
     .get();
   if (!row) return null;
 
-  return toPost(row, linksForPosts(db, [row.id]).get(row.id) ?? [], postLimit(db, userId));
+  const limit = postLimit(db, userId);
+  const media = mediaForPosts(db, [row.id]).get(row.id) ?? [];
+  return toPost(
+    row,
+    linksForPosts(db, [row.id]).get(row.id) ?? [],
+    media,
+    limit,
+    readyChecks({
+      text: row.text,
+      limit,
+      mediaCount: media.length,
+      accountConnected: getConnectedAccount(db, userId) !== null,
+    }),
+  );
 }
 
 export function listPosts(
@@ -167,6 +283,11 @@ export function listPosts(
   }
   if (query.to !== undefined) {
     filterConditions.push(sql`${sortTime} <= ${dayBoundsUtc(query.to, timeZone).end.getTime()}`);
+  }
+  if (query.scheduled !== undefined) {
+    filterConditions.push(
+      query.scheduled ? isNotNull(posts.scheduledAt) : isNull(posts.scheduledAt),
+    );
   }
   if (query.resource_id !== undefined) {
     filterConditions.push(
@@ -209,12 +330,24 @@ export function listPosts(
   const last = pageRows.at(-1);
 
   const limit = postLimit(db, userId);
-  const links = linksForPosts(
-    db,
-    pageRows.map((row) => row.id),
-  );
+  const accountConnected = getConnectedAccount(db, userId) !== null;
+  const postIds = pageRows.map((row) => row.id);
+  const links = linksForPosts(db, postIds);
+  const media = mediaForPosts(db, postIds);
   const items = pageRows.map((row) => {
-    const post = toPost(row, links.get(row.id) ?? [], limit);
+    const postMedia = media.get(row.id) ?? [];
+    const post = toPost(
+      row,
+      links.get(row.id) ?? [],
+      postMedia,
+      limit,
+      readyChecks({
+        text: row.text,
+        limit,
+        mediaCount: postMedia.length,
+        accountConnected,
+      }),
+    );
     return { ...post, title: postListTitle(post.title, post.text) };
   });
 
@@ -324,7 +457,12 @@ export function unlinkResources(
   };
 }
 
-export function deletePosts(db: Db, userId: number, ids: number[]): PostDeleteResponse {
+export function deletePosts(
+  db: Db,
+  userId: number,
+  ids: number[],
+  removeMediaDir?: (postId: number) => void,
+): PostDeleteResponse {
   return {
     results: ids.map((id) => {
       const deleted = db
@@ -333,13 +471,138 @@ export function deletePosts(db: Db, userId: number, ids: number[]): PostDeleteRe
         .returning({ id: posts.id })
         .get();
 
-      return deleted
-        ? { id, ok: true as const }
-        : {
-            id,
-            ok: false as const,
-            error: { code: 'not_found', message: `Post ${id} not found` },
-          };
+      if (!deleted) {
+        return {
+          id,
+          ok: false as const,
+          error: { code: 'not_found', message: `Post ${id} not found` },
+        };
+      }
+      try {
+        removeMediaDir?.(id);
+      } catch {
+        // leave the directory; the post row is already gone
+      }
+      return { id, ok: true as const };
+    }),
+  };
+}
+
+function statusResultError(
+  id: number,
+  code: string,
+  message: string,
+  errors?: Array<{ path: string; message: string }>,
+): { id: number; ok: false; error: { code: string; message: string; errors?: typeof errors } } {
+  return { id, ok: false, error: { code, message, ...(errors ? { errors } : {}) } };
+}
+
+export function promotePosts(
+  db: Db,
+  userId: number,
+  ids: number[],
+  fileExists: (path: string) => boolean,
+  now: Date,
+): PostStatusResponse {
+  return {
+    results: ids.map((id) => {
+      const row = getPostRow(db, userId, id);
+      if (!row) {
+        return statusResultError(id, 'not_found', `Post ${id} not found`);
+      }
+      if (!(PROMOTE_FROM as readonly string[]).includes(row.status)) {
+        return statusResultError(id, 'invalid_status', `Post ${id} is ${row.status}`);
+      }
+      const mediaRows = db
+        .select({ position: postMedia.position, path: postMedia.path })
+        .from(postMedia)
+        .where(eq(postMedia.postId, id))
+        .all();
+      const checks = promoteChecks({
+        text: row.text,
+        limit: postLimit(db, userId),
+        media: mediaRows.map((media) => ({
+          position: media.position,
+          present: fileExists(media.path),
+        })),
+      });
+      if (checks.length > 0) {
+        return statusResultError(id, 'validation', `Post ${id} is not ready`, checks);
+      }
+      db.update(posts)
+        .set({ status: 'official', updatedAt: now })
+        .where(and(eq(posts.id, id), eq(posts.userId, userId)))
+        .run();
+      return { id, ok: true as const };
+    }),
+  };
+}
+
+export function demotePosts(db: Db, userId: number, ids: number[], now: Date): PostStatusResponse {
+  return {
+    results: ids.map((id) => {
+      const row = getPostRow(db, userId, id);
+      if (!row) {
+        return statusResultError(id, 'not_found', `Post ${id} not found`);
+      }
+      if (!(DEMOTE_FROM as readonly string[]).includes(row.status)) {
+        return statusResultError(id, 'invalid_status', `Post ${id} is ${row.status}`);
+      }
+      db.update(posts)
+        .set({ status: 'draft', lastError: null, retryCount: 0, updatedAt: now })
+        .where(and(eq(posts.id, id), eq(posts.userId, userId)))
+        .run();
+      return { id, ok: true as const };
+    }),
+  };
+}
+
+export function schedulePost(
+  db: Db,
+  userId: number,
+  id: number,
+  body: PostScheduleBody,
+  timeZone: string,
+  now: Date,
+): Post | null {
+  const row = getPostRow(db, userId, id);
+  if (!row) return null;
+  if (row.status === 'published') throw new PostImmutableError(id);
+  if (!(SCHEDULE_FROM as readonly string[]).includes(row.status)) {
+    throw new PostStatusError(id, row.status);
+  }
+  const at = parseScheduleTime(body.at, timeZone, now);
+  if (at === null) throw new ScheduleTimeError('Unrecognised time');
+  if (at.getTime() < now.getTime() && body.force !== true) {
+    throw new ScheduleTimeError('Time is in the past');
+  }
+  db.update(posts)
+    .set({ scheduledAt: at, updatedAt: now })
+    .where(and(eq(posts.id, id), eq(posts.userId, userId)))
+    .run();
+  return getPost(db, userId, id);
+}
+
+export function unschedulePosts(
+  db: Db,
+  userId: number,
+  ids: number[],
+  now: Date,
+): PostStatusResponse {
+  return {
+    results: ids.map((id) => {
+      const row = getPostRow(db, userId, id);
+      if (!row) {
+        return statusResultError(id, 'not_found', `Post ${id} not found`);
+      }
+      if (!(SCHEDULE_FROM as readonly string[]).includes(row.status)) {
+        return statusResultError(id, 'invalid_status', `Post ${id} is ${row.status}`);
+      }
+      db.update(posts)
+        .set({ scheduledAt: null, updatedAt: now })
+        .where(and(eq(posts.id, id), eq(posts.userId, userId)))
+        .run();
+      return { id, ok: true as const };
     }),
   };
 }

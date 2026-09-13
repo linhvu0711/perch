@@ -99,6 +99,15 @@ describe('posts', () => {
       estimated_cost: 0.015,
       links: [{ resource_id: 1, type: 'md', title: 'Idea' }],
       media: [],
+      ready: {
+        ok: false,
+        checks: [
+          { code: 'text', ok: true, label: 'Text is not empty' },
+          { code: 'limit', ok: true, label: '11 of 280 characters' },
+          { code: 'media', ok: true, label: '0 of 4 images' },
+          { code: 'account', ok: false, label: 'No X account connected' },
+        ],
+      },
     };
     expect(await created.json()).toEqual(expected);
 

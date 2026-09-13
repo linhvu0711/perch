@@ -60,15 +60,51 @@ function zoneOffsetMs(instant: Date, timeZone: string): number {
   return asUtc - instant.getTime();
 }
 
-function localDay(instant: Date, timeZone: string): string {
+const WEEKDAYS: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
+/** Local `{ date, time, weekday }` of `instant` in `timeZone`. */
+export function zonedParts(
+  instant: Date,
+  timeZone: string,
+): { date: string; time: string; weekday: number } {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    weekday: 'short',
   }).formatToParts(instant);
   const get = (type: string) => parts.find((part) => part.type === type)?.value;
-  return `${get('year')}-${get('month')}-${get('day')}`;
+  return {
+    date: `${get('year')}-${get('month')}-${get('day')}`,
+    time: `${get('hour')}:${get('minute')}`,
+    weekday: WEEKDAYS[get('weekday') ?? ''] ?? 0,
+  };
+}
+
+/** UTC instant for a wall `date` (`YYYY-MM-DD`) and `time` (`HH:mm`) in `timeZone`. */
+export function zonedToUtc(date: string, time: string, timeZone: string): Date {
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+  const [h, min] = time.split(':').map(Number) as [number, number];
+  const guess = new Date(Date.UTC(y, m - 1, d, h, min));
+  let instant = new Date(guess.getTime() - zoneOffsetMs(guess, timeZone));
+  instant = new Date(guess.getTime() - zoneOffsetMs(instant, timeZone));
+  return instant;
+}
+
+function localDay(instant: Date, timeZone: string): string {
+  return zonedParts(instant, timeZone).date;
 }
 
 /** UTC bounds [start, end] of a `YYYY-MM-DD` calendar day in `timeZone`, inclusive. */

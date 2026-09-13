@@ -81,8 +81,8 @@ perch post delete <id>... [--yes]
 - `--title` is a short internal label shown in lists and on the calendar. It is never sent to X. Optional; lists fall back to the first line of text.
 - `promote` checks: text not empty, weighted chars ≤ limit, ≤ 4 media, media files present. Errors list every failure.
 - `schedule` on a published post errors. Scheduling in the past errors unless `--force`.
-- `attach`: total media ≤ 4. From a resource: copies the file and links the resource. From a file: uploads it. Media has no alt text.
-- `detach --media <n>`: n is the 1-based position shown by `post show`.
+- `attach`: total media ≤ 4. From a resource: copies the file and links the resource. From a file: uploads it. Media has no alt text. `--json` prints per-item results: `[{ id, ok, media }]` for resources, `[{ name, ok, media }]` for files, with `error` on failures — including `read_failed` for files the CLI cannot read.
+- `detach --media <n>`: n is the 1-based position shown by `post show`. Prints the remaining media array (`--json`: `[{ id, position, mime, bytes, from_resource_id }]`).
 - `publish`: on a draft, runs the promote checks and promotes first; clears the schedule time; on success status becomes published and `x_account_id` is set. `post list --from/--to` filter on schedule time, or published time for published posts.
 - `retry`: only for failed posts; sends now.
 - `delete`: local only. Never deletes on X.

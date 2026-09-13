@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 
 import {
   formatCost,
@@ -8,6 +9,7 @@ import {
   type PostPatch,
   type PostPreview,
   type PostStatus,
+  type PostStatusResponse,
 } from '@perch/core';
 import type { Command } from 'commander';
 
@@ -55,6 +57,10 @@ function printPost(ctx: CliContext, options: GlobalOptions, post: Post): void {
       scheduled: post.scheduled_at ?? '',
       published: post.published_at ?? '',
       links: post.links.map((link) => link.resource_id).join(', '),
+      media: post.media.map((item) => item.position).join(', '),
+      ready: post.ready.checks
+        .map((check) => `${check.ok ? 'ok' : 'no'} ${check.label}`)
+        .join('; '),
       created: post.created_at,
       updated: post.updated_at,
     })}\n\n${post.text}\n`,
@@ -125,6 +131,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
     .option('--text <text>')
     .option('--file <path>')
     .option('--from <rid...>')
+    .option('--official')
     .action(
       async (
         stdinArg: string | undefined,
@@ -133,6 +140,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
           text?: string;
           file?: string;
           from?: string[];
+          official?: boolean;
         },
       ) => {
         const text = await readTextInput(ctx, commandOptions, stdinArg);
@@ -145,6 +153,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
               ...(commandOptions.title !== undefined ? { title: commandOptions.title } : {}),
               text,
               ...(from.length > 0 ? { from } : {}),
+              ...(commandOptions.official === true ? { official: true } : {}),
             },
           }),
         );
@@ -161,6 +170,8 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
     .option('--to <d>')
     .option('--limit <n>', 'page size', String(POST_LIST_LIMIT_DEFAULT))
     .option('--cursor <cursor>')
+    .option('--scheduled')
+    .option('--unscheduled')
     .action(
       async (commandOptions: {
         status?: string;
@@ -169,7 +180,12 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
         to?: string;
         limit: string;
         cursor?: string;
+        scheduled?: boolean;
+        unscheduled?: boolean;
       }) => {
+        if (commandOptions.scheduled === true && commandOptions.unscheduled === true) {
+          throw new CliError('bad_args', 'Use one of --scheduled or --unscheduled');
+        }
         if (
           commandOptions.status !== undefined &&
           !(POST_STATUSES as readonly string[]).includes(commandOptions.status)
@@ -202,6 +218,8 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
               ...(commandOptions.search !== undefined ? { search: commandOptions.search } : {}),
               ...(commandOptions.from !== undefined ? { from: commandOptions.from } : {}),
               ...(commandOptions.to !== undefined ? { to: commandOptions.to } : {}),
+              ...(commandOptions.scheduled === true ? { scheduled: 'true' as const } : {}),
+              ...(commandOptions.unscheduled === true ? { scheduled: 'false' as const } : {}),
               limit: String(Number(commandOptions.limit)),
               ...(commandOptions.cursor !== undefined ? { cursor: commandOptions.cursor } : {}),
             },
@@ -368,6 +386,170 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
       printResult(ctx, resolveMode(program.opts<GlobalOptions>(), ctx.isTTY), response.results);
       const failed = response.results.filter((result) => !result.ok).length;
       if (failed > 0) throw new BatchFailure(failed, response.results.length);
+    });
+
+  post
+    .command('attach <id>')
+    .description('Attach media to a post')
+    .option('--resource <rid...>')
+    .option('--file <path...>')
+    .action(async (idValue: string, commandOptions: { resource?: string[]; file?: string[] }) => {
+      const id = positiveId(idValue);
+      const mode = resolveMode(program.opts<GlobalOptions>(), ctx.isTTY);
+      const resourceIds = (commandOptions.resource ?? []).map((value) => positiveId(value, true));
+      const files = commandOptions.file ?? [];
+      if (resourceIds.length === 0 && files.length === 0) {
+        throw new CliError('bad_args', 'Use --resource or --file');
+      }
+
+      const api = apiFor(program, ctx);
+      const results: Array<{
+        name?: string;
+        id?: number;
+        ok: boolean;
+        error?: { code: string; message: string };
+      }> = [];
+      if (resourceIds.length > 0) {
+        const response = await api.call(
+          api.client.api.posts[':id'].media.$post({
+            param: { id: String(id) },
+            json: { resource_ids: resourceIds },
+          }),
+        );
+        results.push(...response.results);
+      }
+      if (files.length > 0) {
+        const readable: File[] = [];
+        for (const filePath of files) {
+          const name = path.basename(filePath);
+          try {
+            readable.push(
+              new File([fs.readFileSync(filePath).slice().buffer as ArrayBuffer], name),
+            );
+          } catch (error) {
+            results.push({
+              name,
+              ok: false,
+              error: {
+                code: 'read_failed',
+                message: error instanceof Error ? error.message : 'Cannot read file',
+              },
+            });
+          }
+        }
+        if (readable.length > 0) {
+          const response = await api.call(
+            api.client.api.posts[':id'].media.files.$post({
+              param: { id: String(id) },
+              form: { files: readable },
+            }),
+          );
+          results.push(...response.results);
+        }
+      }
+
+      printResult(ctx, mode, results);
+      const failed = results.filter((result) => !result.ok).length;
+      if (failed > 0) throw new BatchFailure(failed, results.length);
+    });
+
+  post
+    .command('detach <id>')
+    .description('Detach media from a post')
+    .option('--media <n...>')
+    .option('--all')
+    .action(async (idValue: string, commandOptions: { media?: string[]; all?: boolean }) => {
+      const id = positiveId(idValue);
+      const positions = (commandOptions.media ?? []).map((value) => positiveId(value, true));
+      if (positions.length > 0 === (commandOptions.all === true)) {
+        throw new CliError('bad_args', 'Use one of --media or --all');
+      }
+
+      const api = apiFor(program, ctx);
+      const response = await api.call(
+        api.client.api.posts[':id'].media.$delete({
+          param: { id: String(id) },
+          json: commandOptions.all ? { all: true } : { positions },
+        }),
+      );
+      printResult(ctx, resolveMode(program.opts<GlobalOptions>(), ctx.isTTY), response.media);
+    });
+
+  const statusPrint = (
+    results: PostStatusResponse['results'],
+    mode: ReturnType<typeof resolveMode>,
+  ): void => {
+    if (mode === 'json') {
+      printResult(ctx, mode, results);
+      return;
+    }
+    printResult(
+      ctx,
+      mode,
+      results.map((result) => ({
+        id: result.id,
+        ok: result.ok,
+        error: result.ok
+          ? ''
+          : result.error.message +
+            (result.error.errors !== undefined
+              ? `: ${result.error.errors.map((e) => e.message).join('; ')}`
+              : ''),
+      })),
+    );
+  };
+
+  post
+    .command('promote <id...>')
+    .description('Promote drafts to official')
+    .action(async (idValues: string[]) => {
+      const ids = idValues.map((value) => positiveId(value, true));
+      const api = apiFor(program, ctx);
+      const response = await api.call(api.client.api.posts.promote.$post({ json: { ids } }));
+      statusPrint(response.results, resolveMode(program.opts<GlobalOptions>(), ctx.isTTY));
+      const failed = response.results.filter((result) => !result.ok).length;
+      if (failed > 0) throw new BatchFailure(failed, response.results.length);
+    });
+
+  post
+    .command('demote <id...>')
+    .description('Demote official or failed posts to draft')
+    .action(async (idValues: string[]) => {
+      const ids = idValues.map((value) => positiveId(value, true));
+      const api = apiFor(program, ctx);
+      const response = await api.call(api.client.api.posts.demote.$post({ json: { ids } }));
+      statusPrint(response.results, resolveMode(program.opts<GlobalOptions>(), ctx.isTTY));
+      const failed = response.results.filter((result) => !result.ok).length;
+      if (failed > 0) throw new BatchFailure(failed, response.results.length);
+    });
+
+  post
+    .command('unschedule <id...>')
+    .description('Clear the schedule on posts')
+    .action(async (idValues: string[]) => {
+      const ids = idValues.map((value) => positiveId(value, true));
+      const api = apiFor(program, ctx);
+      const response = await api.call(api.client.api.posts.unschedule.$post({ json: { ids } }));
+      statusPrint(response.results, resolveMode(program.opts<GlobalOptions>(), ctx.isTTY));
+      const failed = response.results.filter((result) => !result.ok).length;
+      if (failed > 0) throw new BatchFailure(failed, response.results.length);
+    });
+
+  post
+    .command('schedule <id>')
+    .description('Set the schedule time on a post')
+    .requiredOption('--at <time>')
+    .option('--force')
+    .action(async (idValue: string, commandOptions: { at: string; force?: boolean }) => {
+      const id = positiveId(idValue);
+      const api = apiFor(program, ctx);
+      const post = await api.call(
+        api.client.api.posts[':id'].schedule.$post({
+          param: { id: String(id) },
+          json: { at: commandOptions.at, ...(commandOptions.force ? { force: true } : {}) },
+        }),
+      );
+      printPost(ctx, program.opts<GlobalOptions>(), post);
     });
 
   post

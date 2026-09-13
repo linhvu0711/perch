@@ -1,28 +1,50 @@
-import type { Post } from '@perch/core';
+import type { Post, PostMedia } from '@perch/core';
 import {
   CHAR_LIMIT_DEFAULT,
   COST_POST_USD,
   COST_POST_WITH_URL_USD,
+  DEFAULT_TIMEZONE,
   estimateCost,
   formatCost,
+  POST_MEDIA_MAX,
+  readyChecks,
   weightedLength,
 } from '@perch/core';
-import { FileText, FolderOpen, Trash2, X } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  FileText,
+  FolderOpen,
+  Plus,
+  Trash2,
+  TriangleAlert,
+  X,
+} from 'lucide-react';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 
 import { ApiError, errorMessage } from '@/lib/api';
+import { formatSchedule } from '@/lib/format';
 import {
   useAccount,
   useCreatePost,
   useDeletePosts,
+  useDemotePosts,
+  useDetachMedia,
   usePost,
+  usePromotePosts,
+  useSchedulePost,
+  useSettings,
   useUnlinkResources,
+  useUnschedulePosts,
   useUpdatePost,
 } from '@/lib/queries';
 
 import { ConfirmDialog } from './ConfirmDialog';
+import { DateTimePicker } from './DateTimePicker';
 import { IconButton } from './IconButton';
+import { Lightbox } from './Lightbox';
 import { PostPreview } from './PostPreview';
 import { ResourcesDrawer } from './ResourcesDrawer';
 import { StatusPill } from './StatusPill';
@@ -46,6 +68,7 @@ const EMPTY_POST: Post = {
   estimated_cost: COST_POST_USD,
   links: [],
   media: [],
+  ready: { ok: false, checks: [] },
 };
 
 export function PostModal(): JSX.Element | null {
@@ -60,10 +83,17 @@ export function PostModal(): JSX.Element | null {
 
   const postQuery = usePost(isNew || invalidId ? null : parsedId);
   const account = useAccount();
+  const settings = useSettings();
+  const timeZone = settings.data?.timezone ?? DEFAULT_TIMEZONE;
   const createPost = useCreatePost();
   const updatePost = useUpdatePost();
   const deletePosts = useDeletePosts();
+  const promotePosts = usePromotePosts();
+  const demotePosts = useDemotePosts();
+  const schedulePost = useSchedulePost();
+  const unschedulePosts = useUnschedulePosts();
   const unlinkResources = useUnlinkResources();
+  const detachMedia = useDetachMedia();
   const modalRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const timerRef = useRef<number>(undefined);
@@ -71,13 +101,17 @@ export function PostModal(): JSX.Element | null {
   const savedRef = useRef(false);
   const pendingRef = useRef<{ title?: string; text?: string }>({});
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerType, setDrawerType] = useState<'all' | 'image'>('all');
   const [confirm, setConfirm] = useState<'delete' | null>(null);
+  const [confirmDetach, setConfirmDetach] = useState<PostMedia | null>(null);
+  const [lightbox, setLightbox] = useState<PostMedia | null>(null);
   const [drafts, setDrafts] = useState<{ title: string; text: string } | null>(null);
 
   const post = postQuery.data;
   const readOnly = post?.status === 'published';
   const currentId = post?.id;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset when the post changes
   useEffect(() => {
     setDrafts(null);
     savedRef.current = false;
@@ -94,6 +128,7 @@ export function PostModal(): JSX.Element | null {
     }
   }, [navigate, postQuery.error]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: focus when the post changes
   useEffect(() => {
     const modal = modalRef.current;
     if (modal && !modal.contains(document.activeElement)) modal.focus();
@@ -185,11 +220,45 @@ export function PostModal(): JSX.Element | null {
         setConfirm(null);
         return;
       }
+      if (confirmDetach !== null) {
+        setConfirmDetach(null);
+        return;
+      }
       requestClose();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [confirm, requestClose]);
+  }, [confirm, confirmDetach, requestClose]);
+
+  const linkTitle = useCallback(
+    (resourceId: number): string =>
+      post?.links.find((link) => link.resource_id === resourceId)?.title ??
+      `Resource ${resourceId}`,
+    [post],
+  );
+
+  const detachOne = useCallback(
+    (media: PostMedia) => {
+      if (currentId === undefined) return;
+      void detachMedia
+        .mutateAsync({ id: currentId, positions: [media.position] })
+        .then(() =>
+          toast(
+            media.from_resource_id !== null
+              ? 'Image removed. The resource is still linked.'
+              : 'Image removed',
+          ),
+        )
+        .catch((error: unknown) => toast(errorMessage(error), 'warn'));
+    },
+    [currentId, detachMedia],
+  );
+
+  const mediaTitle = useCallback(
+    (media: PostMedia): string =>
+      media.from_resource_id !== null ? linkTitle(media.from_resource_id) : 'Uploaded file',
+    [linkTitle],
+  );
 
   const scheduleSave = useCallback(
     (patch: { title?: string; text?: string }) => {
@@ -246,6 +315,7 @@ export function PostModal(): JSX.Element | null {
   }
 
   const loadingShell = (body: JSX.Element) => (
+    // biome-ignore lint/a11y/noStaticElementInteractions: scrim click-to-close
     <div
       className="scrim"
       onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
@@ -292,6 +362,7 @@ export function PostModal(): JSX.Element | null {
 
   return (
     <>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: scrim click-to-close */}
       <div
         className="scrim"
         onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
@@ -307,8 +378,55 @@ export function PostModal(): JSX.Element | null {
           <div className="mhead">
             <span className="id">{isNew ? 'new' : `#${viewPost.id}`}</span>
             <StatusPill status={viewPost.status} />
-            <span className="muted">{isNew ? 'New draft' : 'Not scheduled'}</span>
+            <span className="muted">
+              {isNew
+                ? 'New draft'
+                : viewPost.scheduled_at !== null
+                  ? `Scheduled · ${formatSchedule(viewPost.scheduled_at, timeZone)}`
+                  : 'Not scheduled'}
+            </span>
             <div className="right">
+              {!isNew && viewPost.status === 'draft' && (
+                <IconButton
+                  label="Promote to official"
+                  icon={ArrowUp}
+                  variant="primary"
+                  onClick={() => {
+                    if (currentId === undefined) return;
+                    void (async () => {
+                      const ok = await drain();
+                      if (!ok) return;
+                      try {
+                        const response = await promotePosts.mutateAsync([currentId]);
+                        const result = response.results[0];
+                        if (result !== undefined && result.ok) {
+                          toast('Promoted');
+                        } else if (result !== undefined) {
+                          toast(result.error.errors?.[0]?.message ?? result.error.message, 'warn');
+                        }
+                      } catch (error) {
+                        toast(errorMessage(error), 'warn');
+                      }
+                    })();
+                  }}
+                />
+              )}
+              {!isNew && (viewPost.status === 'official' || viewPost.status === 'failed') && (
+                <IconButton
+                  label="Demote to draft"
+                  icon={ArrowDown}
+                  variant="ghost"
+                  onClick={() => {
+                    if (currentId === undefined) return;
+                    void demotePosts
+                      .mutateAsync([currentId])
+                      .then((response) => {
+                        if (response.results[0]?.ok) toast('Demoted to draft');
+                      })
+                      .catch((error: unknown) => toast(errorMessage(error), 'warn'));
+                  }}
+                />
+              )}
               {!isNew && (
                 <IconButton
                   label="Delete post"
@@ -356,6 +474,114 @@ export function PostModal(): JSX.Element | null {
                 />
               </div>
               <div className="field">
+                {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the slot grid */}
+                <label>
+                  Images{' '}
+                  <span className="faint">
+                    {viewPost.media.length} of {POST_MEDIA_MAX}
+                  </span>
+                </label>
+                <div className="slots">
+                  {[0, 1, 2, 3].slice(0, POST_MEDIA_MAX).map((index) => {
+                    const media = viewPost.media[index];
+                    if (media === undefined) {
+                      return (
+                        <button
+                          key={`empty-${index}`}
+                          type="button"
+                          className="slot"
+                          title="Add image"
+                          aria-label="Add image"
+                          disabled={readOnly}
+                          onClick={() => {
+                            setDrawerType('image');
+                            setDrawerOpen(true);
+                          }}
+                        >
+                          {index === viewPost.media.length && <Plus size={18} strokeWidth={1.75} />}
+                        </button>
+                      );
+                    }
+                    const caption = mediaTitle(media);
+                    return (
+                      // biome-ignore lint/a11y/useSemanticElements: holds a nested remove button
+                      <div
+                        key={media.id}
+                        className="slot filled"
+                        role="button"
+                        tabIndex={0}
+                        title={
+                          media.from_resource_id !== null
+                            ? `From ${caption}. Click to view.`
+                            : 'Uploaded file. Click to view.'
+                        }
+                        onClick={() => setLightbox(media)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') setLightbox(media);
+                        }}
+                      >
+                        <img
+                          src={`/api/posts/${viewPost.id}/media/${media.id}/file`}
+                          alt={caption}
+                        />
+                        {!readOnly && (
+                          <button
+                            type="button"
+                            className="x"
+                            title="Remove"
+                            aria-label={`Remove image ${media.position}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (media.from_resource_id !== null) {
+                                detachOne(media);
+                              } else {
+                                setConfirmDetach(media);
+                              }
+                            }}
+                          >
+                            <X size={11} strokeWidth={2.5} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="field">
+                {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the picker */}
+                <label>Schedule</label>
+                <DateTimePicker
+                  value={viewPost.scheduled_at}
+                  timeZone={timeZone}
+                  disabled={readOnly}
+                  onSet={(at) => {
+                    void (async () => {
+                      const postId = await ensurePostId();
+                      if (postId === null) return;
+                      try {
+                        await schedulePost.mutateAsync({ id: postId, at });
+                        toast('Schedule saved');
+                      } catch (error) {
+                        toast(errorMessage(error), 'warn');
+                      }
+                    })();
+                  }}
+                  onClear={() => {
+                    if (currentId === undefined) return;
+                    void unschedulePosts
+                      .mutateAsync([currentId])
+                      .then(() => toast('Schedule cleared'))
+                      .catch((error: unknown) => toast(errorMessage(error), 'warn'));
+                  }}
+                />
+                {viewPost.status === 'draft' && viewPost.scheduled_at !== null && (
+                  <span className="note">
+                    A scheduled <b>draft</b> is not sent. Promote it so the scheduler sends it.
+                  </span>
+                )}
+              </div>
+              <div className="field">
+                {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the links list */}
                 <label>
                   Linked resources <span className="faint">{viewPost.links.length}</span>
                   {!readOnly && (
@@ -363,7 +589,10 @@ export function PostModal(): JSX.Element | null {
                       <IconButton
                         label="Browse resources"
                         icon={FolderOpen}
-                        onClick={() => setDrawerOpen(true)}
+                        onClick={() => {
+                          setDrawerType('all');
+                          setDrawerOpen(true);
+                        }}
                       />
                     </span>
                   )}
@@ -423,9 +652,33 @@ export function PostModal(): JSX.Element | null {
                 </div>
                 <div className="card metric">
                   <div className="l">Publish as</div>
-                  <div className="v">—</div>
+                  <div className="v">
+                    {account.data?.account != null ? `@${account.data.account.username}` : '—'}
+                  </div>
                 </div>
               </div>
+              {!readOnly && (
+                <div>
+                  <h2>Ready to publish?</h2>
+                  <ul className="checks">
+                    {readyChecks({
+                      text: viewPost.text,
+                      limit: viewPost.limit,
+                      mediaCount: viewPost.media.length,
+                      accountConnected: account.data?.account != null,
+                    }).checks.map((check) => (
+                      <li key={check.code} className={check.ok ? 'ok' : 'bad'}>
+                        {check.ok ? (
+                          <Check size={14} strokeWidth={2} />
+                        ) : (
+                          <TriangleAlert size={14} strokeWidth={1.75} />
+                        )}
+                        {check.label}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className="note">
                 {hasUrl ? (
                   <>
@@ -443,6 +696,7 @@ export function PostModal(): JSX.Element | null {
             <ResourcesDrawer
               post={post ?? null}
               open={drawerOpen}
+              initialType={drawerType}
               ensurePostId={ensurePostId}
               onClose={() => setDrawerOpen(false)}
               onNavigate={openResource}
@@ -460,6 +714,33 @@ export function PostModal(): JSX.Element | null {
           </div>
         </div>
       </div>
+      {lightbox !== null && (
+        <Lightbox
+          src={`/api/posts/${viewPost.id}/media/${lightbox.id}/file`}
+          caption={mediaTitle(lightbox)}
+          onClose={() => setLightbox(null)}
+        />
+      )}
+      {confirmDetach !== null && currentId !== undefined && (
+        <ConfirmDialog
+          title="Remove this image?"
+          body={
+            <p>
+              It was uploaded straight to the post and is <b>not a resource</b>. Removing it deletes
+              the file. You would have to upload it again.
+            </p>
+          }
+          ok="Remove"
+          danger
+          busy={detachMedia.isPending}
+          onOk={() => {
+            const media = confirmDetach;
+            setConfirmDetach(null);
+            detachOne(media);
+          }}
+          onCancel={() => setConfirmDetach(null)}
+        />
+      )}
       {confirm === 'delete' && post && (
         <ConfirmDialog
           title={`Delete post #${post.id}?`}

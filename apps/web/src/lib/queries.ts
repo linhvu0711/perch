@@ -3,6 +3,8 @@ import type {
   ImageCreateResponse,
   NoteCreate,
   PostCreate,
+  PostMediaDetachBody,
+  PostMediaFilesResponse,
   PostPatch,
   PostStatus,
   ResourcePatch,
@@ -239,6 +241,7 @@ export interface PostFilters {
   status?: PostStatus;
   search?: string;
   resource_id?: number;
+  scheduled?: boolean;
 }
 
 export const POSTS_PAGE_SIZE = 50;
@@ -254,6 +257,9 @@ export function usePosts(filters: PostFilters, enabled = true) {
             ...(filters.search !== undefined ? { search: filters.search } : {}),
             ...(filters.resource_id !== undefined
               ? { resource_id: String(filters.resource_id) }
+              : {}),
+            ...(filters.scheduled !== undefined
+              ? { scheduled: filters.scheduled ? ('true' as const) : ('false' as const) }
               : {}),
             limit: String(POSTS_PAGE_SIZE),
             ...(pageParam !== undefined ? { cursor: pageParam } : {}),
@@ -325,6 +331,63 @@ export function useDeletePosts() {
   });
 }
 
+export function usePromotePosts() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: number[]) => unwrap(api.api.posts.promote.$post({ json: { ids } })),
+    onSuccess: (data) => {
+      for (const result of data.results) {
+        if (result.ok) {
+          void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', result.id] });
+        }
+      }
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
+    },
+  });
+}
+
+export function useDemotePosts() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: number[]) => unwrap(api.api.posts.demote.$post({ json: { ids } })),
+    onSuccess: (data) => {
+      for (const result of data.results) {
+        if (result.ok) {
+          void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', result.id] });
+        }
+      }
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
+    },
+  });
+}
+
+export function useUnschedulePosts() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: number[]) => unwrap(api.api.posts.unschedule.$post({ json: { ids } })),
+    onSuccess: (data) => {
+      for (const result of data.results) {
+        if (result.ok) {
+          void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', result.id] });
+        }
+      }
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
+    },
+  });
+}
+
+export function useSchedulePost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, at }: { id: number; at: string }) =>
+      unwrap(api.api.posts[':id'].schedule.$post({ param: { id: String(id) }, json: { at } })),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['posts', 'detail', data.id], data);
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
+    },
+  });
+}
+
 export function useLinkResources() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -357,6 +420,62 @@ export function useUnlinkResources() {
       void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', id] });
       void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
       void queryClient.invalidateQueries({ queryKey: ['resources', 'list'] });
+    },
+  });
+}
+
+export function useAttachMedia() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, resource_ids }: { id: number; resource_ids: number[] }) =>
+      unwrap(
+        api.api.posts[':id'].media.$post({
+          param: { id: String(id) },
+          json: { resource_ids },
+        }),
+      ),
+    onSuccess: (_data, { id }) => {
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', id] });
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
+      void queryClient.invalidateQueries({ queryKey: ['resources', 'list'] });
+    },
+  });
+}
+
+export function useAttachFiles() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, files }: { id: number; files: File[] }) => {
+      const form = new FormData();
+      for (const file of files) form.append('files', file);
+      return unwrap(
+        fetch(`/api/posts/${id}/media/files`, {
+          method: 'POST',
+          body: form,
+          credentials: 'same-origin',
+        }) as Promise<JsonResponse<PostMediaFilesResponse>>,
+      );
+    },
+    onSuccess: (_data, { id }) => {
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', id] });
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
+    },
+  });
+}
+
+export function useDetachMedia() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number } & PostMediaDetachBody) =>
+      unwrap(
+        api.api.posts[':id'].media.$delete({
+          param: { id: String(id) },
+          json: body,
+        }),
+      ),
+    onSuccess: (_data, { id }) => {
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', id] });
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
     },
   });
 }

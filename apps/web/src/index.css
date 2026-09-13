@@ -917,7 +917,6 @@ main {
   background: var(--surface);
   resize: vertical;
   min-height: 70px;
-  font-size: 13px;
   font: inherit;
   color: inherit;
 }
@@ -1317,6 +1316,18 @@ textarea:focus-visible {
 .ta::placeholder {
   color: var(--text-3);
 }
+.dt {
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 6px 9px;
+  background: var(--surface);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  width: 118px;
+}
+.dt.time {
+  width: 64px;
+}
 .field {
   margin-bottom: 16px;
 }
@@ -1446,6 +1457,27 @@ textarea:focus-visible {
 .metric .v.bad {
   color: var(--failed);
 }
+ul.checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+ul.checks li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--text-2);
+}
+ul.checks li.bad {
+  color: var(--failed);
+}
+ul.checks li.ok svg {
+  color: var(--published);
+}
 .linked {
   display: flex;
   flex-direction: column;
@@ -1486,6 +1518,116 @@ textarea:focus-visible {
   color: var(--failed);
   background: var(--failed-bg);
 }
+
+/* post media */
+.slots {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.slot {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  border: 1px dashed var(--border-strong);
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+  position: relative;
+  cursor: pointer;
+  padding: 0;
+  background: none;
+}
+.slot.filled {
+  border: 0;
+  cursor: zoom-in;
+}
+.slot.filled img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.slot.filled .x {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.slot.filled .x svg {
+  width: 11px;
+  height: 11px;
+}
+.slot.filled .x:hover {
+  background: var(--failed);
+}
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(8, 9, 12, 0.82);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  cursor: zoom-out;
+}
+.lightbox .img {
+  max-width: min(1100px, 100%);
+  max-height: 82vh;
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.lightbox .cap {
+  color: #fff;
+  font-size: 13px;
+  opacity: 0.8;
+}
+.xcard .imgs {
+  margin-top: 12px;
+  display: grid;
+  gap: 3px;
+  border-radius: 14px;
+  overflow: hidden;
+  height: 220px;
+}
+.xcard .imgs.n1 {
+  grid-template-columns: 1fr;
+}
+.xcard .imgs.n2 {
+  grid-template-columns: 1fr 1fr;
+}
+.xcard .imgs.n3 {
+  grid-template-columns: 1fr 1fr;
+}
+.xcard .imgs.n3 > :first-child {
+  grid-row: span 2;
+}
+.xcard .imgs.n4 {
+  grid-template-columns: 1fr 1fr;
+}
+.xcard .imgs img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.ditem .ic img {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
 .drawer {
   position: absolute;
   top: 0;
