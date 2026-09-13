@@ -1,4 +1,11 @@
-import { DEFAULT_TIMEZONE } from '@perch/core';
+import {
+  CHAR_LIMIT_DEFAULT,
+  CHAR_LIMIT_MAX,
+  charLimitOverrideSchema,
+  DEFAULT_TIMEZONE,
+  formatUsd,
+  X_COSTS_USD,
+} from '@perch/core';
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { useSearchParams } from 'react-router';
 import { LogOut, Monitor, Moon, Sun, type LucideIcon } from 'lucide-react';
@@ -90,7 +97,7 @@ export function Settings() {
         <>
           <div>
             <div className="k">No account connected</div>
-            <div className="d">Connect an X account to publish. One account at a time. Costs $0.010 once.</div>
+            <div className="d">Connect an X account to publish. One account at a time. Costs {formatUsd(X_COSTS_USD.getMe)} once.</div>
           </div>
           <button className="btn primary" onClick={() => setConfirm('connect')}>Connect X</button>
         </>
@@ -119,8 +126,8 @@ export function Settings() {
   async function saveLimit(): Promise<void> {
     const saved = savedLimit === null ? '' : String(savedLimit);
     if (limit === saved) return;
-    if (limit !== '' && !/^\d+$/.test(limit)) {
-      toast('Enter a whole number', 'warn');
+    if (limit !== '' && !charLimitOverrideSchema.safeParse(Number(limit)).success) {
+      toast(`Enter a whole number from 1 to ${CHAR_LIMIT_MAX.toLocaleString('en-US')}`, 'warn');
       setLimit(saved);
       return;
     }
@@ -190,7 +197,7 @@ export function Settings() {
             </div>
             <div className="card set">
               <div><div className="k">Character limit</div><div className="d">Set from your X plan when you connect. Override if needed.</div></div>
-              <input className="mono" inputMode="numeric" placeholder="280" value={limit} onChange={(event) => setLimit(event.target.value)} onBlur={() => void saveLimit()} onKeyDown={submitLimit} />
+              <input className="mono" inputMode="numeric" placeholder={String(CHAR_LIMIT_DEFAULT)} value={limit} onChange={(event) => setLimit(event.target.value)} onBlur={() => void saveLimit()} onKeyDown={submitLimit} />
             </div>
             <div className="card set">
               <div><div className="k">Theme</div><div className="d">Follows your system by default.</div></div>
@@ -208,7 +215,7 @@ export function Settings() {
         <ConfirmDialog
           title="Connect an X account"
           body={
-            <p>You will be sent to X to approve Perch. Scopes: read and write posts, upload media, read your profile. The plan check costs <b>$0.010</b> once.</p>
+            <p>You will be sent to X to approve Perch. Scopes: read and write posts, upload media, read your profile. The plan check costs <b>{formatUsd(X_COSTS_USD.getMe)}</b> once.</p>
           }
           ok="Continue to X"
           onCancel={() => setConfirm(null)}
