@@ -259,5 +259,5 @@ export function detachMedia(
     }
   }
   if (cleanupError !== undefined) throw cleanupError;
-  return getPost(db, userId, postId);
+  return getPost(db, userId, postId, new Date());
 }

@@ -37,6 +37,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  not,
   or,
   type SQL,
   sql,
@@ -94,7 +95,7 @@ export class TagExistsError extends Error {
 }
 
 type PostRow = typeof posts.$inferSelect;
-type PostJoinRow = PostRow & { username: string | null };
+type PostJoinRow = PostRow & { username: string | null; missed: number };
 
 function toPost(
   row: PostJoinRow,
@@ -128,6 +129,7 @@ function toPost(
     tags,
     media,
     ready,
+    missed: row.missed === 1,
   };
 }
 
@@ -246,14 +248,18 @@ export async function createPost(
       .run();
   }
 
-  const post = getPost(db, userId, row.id);
+  const post = getPost(db, userId, row.id, now);
   if (!post) throw new Error('post insert failed');
   return post;
 }
 
-export function getPost(db: Db, userId: number, id: number): Post | null {
+export function getPost(db: Db, userId: number, id: number, now: Date): Post | null {
   const row = db
-    .select({ ...getTableColumns(posts), username: xAccounts.username })
+    .select({
+      ...getTableColumns(posts),
+      username: xAccounts.username,
+      missed: sql<number>`${missedSql(userId, now)}`,
+    })
     .from(posts)
     .leftJoin(xAccounts, eq(xAccounts.id, posts.xAccountId))
     .where(and(eq(posts.id, id), eq(posts.userId, userId)))
@@ -282,6 +288,7 @@ export function listPosts(
   userId: number,
   query: PostListQuery,
   timeZone: string,
+  now: Date,
 ): PostList {
   const sortTime = sql`CASE WHEN ${posts.status} = 'published' THEN ${posts.publishedAt} ELSE ${posts.scheduledAt} END`;
 
@@ -309,6 +316,10 @@ export function listPosts(
     filterConditions.push(
       query.scheduled ? isNotNull(posts.scheduledAt) : isNull(posts.scheduledAt),
     );
+  }
+  if (query.missed !== undefined) {
+    const condition = missedSql(userId, now);
+    filterConditions.push(query.missed ? condition : not(sql`(${condition})`));
   }
   if (query.resource_id !== undefined) {
     filterConditions.push(
@@ -357,7 +368,11 @@ export function listPosts(
   }
 
   const rows = db
-    .select({ ...getTableColumns(posts), username: xAccounts.username })
+    .select({
+      ...getTableColumns(posts),
+      username: xAccounts.username,
+      missed: sql<number>`${missedSql(userId, now)}`,
+    })
     .from(posts)
     .leftJoin(xAccounts, eq(xAccounts.id, posts.xAccountId))
     .where(and(...pageConditions))
@@ -426,7 +441,7 @@ export function updatePost(
     .where(and(eq(posts.id, id), eq(posts.userId, userId)))
     .run();
 
-  return getPost(db, userId, id);
+  return getPost(db, userId, id, now);
 }
 
 export function getPostRow(db: Db, userId: number, id: number): PostRow | undefined {
@@ -439,6 +454,20 @@ export function getPostRow(db: Db, userId: number, id: number): PostRow | undefi
 
 function accountConnectedAtSql(userId: number | typeof posts.userId, at: SQL): SQL {
   return sql`EXISTS (select 1 from x_accounts where x_accounts.user_id = ${userId} and x_accounts.connected_at <= ${at} and (x_accounts.disconnected_at is null or x_accounts.disconnected_at > ${at}))`;
+}
+
+/**
+ * Scheduled posts whose time has already passed without Perch sending them:
+ * drafts that were never promoted, or officials scheduled while the account
+ * was disconnected.
+ */
+export function missedSql(userId: number | typeof posts.userId, now: Date): SQL {
+  return sql`${posts.scheduledAt} IS NOT NULL
+    AND ${posts.scheduledAt} < ${now.getTime()}
+    AND (
+      ${posts.status} = 'draft'
+      OR (${posts.status} = 'official' AND NOT ${accountConnectedAtSql(userId, sql`${posts.scheduledAt}`)})
+    )`;
 }
 
 /** Official posts due to be sent at `now`, oldest schedule time first. */
@@ -643,7 +672,7 @@ export function schedulePost(
     .set({ scheduledAt: at, updatedAt: now })
     .where(and(eq(posts.id, id), eq(posts.userId, userId)))
     .run();
-  return getPost(db, userId, id);
+  return getPost(db, userId, id, now);
 }
 
 export function unschedulePosts(

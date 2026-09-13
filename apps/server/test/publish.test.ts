@@ -464,3 +464,88 @@ describe('scheduler tick', () => {
     expect((await getPost(1)).status).toBe('published');
   });
 });
+
+describe('missed', () => {
+  test('reads a due draft as missed and a future one as not', async () => {
+    // Given: draft post 1 scheduled in the past, draft post 2 in the future
+    await createPost({ text: 'Past' });
+    await createPost({ text: 'Future' });
+    setPost(1, { scheduledAt: new Date('2026-09-04T09:00:00Z') });
+    setPost(2, { scheduledAt: new Date('2026-09-10T09:00:00Z') });
+
+    // When/Then: the past one is missed, the future one is not
+    expect((await getPost(1)).missed).toBe(true);
+    expect((await getPost(2)).missed).toBe(false);
+  });
+
+  test('reads a due official post as missed only when no account was connected at its time', async () => {
+    // Given: the account connected at 10:00Z; post 1 scheduled before, post 2 after
+    connectTestAccount(server);
+    await createPost({ text: 'Before', official: true });
+    await createPost({ text: 'After', official: true });
+    setPost(1, { scheduledAt: new Date('2026-09-04T09:00:00Z') });
+    setPost(2, { scheduledAt: new Date('2026-09-04T10:30:00Z') });
+    server.clock.set(new Date('2026-09-04T10:31:00Z'));
+
+    // When/Then: post 1's time was before the connect so it is missed; post 2's was not
+    expect((await getPost(1)).missed).toBe(true);
+    expect((await getPost(2)).missed).toBe(false);
+  });
+
+  test("a disconnect at the time reads as missed and is never sent", async () => {
+    // Given: the account connected at 10:00Z and disconnected at 10:20Z
+    connectTestAccount(server);
+    disconnectTestAccount(server, new Date('2026-09-04T10:20:00Z'));
+    await createPost({ text: 'Due', official: true });
+    setPost(1, { scheduledAt: new Date('2026-09-04T10:30:00Z') });
+    server.clock.set(new Date('2026-09-04T10:31:00Z'));
+
+    // When: a tick runs past the schedule time
+    await server.tick(new Date('2026-09-04T10:31:00Z'));
+
+    // Then: the post was never sent and reads as missed
+    expect(server.xClient.calls).toEqual([]);
+    expect(await getPost(1)).toMatchObject({ status: 'official', missed: true });
+  });
+
+  test('filters missed posts', async () => {
+    // Given: missed posts 1 (draft) and 2 (official before connect), plus 3 and 4 not missed
+    connectTestAccount(server);
+    await createPost({ text: 'Draft due' });
+    await createPost({ text: 'Official early', official: true });
+    await createPost({ text: 'Official future', official: true });
+    await createPost({ text: 'Untimed' });
+    setPost(1, { scheduledAt: new Date('2026-09-04T09:00:00Z') });
+    setPost(2, { scheduledAt: new Date('2026-09-04T09:00:00Z') });
+    setPost(3, { scheduledAt: new Date('2026-09-04T10:30:00Z') });
+    server.clock.set(new Date('2026-09-04T10:31:00Z'));
+
+    // When: filtering by missed
+    const missedOnly = await request('/api/posts?missed=true');
+    const notMissed = await request('/api/posts?missed=false');
+
+    // Then: each side holds only its posts
+    const missedJson = (await missedOnly.json()) as { items: Post[]; total: number };
+    expect(missedJson.items.map((item) => item.id)).toEqual([2, 1]);
+    expect(missedJson.total).toBe(2);
+    const notMissedJson = (await notMissed.json()) as { items: Post[]; total: number };
+    expect(notMissedJson.items.map((item) => item.id)).toEqual([3, 4]);
+    expect(notMissedJson.total).toBe(2);
+  });
+
+  test('failed and published posts are never missed', async () => {
+    // Given: a failed post and a published post, each scheduled in the past
+    await createPost({ text: 'Failed' });
+    await createPost({ text: 'Published' });
+    setPost(1, { status: 'failed', scheduledAt: new Date('2026-09-04T09:00:00Z') });
+    setPost(2, {
+      status: 'published',
+      publishedAt: new Date('2026-09-04T09:00:00Z'),
+      scheduledAt: null,
+    });
+
+    // When/Then: neither is missed
+    expect((await getPost(1)).missed).toBe(false);
+    expect((await getPost(2)).missed).toBe(false);
+  });
+});

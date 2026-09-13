@@ -54,6 +54,7 @@ export const postSchema = z.object({
   tags: z.array(z.string()),
   media: z.array(postMediaSchema),
   ready: readySchema,
+  missed: z.boolean(),
 });
 export type Post = z.infer<typeof postSchema>;
 
@@ -85,6 +86,10 @@ export const postListQuerySchema = z.object({
   resource_id: z.coerce.number().int().positive().optional(),
   tag: tagFilterSchema,
   scheduled: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .optional(),
+  missed: z
     .enum(['true', 'false'])
     .transform((value) => value === 'true')
     .optional(),

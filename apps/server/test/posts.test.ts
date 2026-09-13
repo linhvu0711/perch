@@ -110,6 +110,7 @@ describe('posts', () => {
           { code: 'account', ok: false, label: 'No X account connected' },
         ],
       },
+      missed: false,
     };
     expect(await created.json()).toEqual(expected);
 

@@ -89,7 +89,13 @@ export function postsRoutes(deps: AppDeps) {
       try {
         const userId = c.get('user').id;
         return c.json(
-          listPosts(deps.db, userId, c.req.valid('query'), getSettings(deps.db, userId).timezone),
+          listPosts(
+            deps.db,
+            userId,
+            c.req.valid('query'),
+            getSettings(deps.db, userId).timezone,
+            deps.clock.now(),
+          ),
           200,
         );
       } catch (error) {
@@ -211,7 +217,7 @@ export function postsRoutes(deps: AppDeps) {
     })
     .get('/:id', zValidator('param', idParamSchema, validationHook), (c) => {
       const { id } = c.req.valid('param');
-      const post = getPost(deps.db, c.get('user').id, id);
+      const post = getPost(deps.db, c.get('user').id, id, deps.clock.now());
       if (!post) throw notFound(id);
       return c.json(post, 200);
     })

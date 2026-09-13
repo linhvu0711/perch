@@ -74,6 +74,7 @@ const EMPTY_POST: Post = {
   links: [],
   media: [],
   ready: { ok: false, checks: [] },
+  missed: false,
 };
 
 export function PostModal(): JSX.Element | null {

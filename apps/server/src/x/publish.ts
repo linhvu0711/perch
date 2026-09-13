@@ -136,7 +136,7 @@ export function createPublishService(deps: {
             .run();
           throw new ApiError(502, 'publish_failed', sent.message);
         }
-        return getPost(deps.db, userId, id);
+        return getPost(deps.db, userId, id, now);
       } finally {
         inFlight.delete(id);
       }
