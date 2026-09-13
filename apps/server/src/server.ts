@@ -22,6 +22,7 @@ export interface BuildServerOptions {
   token: string;
   secureCookies: boolean;
   webDist: string;
+  timezone: string;
 }
 
 export interface PerchServer {
@@ -34,7 +35,7 @@ export async function buildServer(options: BuildServerOptions): Promise<PerchSer
   fs.mkdirSync(options.uploadDir, { recursive: true });
   const { db, sqlite } = openDb(options.dbPath);
   migrateDb(db);
-  seedDb(db, options.clock.now());
+  seedDb(db, options.clock.now(), options.timezone);
   const webDist = path.resolve(options.webDist);
   const accounts = createXAccountService({
     db,

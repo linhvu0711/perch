@@ -23,6 +23,7 @@ export async function createTestServer(opts?: {
   indexHtml?: string;
   now?: Date;
   secureCookies?: boolean;
+  timezone?: string;
   xOAuthConfigured?: boolean;
 }): Promise<TestServer> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'perch-test-'));
@@ -46,6 +47,7 @@ export async function createTestServer(opts?: {
     token,
     secureCookies: opts?.secureCookies ?? false,
     webDist,
+    timezone: opts?.timezone ?? 'UTC',
     xOAuth:
       opts?.xOAuthConfigured === false
         ? null

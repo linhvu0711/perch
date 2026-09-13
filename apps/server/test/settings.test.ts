@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import path from 'node:path';
 
+import { buildServer } from '../src/server';
 import { createTestServer, type TestServer } from '../src/testing';
 
 let server: TestServer;
@@ -62,6 +64,55 @@ describe('settings', () => {
       timezone: 'Asia/Ho_Chi_Minh',
       char_limit_override: null,
     });
+  });
+
+  test('seeds the time zone from the boot option', async () => {
+    // Given: a server booted with timezone Europe/Berlin
+    server.cleanup();
+    server = await createTestServer({ timezone: 'Europe/Berlin' });
+
+    // When: GET /api/settings
+    const response = await request('/api/settings');
+
+    // Then
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      timezone: 'Europe/Berlin',
+      char_limit_override: null,
+    });
+  });
+
+  test('keeps the stored time zone on a later boot', async () => {
+    // Given: a server whose time zone was changed, then a second boot on the same database
+    await request('/api/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ timezone: 'Asia/Ho_Chi_Minh' }),
+    });
+    server.close();
+    const second = await buildServer({
+      dbPath: path.join(server.dir, 'perch.db'),
+      uploadDir: path.join(server.dir, 'uploads'),
+      clock: server.clock,
+      xClient: server.xClient,
+      token: server.token,
+      secureCookies: false,
+      webDist: server.webDist,
+      timezone: 'Europe/Berlin',
+    });
+    try {
+      // When: GET /api/settings on the second app
+      const response = await second.app.request('/api/settings', {
+        headers: { Authorization: `Bearer ${server.token}` },
+      });
+      // Then: the stored value wins over the boot option
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        timezone: 'Asia/Ho_Chi_Minh',
+        char_limit_override: null,
+      });
+    } finally {
+      second.close();
+    }
   });
 
   test('reports validation errors', async () => {

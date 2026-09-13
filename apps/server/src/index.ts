@@ -55,6 +55,7 @@ if (import.meta.main) {
     token: env.PERCH_TOKEN,
     secureCookies: env.PERCH_SECURE_COOKIES,
     webDist,
+    timezone: env.PERCH_TIMEZONE,
   });
 
   const intervalId = setInterval(() => perch.tick(systemClock.now()).catch(console.error), 30_000);
