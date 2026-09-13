@@ -8,6 +8,7 @@ import { accountRoutes } from './routes/account';
 import { authRoutes } from './routes/auth';
 import { calendarRoutes } from './routes/calendar';
 import { countsRoutes } from './routes/counts';
+import { healthRoutes } from './routes/health';
 import { postsRoutes } from './routes/posts';
 import { resourcesRoutes } from './routes/resources';
 import { settingsRoutes } from './routes/settings';
@@ -56,6 +57,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   app.route('/', createRoutes(deps));
   app.onError(errorHandler);
   app.notFound(notFoundHandler);
+  app.route('/health', healthRoutes());
   app.get('/auth/x/callback', xCallbackHandler(deps));
   app.get('*', staticHandler(deps.webDist));
   return app;
