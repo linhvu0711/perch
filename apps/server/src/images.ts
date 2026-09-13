@@ -4,6 +4,8 @@ import path from 'node:path';
 
 import { IMAGE_BYTES_MAX, type ImageResource } from '@perch/core';
 
+import type { R2Client } from './r2/client';
+
 type Mime = ImageResource['mime'];
 
 const EXT_BY_FORMAT = { png: 'png', jpeg: 'jpg', webp: 'webp', gif: 'gif' } as const;
@@ -112,4 +114,19 @@ export function removeMedia(uploadDir: string, rel: string): void {
 /** Deletes a post's whole media directory. */
 export function removeMediaDir(uploadDir: string, userId: number, postId: number): void {
   fs.rmSync(postMediaDir(uploadDir, userId, postId), { recursive: true, force: true });
+}
+
+/** Copies a stored upload to R2 under uploads/<rel>. A failed copy is logged and never fails the request. */
+export async function copyToR2(
+  r2: R2Client | null,
+  rel: string,
+  bytes: Uint8Array,
+  logError: (error: unknown) => void,
+): Promise<void> {
+  if (!r2) return;
+  try {
+    await r2.put(`uploads/${rel}`, bytes);
+  } catch (error) {
+    logError(error);
+  }
 }

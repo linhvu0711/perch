@@ -478,8 +478,13 @@ export function calendarDays(
   ];
 
   const rows = db
-    .select()
+    .select({
+      ...getTableColumns(posts),
+      username: xAccounts.username,
+      missed: sql<number>`${missedSql(userId, now)}`,
+    })
     .from(posts)
+    .leftJoin(xAccounts, eq(xAccounts.id, posts.xAccountId))
     .where(and(...conditions))
     .orderBy(asc(sortTime), asc(posts.id))
     .all();

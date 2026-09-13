@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { systemClock } from './clock';
-import { parseServerEnv } from './env';
+import { parseServerEnv, r2ConfigFromEnv } from './env';
+import { createR2Client } from './r2/client';
 import { buildServer } from './server';
 import { createRealXClient } from './x/real';
 
@@ -40,6 +41,12 @@ if (import.meta.main) {
     console.warn('X OAuth is not configured; Connect X is disabled');
   }
 
+  const r2Config = r2ConfigFromEnv(env);
+  const r2 = r2Config ? createR2Client(r2Config) : null;
+  if (!r2) {
+    console.warn('R2 is not configured; uploads stay on the volume only');
+  }
+
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   fs.mkdirSync(uploadDir, { recursive: true });
 
@@ -55,6 +62,9 @@ if (import.meta.main) {
     token: env.PERCH_TOKEN,
     secureCookies: env.PERCH_SECURE_COOKIES,
     webDist,
+    timezone: env.PERCH_TIMEZONE,
+    r2,
+    logError: console.error,
   });
 
   const intervalId = setInterval(() => perch.tick(systemClock.now()).catch(console.error), 30_000);

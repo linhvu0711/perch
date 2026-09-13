@@ -25,8 +25,8 @@ describe('database', () => {
 
     migrateDb(db);
     const now = new Date('2026-09-04T10:00:00Z');
-    seedDb(db, now);
-    seedDb(db, now);
+    seedDb(db, now, 'UTC');
+    seedDb(db, now, 'UTC');
 
     expect(getSettings(db, 1)).toEqual({
       timezone: 'UTC',

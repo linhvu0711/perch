@@ -13,6 +13,7 @@
     "dev": "bun --watch apps/server/src/index.ts",
     "dev:web": "bun run --filter @perch/web dev",
     "start": "bun apps/server/src/index.ts",
+    "start:local": "bun run build && bun run start",
     "build": "bun run --filter @perch/web build",
     "test": "bun test",
     "typecheck": "bun run --filter '*' typecheck",
