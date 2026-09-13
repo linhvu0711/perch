@@ -757,26 +757,19 @@ main {
 }
 .pager {
   display: flex;
-  justify-content: center;
-  gap: 10px;
   align-items: center;
-  padding: 10px 14px;
+  gap: 8px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--border);
   color: var(--text-3);
   font-size: 12.5px;
-  border-top: 1px solid var(--line);
 }
-.pager button {
-  color: var(--indigo-text);
+.pager .btn:first-of-type {
+  margin-left: auto;
+}
+
+table.t tr.cur td:first-child {
   font-weight: 500;
-  padding: 6px 12px;
-  border-radius: 6px;
-}
-.pager button:hover {
-  background: var(--indigo-soft);
-}
-.pager button:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 .loadmore button:disabled {

@@ -3,31 +3,26 @@ import {
   ATTENTION_WINDOW_DAYS,
   addDays,
   DEFAULT_TIMEZONE,
-  formatCost,
   postCalendarTime,
   STATUS_WEEK_DAYS,
   X_COSTS_USD,
   zonedParts,
 } from '@perch/core';
-import { TriangleAlert } from 'lucide-react';
+import { ChevronLeft, ChevronRight, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 
 import { AttentionRow } from '@/components/AttentionRow';
 import { Empty } from '@/components/Empty';
+import { IconButton } from '@/components/IconButton';
 import { PostRow } from '@/components/PostRow';
 import { errorMessage } from '@/lib/api';
-import {
-  formatDayTitle,
-  formatMonthShort,
-  formatMonthTitle,
-  formatSchedule,
-  formatUsd,
-} from '@/lib/format';
+import { formatDayTitle, formatMonthTitle, formatSchedule, formatUsd } from '@/lib/format';
 import {
   useAccount,
   useCalendar,
   useCostMonths,
+  useCostSummary,
   usePosts,
   useSettings,
   useStatus,
@@ -49,7 +44,9 @@ export function Dashboard() {
   const account = useAccount();
   const status = useStatus();
   const attention = usePosts({ needs_attention: true });
-  const costMonths = useCostMonths();
+  const costSummary = useCostSummary();
+  const [cursors, setCursors] = useState<string[]>([]);
+  const costMonths = useCostMonths(cursors[cursors.length - 1]);
   const timezone = settings.data?.timezone ?? DEFAULT_TIMEZONE;
   const [now, setNow] = useState(() => new Date());
 
@@ -79,8 +76,12 @@ export function Dashboard() {
     (snapshot?.missed_count ?? 0) + (snapshot?.failed_count ?? 0) + (snapshot?.due_soon_count ?? 0);
   const attentionItems = attention.data?.pages.flatMap((page) => page.items) ?? [];
   const attentionListTotal = attention.data?.pages[0]?.total ?? 0;
-  const costItems = costMonths.data?.pages.flatMap((page) => page.items) ?? [];
-  const costTotal = costMonths.data?.pages[0]?.total ?? 0;
+  const costPage = cursors.length;
+  const costItems = costMonths.data?.items ?? [];
+  const costTotal = costMonths.data?.total ?? 0;
+  const costFirst = costPage * 6 + 1;
+  const costLast = costFirst + costItems.length - 1;
+  const costSummaryData = costSummary.data;
 
   const upcomingDays = (calendar.data?.days ?? [])
     .map((day) => ({
@@ -169,11 +170,22 @@ export function Dashboard() {
               </div>
             </div>
             <div className="card stat">
-              <div className="lbl">Cost, {formatMonthTitle(today).split(' ')[0]}</div>
-              <div className="val">
-                {status.isPending ? '…' : formatUsd(snapshot?.month_cost_usd ?? 0)}
+              <div className="lbl">
+                Cost,{' '}
+                {
+                  formatMonthTitle(`${costSummaryData?.month ?? today.slice(0, 7)}-01`).split(
+                    ' ',
+                  )[0]
+                }
               </div>
-              <div className="sub">this month</div>
+              <div className="val">
+                {costSummary.isPending ? '…' : formatUsd(costSummaryData?.total_usd ?? 0)}
+              </div>
+              <div className="sub">
+                {costSummaryData === undefined
+                  ? ''
+                  : `${costSummaryData.calls} X API ${costSummaryData.calls === 1 ? 'call' : 'calls'}`}
+              </div>
             </div>
           </div>
           <div className="section">
@@ -217,59 +229,6 @@ export function Dashboard() {
           </div>
           <div className="section">
             <h2>
-              Cost<small>X API spend by month</small>
-            </h2>
-            <div className="card list">
-              {costMonths.isPending ? (
-                <div className="empty">
-                  <b>Loading…</b>
-                </div>
-              ) : costItems.length === 0 ? (
-                <div className="empty">
-                  <b>No calls yet</b>Perch has not called the X API.
-                </div>
-              ) : (
-                <>
-                  {costItems.map((row) => (
-                    <div className="row" key={row.month}>
-                      <div className="txt">
-                        <b>
-                          {formatMonthShort(row.month)} · {row.calls} calls ·{' '}
-                          {formatUsd(row.total_usd)}
-                        </b>
-                        <span className="why">
-                          Publishing {formatUsd(row.publish_usd)} · Saving tweets{' '}
-                          {formatUsd(row.save_tweet_usd)} · Connecting {formatUsd(row.connect_usd)}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                  <div className="pager">
-                    <span>
-                      {costItems.length} of {costTotal} months
-                    </span>
-                    {costMonths.hasNextPage && (
-                      <button
-                        type="button"
-                        disabled={costMonths.isFetchingNextPage}
-                        onClick={() => costMonths.fetchNextPage()}
-                      >
-                        {costMonths.isFetchingNextPage ? 'Loading…' : 'Show more'}
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="note">
-              X charges per call: post {formatCost(X_COSTS_USD.publish)} / post with a link{' '}
-              {formatCost(X_COSTS_USD.publishWithUrl)} / save a tweet{' '}
-              {formatCost(X_COSTS_USD.saveTweet)} / connect an account{' '}
-              {formatCost(X_COSTS_USD.getMe)}. Media uploads are free.
-            </div>
-          </div>
-          <div className="section">
-            <h2>
               Next {ATTENTION_WINDOW_DAYS} days
               <small>until {formatDayTitle(addDays(today, ATTENTION_WINDOW_DAYS))}</small>
             </h2>
@@ -288,6 +247,77 @@ export function Dashboard() {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+          <div className="section">
+            <h2>
+              Cost by month<small>X API, pay-per-use</small>
+            </h2>
+            <div className="card">
+              {costMonths.isPending ? (
+                <div className="empty">
+                  <b>Loading…</b>
+                </div>
+              ) : costTotal === 0 ? (
+                <div className="empty">
+                  <b>No X API calls yet</b>Costs appear here after the first publish, tweet save, or
+                  connect.
+                </div>
+              ) : (
+                <>
+                  <table className="t">
+                    <thead>
+                      <tr>
+                        <th>Month</th>
+                        <th className="num">Publish</th>
+                        <th className="num">Save tweet</th>
+                        <th className="num">Connect</th>
+                        <th className="num">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {costItems.map((row, index) => (
+                        <tr key={row.month} className={costPage === 0 && index === 0 ? 'cur' : ''}>
+                          <td>{formatMonthTitle(`${row.month}-01`)}</td>
+                          <td className="num">{formatUsd(row.publish_usd)}</td>
+                          <td className="num">{formatUsd(row.save_tweet_usd)}</td>
+                          <td className="num">{formatUsd(row.connect_usd)}</td>
+                          <td className="num">{formatUsd(row.total_usd)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="pager">
+                    <span>
+                      {costFirst}–{costLast} of {costTotal} months · all time{' '}
+                      {formatUsd(costSummaryData?.all_time_usd ?? 0)}
+                    </span>
+                    <IconButton
+                      label="Newer months"
+                      icon={ChevronLeft}
+                      size="sm"
+                      disabled={costPage === 0}
+                      onClick={() => setCursors(cursors.slice(0, -1))}
+                    />
+                    <IconButton
+                      label="Older months"
+                      icon={ChevronRight}
+                      size="sm"
+                      disabled={costMonths.data?.next_cursor == null}
+                      onClick={() => {
+                        const next = costMonths.data?.next_cursor;
+                        if (next != null) setCursors([...cursors, next]);
+                      }}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="note">
+              Publish {formatUsd(X_COSTS_USD.publish)} · publish with a link{' '}
+              {formatUsd(X_COSTS_USD.publishWithUrl)} · save a tweet{' '}
+              {formatUsd(X_COSTS_USD.saveTweet)} · connect {formatUsd(X_COSTS_USD.getMe)} · image
+              upload free.
             </div>
           </div>
         </>

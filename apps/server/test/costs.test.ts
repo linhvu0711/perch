@@ -23,13 +23,13 @@ async function request(path: string, init: RequestInit = {}): Promise<Response> 
 }
 
 async function getSummary(query = ''): Promise<CostSummary> {
-  const response = await request(`/api/costs${query}`);
+  const response = await request(`/api/costs/summary${query}`);
   expect(response.status).toBe(200);
   return (await response.json()) as CostSummary;
 }
 
 async function getHistory(query = ''): Promise<CostHistory> {
-  const response = await request(`/api/costs/months${query}`);
+  const response = await request(`/api/costs${query}`);
   expect(response.status).toBe(200);
   return (await response.json()) as CostHistory;
 }
@@ -96,8 +96,8 @@ describe('GET /api/costs', () => {
   test('rejects a malformed month', async () => {
     // Given: nothing
     // When
-    const badDay = await request('/api/costs?month=2026-13');
-    const badShape = await request('/api/costs?month=Sep');
+    const badDay = await request('/api/costs/summary?month=2026-13');
+    const badShape = await request('/api/costs/summary?month=Sep');
 
     // Then
     expect(badDay.status).toBe(400);
@@ -208,7 +208,7 @@ describe('GET /api/costs', () => {
   });
 });
 
-describe('GET /api/costs/months', () => {
+describe('GET /api/costs', () => {
   test('lists months newest first and pages by cursor', async () => {
     // Given: calls across three months
     for (const createdAt of [
@@ -260,9 +260,9 @@ describe('GET /api/costs/months', () => {
 
     // When
     const page = await getHistory();
-    const zero = await request('/api/costs/months?limit=0');
-    const word = await request('/api/costs/months?limit=lots');
-    const over = await request('/api/costs/months?limit=101');
+    const zero = await request('/api/costs?limit=0');
+    const word = await request('/api/costs?limit=lots');
+    const over = await request('/api/costs?limit=101');
 
     // Then
     expect(page.items.length).toBe(6);
@@ -275,7 +275,7 @@ describe('GET /api/costs/months', () => {
   test('rejects a bad cursor', async () => {
     // Given: nothing
     // When
-    const response = await request('/api/costs/months?cursor=not a cursor!');
+    const response = await request('/api/costs?cursor=not a cursor!');
 
     // Then
     expect(response.status).toBe(400);

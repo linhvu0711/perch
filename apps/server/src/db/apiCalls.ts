@@ -1,12 +1,13 @@
 import {
   type CostHistory,
+  type CostHistoryQuery,
   type CostMonth,
   type CostMonthRow,
   type CostSummary,
   costKindOf,
   zonedParts,
 } from '@perch/core';
-import { asc, eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 
 import { decodeMonthCursor, encodeMonthCursor } from './cursor';
 import type { Db } from './index';
@@ -45,7 +46,8 @@ function emptyMonthRow(month: CostMonth): CostMonthRow {
   return { month, calls: 0, publish_usd: 0, save_tweet_usd: 0, connect_usd: 0, total_usd: 0 };
 }
 
-function monthRows(db: Db, userId: number, timeZone: string): CostMonthRow[] {
+/** Per-month cost totals keyed by the calendar month in `timeZone`, newest first. */
+export function costMonths(db: Db, userId: number, timeZone: string): CostMonthRow[] {
   const rows = db
     .select({
       endpoint: apiCalls.endpoint,
@@ -54,7 +56,7 @@ function monthRows(db: Db, userId: number, timeZone: string): CostMonthRow[] {
     })
     .from(apiCalls)
     .where(eq(apiCalls.userId, userId))
-    .orderBy(asc(apiCalls.createdAt))
+    .orderBy(desc(apiCalls.createdAt))
     .all();
 
   const byMonth = new Map<CostMonth, CostMonthRow>();
@@ -73,61 +75,49 @@ function monthRows(db: Db, userId: number, timeZone: string): CostMonthRow[] {
     byMonth.set(month, bucket);
   }
 
-  return [...byMonth.values()].map((row) => ({
-    ...row,
-    publish_usd: roundUsd(row.publish_usd),
-    save_tweet_usd: roundUsd(row.save_tweet_usd),
-    connect_usd: roundUsd(row.connect_usd),
-    total_usd: roundUsd(row.total_usd),
-  }));
+  return [...byMonth.values()]
+    .map((row) => ({
+      ...row,
+      publish_usd: roundUsd(row.publish_usd),
+      save_tweet_usd: roundUsd(row.save_tweet_usd),
+      connect_usd: roundUsd(row.connect_usd),
+      total_usd: roundUsd(row.total_usd),
+    }))
+    .sort((a, b) => (a.month < b.month ? 1 : -1));
 }
 
-/** USD cost for the calendar month containing `now` in `timeZone`. */
-export function monthCostUsd(db: Db, userId: number, timeZone: string, now: Date): number {
-  const month = zonedParts(now, timeZone).date.slice(0, 7);
-  const row = monthRows(db, userId, timeZone).find((item) => item.month === month);
-  return row?.total_usd ?? 0;
-}
-
-/** Per-month cost totals for the requested month (the current month by default). */
-export function costSummary(
-  db: Db,
-  userId: number,
-  timeZone: string,
-  now: Date,
-  month?: CostMonth,
-): CostSummary {
-  const wanted = month ?? (zonedParts(now, timeZone).date.slice(0, 7) as CostMonth);
-  const rows = monthRows(db, userId, timeZone);
-  const row = rows.find((item) => item.month === wanted) ?? emptyMonthRow(wanted);
+/** The `costMonths` row for `month` (zeros when absent) plus the all-time total. */
+export function costSummary(db: Db, userId: number, month: string, timeZone: string): CostSummary {
+  const rows = costMonths(db, userId, timeZone);
+  const row = rows.find((item) => item.month === month) ?? emptyMonthRow(month as CostMonth);
   const allTime = roundUsd(rows.reduce((sum, item) => sum + item.total_usd, 0));
   return { ...row, all_time_usd: allTime };
 }
 
-/** Months with known-endpoint calls, newest first, paged by month cursor. */
+/** `costMonths` cut to the rows after the cursor month, paged at `limit`. */
 export function costHistory(
   db: Db,
   userId: number,
+  query: CostHistoryQuery,
   timeZone: string,
-  query: { limit: number; cursor?: string },
 ): CostHistory | null {
   const after = query.cursor === undefined ? null : decodeMonthCursor(query.cursor);
   if (query.cursor !== undefined && after === null) return null;
 
-  const rows = monthRows(db, userId, timeZone);
-  const months = rows
-    .map((row) => row.month)
-    .sort()
-    .reverse();
-  const page = months.filter((month) => after === null || month < after);
+  const rows = costMonths(db, userId, timeZone);
+  const page = rows.filter((row) => after === null || row.month < after);
   const items = page.slice(0, query.limit);
-  const hasMore = page.length > query.limit;
   const last = items[items.length - 1];
-  const byMonth = new Map(rows.map((row) => [row.month, row] as const));
 
   return {
-    items: items.map((month) => byMonth.get(month) ?? emptyMonthRow(month)),
-    total: months.length,
-    next_cursor: hasMore && last !== undefined ? encodeMonthCursor(last) : null,
+    items,
+    total: rows.length,
+    next_cursor:
+      last !== undefined && page.length > query.limit ? encodeMonthCursor(last.month) : null,
   };
+}
+
+/** USD cost of the calendar month containing `now` in `timeZone`. */
+export function monthCostUsd(db: Db, userId: number, timeZone: string, now: Date): number {
+  return costSummary(db, userId, zonedParts(now, timeZone).date.slice(0, 7), timeZone).total_usd;
 }
