@@ -38,9 +38,15 @@ None for fake X. Set a disposable `PERCH_TOKEN` and use it on the login screen. 
 ## Evidence capture
 - Maximize Chrome before recording. Keep authentication/server setup outside the feature recording unless sign-in is itself an explicitly numbered video step.
 - Prefer computer-tool UI actions. Attach Playwright to the available Chrome CDP endpoint for screenshots and passive console/request logging. Python tooling, if missing, can be installed with `pip install playwright`; attaching to existing Chrome does not need a browser download.
-- Arm screenshot capture with `getByText(exactToast).waitFor({state:'visible'})` before the UI action, then screenshot immediately, so short-lived callback/disconnect toasts are preserved.
+- Arm screenshot capture with `page.locator('.toast').filter({hasText: exactToast}).waitFor({state:'visible'})` before the UI action, then screenshot immediately. Scope to `.toast`: error text can also appear in the red post banner, making a page-wide exact-text locator ambiguous.
 - Callback query cleanup is visible in the browser address bar/video and can additionally be logged from `page.url()`. Page screenshots omit browser chrome.
 - For plans requiring video-derived screenshots, log a wall-clock marker at every specified Shows state and leave it rendered for at least two captured frames.
 - For real-speed requirements, preserve the raw recording. The recording tool's edited/clean derivatives can compress idle time; do not use those as real-speed proof.
+- Raw captures can be segmented as `*-raw-000.mkv`, `*-raw-001.mkv`, etc. Join all segments in order using ffmpeg's concat demuxer and `-c copy` to MP4; do not use edited/clean files or time filters when the brief forbids trimming or speed changes.
 - Raw x11grab recordings expose their epoch start in `ffmpeg.log` (`Duration: N/A, start: ...`). Subtract it from step timestamps to find source offsets. Trim only lead-in/tail without speed filters, then extract PNGs from the final MP4.
 - Inspect every extracted PNG visually, including transient toasts and pagination states. Keep a manifest of video timestamp → screenshot filename so evidence provenance is auditable.
+
+## Publishing scenarios
+- `--fail-send` makes publish and retry fail with `Service Unavailable`. The application's HTTP response is 502, so Chrome emits resource-load console errors; distinguish these deliberate HTTP failures from uncaught JavaScript exceptions, and report them rather than calling the console clean.
+- Read the zone next to Date/Time inputs and calculate near-future times in that zone. They are plain text inputs expecting `YYYY-MM-DD` and `HH:mm`; press Set before promoting.
+- Keep the posts list visible through the actual schedule time plus one scheduler tick when testing background sends. Verify both reopened modal state and list state: a fresh detail response alone does not prove that a cached list updates.
