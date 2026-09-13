@@ -133,7 +133,7 @@ export function Calendar() {
               setAnchor(view === 'month' ? addDays(monthOf(anchor).to, 1) : addDays(anchor, 7))
             }
           />
-          <button type="button" className="btn ghost sm" onClick={() => setAnchor(today)}>
+          <button type="button" className="btn ghost sm" onClick={() => setAnchor(null)}>
             Today
           </button>
         </div>
