@@ -6,8 +6,8 @@ import {
   PROMOTE_FROM,
   PUBLISH_FROM,
   promoteChecks,
-  readyChecks,
   RETRY_FROM,
+  readyChecks,
   SCHEDULE_FROM,
 } from '../src/postRules';
 
