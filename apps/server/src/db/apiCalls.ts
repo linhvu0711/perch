@@ -105,7 +105,9 @@ export function costSummary(db: Db, userId: number, month: string, timeZone: str
     try {
       costKindOf(call.endpoint);
       allTimeRaw += call.costUsd;
-    } catch {}
+    } catch {
+      // Endpoints costKindOf does not classify are not billed kinds; skip them.
+    }
   }
   const rows = costMonths(db, userId, timeZone);
   const row = rows.find((item) => item.month === month) ?? emptyMonthRow(month as CostMonth);

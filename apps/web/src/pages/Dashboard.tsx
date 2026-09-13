@@ -322,8 +322,8 @@ export function Dashboard() {
             </div>
             <div className="note">
               Publish {formatUsd(X_COSTS_USD.publish)} · publish with a link{' '}
-              {formatUsd(X_COSTS_USD.publishWithUrl)} · save a Tweet Resource{' '}
-              {formatUsd(X_COSTS_USD.saveTweet)} · connect {formatUsd(X_COSTS_USD.getMe)} · Media
+              {formatUsd(X_COSTS_USD.publishWithUrl)} · save a tweet{' '}
+              {formatUsd(X_COSTS_USD.saveTweet)} · connect {formatUsd(X_COSTS_USD.getMe)} · image
               upload free.
             </div>
           </div>

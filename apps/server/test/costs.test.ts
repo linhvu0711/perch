@@ -304,4 +304,35 @@ describe('status month cost', () => {
     // Then
     expect(status.month_cost_usd).toBe(0.2);
   });
+
+  test('status month cost reaches the far edge of a long month in a far-west zone', async () => {
+    // Given: Pacific/Midway (UTC-11) sits late on the last day of September
+    const midway = await createTestServer({
+      timezone: 'Pacific/Midway',
+      now: new Date('2026-10-01T10:59:00Z'),
+    });
+    try {
+      // The earliest September call in that zone is ~30 days back; an August call sits just beside it
+      insertTestApiCall(midway, {
+        endpoint: 'POST /2/tweets',
+        costUsd: 0.015,
+        createdAt: '2026-09-01T11:00:00Z',
+      });
+      insertTestApiCall(midway, {
+        endpoint: 'GET /2/users/me',
+        costUsd: 0.01,
+        createdAt: '2026-08-31T10:59:00Z',
+      });
+
+      const response = await midway.app.request('/api/status', {
+        headers: { Authorization: `Bearer ${midway.token}` },
+      });
+      expect(response.status).toBe(200);
+      const status = (await response.json()) as Status;
+
+      expect(status.month_cost_usd).toBe(0.015);
+    } finally {
+      midway.cleanup();
+    }
+  });
 });

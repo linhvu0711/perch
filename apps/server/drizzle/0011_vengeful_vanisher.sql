@@ -1,0 +1,1 @@
+CREATE INDEX `api_calls_user_created_idx` ON `api_calls` (`user_id`,`created_at`);
