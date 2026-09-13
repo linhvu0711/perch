@@ -98,7 +98,6 @@ export function ResourceModal(): JSX.Element | null {
     setNotesDraft(resource.notes);
   }, [isEditing, resource]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies(resourceId): focus moves to the modal when the resource changes
   useEffect(() => {
     if (!isEditing) modalRef.current?.focus();
   }, [isEditing]);
@@ -406,7 +405,7 @@ export function ResourceModal(): JSX.Element | null {
               </div>
               <div className="rside">
                 <div className="field">
-                  <label>Details</label>
+                  <div className="flabel">Details</div>
                   <div className="kv">
                     <b>author</b>
                     <span>@{resource.author_username}</span>
@@ -417,9 +416,9 @@ export function ResourceModal(): JSX.Element | null {
                   </div>
                 </div>
                 <div className="field">
-                  <label>
+                  <div className="flabel">
                     Used in {usedByTotal} post{usedByTotal === 1 ? '' : 's'}
-                  </label>
+                  </div>
                   <div className="linked">
                     {usedByPosts.length === 0 ? (
                       <span className="note">Not linked to any post yet.</span>
@@ -442,8 +441,9 @@ export function ResourceModal(): JSX.Element | null {
                   </div>
                 </div>
                 <div className="field">
-                  <label>Private notes</label>
+                  <label htmlFor="resource-notes">Private notes</label>
                   <textarea
+                    id="resource-notes"
                     aria-label="Private notes"
                     placeholder="Why you saved this"
                     value={notesDraft}
