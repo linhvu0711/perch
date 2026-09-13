@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { POST_MEDIA_MAX, readySchema } from './postRules';
 import { batchErrorSchema, IMAGE_MIME_TYPES, resourceTypeSchema } from './resources';
 import { isCalendarDate } from './schedule';
+import { TAG_BATCH_MAX, tagFilterSchema, tagNameSchema } from './tags';
 
 export const POST_STATUSES = ['draft', 'official', 'published', 'failed'] as const;
 export const postStatusSchema = z.enum(POST_STATUSES);
@@ -49,6 +50,7 @@ export const postSchema = z.object({
   limit: z.number().int(),
   estimated_cost: z.number(),
   links: z.array(postLinkSchema),
+  tags: z.array(z.string()),
   media: z.array(postMediaSchema),
   ready: readySchema,
 });
@@ -58,6 +60,7 @@ export const postCreateSchema = z.object({
   title: z.string().trim().max(POST_TITLE_MAX).optional(),
   text: z.string().max(POST_TEXT_MAX).optional(),
   from: z.array(z.number().int().positive()).max(POST_BATCH_MAX).optional(),
+  tags: z.array(tagNameSchema).max(TAG_BATCH_MAX).optional(),
   official: z.boolean().optional(),
 });
 export type PostCreate = z.infer<typeof postCreateSchema>;
@@ -79,6 +82,7 @@ export const postListQuerySchema = z.object({
   from: listDateSchema.optional(),
   to: listDateSchema.optional(),
   resource_id: z.coerce.number().int().positive().optional(),
+  tag: tagFilterSchema,
   scheduled: z
     .enum(['true', 'false'])
     .transform((value) => value === 'true')

@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import {
   firstMarkdownHeading,
+  type ItemTagsResponse,
   isValidDate,
   RESOURCE_LIST_LIMIT_DEFAULT,
   RESOURCE_LIST_LIMIT_MAX,
@@ -19,7 +20,14 @@ import { createApi } from '../api';
 import { resolveMirrorDir, resolveServerUrl, resolveToken } from '../config';
 import type { CliContext } from '../context';
 import { applyMirror } from '../mirror';
-import { BatchFailure, CliError, formatTable, printResult, resolveMode } from '../output';
+import {
+  BatchFailure,
+  CliError,
+  formatTable,
+  mergeItemTagResults,
+  printResult,
+  resolveMode,
+} from '../output';
 
 interface GlobalOptions {
   json?: boolean;
@@ -63,6 +71,7 @@ function printResource(ctx: CliContext, options: GlobalOptions, resource: Resour
         bytes: resource.bytes,
         width: resource.width,
         height: resource.height,
+        tags: resource.tags.join(', '),
       })}\n`,
     );
     return;
@@ -78,6 +87,7 @@ function printResource(ctx: CliContext, options: GlobalOptions, resource: Resour
         url: resource.url,
         notes: resource.notes,
         created: resource.created_at,
+        tags: resource.tags.join(', '),
       })}\n\n${resource.text}\n`,
     );
     return;
@@ -90,6 +100,7 @@ function printResource(ctx: CliContext, options: GlobalOptions, resource: Resour
       title: resource.title,
       notes: resource.notes,
       created: resource.created_at,
+      tags: resource.tags.join(', '),
     })}\n\n${resource.body}\n`,
   );
 }
@@ -103,12 +114,17 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
     .command('tweet <urls...>')
     .description('Save tweets from X URLs')
     .option('--refresh', 're-fetch a saved tweet')
-    .action(async (urls: string[], commandOptions: { refresh?: boolean }) => {
+    .option('--tag <name...>')
+    .action(async (urls: string[], commandOptions: { refresh?: boolean; tag?: string[] }) => {
       const options = program.opts<GlobalOptions>();
       const api = apiFor(program, ctx);
       const response = await api.call(
         api.client.api.resources.tweets.$post({
-          json: { urls, refresh: commandOptions.refresh ?? false },
+          json: {
+            urls,
+            refresh: commandOptions.refresh ?? false,
+            ...(commandOptions.tag !== undefined ? { tags: commandOptions.tag } : {}),
+          },
         }),
       );
       const mode = resolveMode(options, ctx.isTTY);
@@ -135,7 +151,8 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
     .command('md <path...>')
     .description('Add Markdown notes')
     .option('--title <title>')
-    .action(async (paths: string[], commandOptions: { title?: string }) => {
+    .option('--tag <name...>')
+    .action(async (paths: string[], commandOptions: { title?: string; tag?: string[] }) => {
       const options = program.opts<GlobalOptions>();
       const mode = resolveMode(options, ctx.isTTY);
       const stdinCount = paths.filter((item) => item === '-').length;
@@ -177,7 +194,11 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
         try {
           const created = await api.call(
             api.client.api.resources.notes.$post({
-              json: { ...(title !== undefined ? { title } : {}), body },
+              json: {
+                ...(title !== undefined ? { title } : {}),
+                body,
+                ...(commandOptions.tag !== undefined ? { tags: commandOptions.tag } : {}),
+              },
             }),
           );
           results.push({ path: inputPath, ok: true, resource: created });
@@ -222,7 +243,8 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
     .command('image <path...>')
     .description('Add image files')
     .option('--title <title>')
-    .action(async (paths: string[], commandOptions: { title?: string }) => {
+    .option('--tag <name...>')
+    .action(async (paths: string[], commandOptions: { title?: string; tag?: string[] }) => {
       const options = program.opts<GlobalOptions>();
       const mode = resolveMode(options, ctx.isTTY);
       if (commandOptions.title !== undefined && paths.length !== 1) {
@@ -260,6 +282,7 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
               form: {
                 files: new File([bytes.slice().buffer as ArrayBuffer], path.basename(inputPath)),
                 ...(commandOptions.title !== undefined ? { title: commandOptions.title } : {}),
+                ...(commandOptions.tag !== undefined ? { tags: commandOptions.tag } : {}),
               },
             }),
           );
@@ -322,6 +345,7 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
     .option('--from <date>')
     .option('--to <date>')
     .option('--sort <sort>', 'sort field', 'created')
+    .option('--tag <name...>')
     .option('--desc', 'newest first')
     .option('--limit <n>', 'page size', String(RESOURCE_LIST_LIMIT_DEFAULT))
     .option('--cursor <cursor>')
@@ -333,6 +357,7 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
         from?: string;
         to?: string;
         sort: string;
+        tag?: string[];
         desc?: boolean;
         limit: string;
         cursor?: string;
@@ -381,6 +406,7 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
               ...(commandOptions.author !== undefined ? { author: commandOptions.author } : {}),
               ...(commandOptions.from !== undefined ? { from: commandOptions.from } : {}),
               ...(commandOptions.to !== undefined ? { to: commandOptions.to } : {}),
+              ...(commandOptions.tag !== undefined ? { tag: commandOptions.tag } : {}),
               sort: commandOptions.sort as 'created' | 'used',
               order: commandOptions.desc ? 'desc' : 'asc',
               limit: String(parsedLimit.data),
@@ -400,6 +426,7 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
           title: item.title,
           created: item.created_at,
           author: item.type === 'tweet' ? `@${item.author_username}` : '',
+          tags: item.tags.join(', '),
         }));
         const summary = `${result.items.length} shown · ${result.total} total`;
         if (rows.length === 0) {
@@ -545,6 +572,62 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
 
       const failed = response.results.filter((result) => !result.ok).length;
       if (failed > 0) throw new BatchFailure(failed, response.results.length);
+    });
+
+  resource
+    .command('tag <id...>')
+    .description('Add or remove tags on resources')
+    .option('--add <name...>')
+    .option('--remove <name...>')
+    .action(async (idValues: string[], commandOptions: { add?: string[]; remove?: string[] }) => {
+      const ids = idValues.map((value) => positiveId(value, true));
+      if (commandOptions.add === undefined && commandOptions.remove === undefined) {
+        throw new CliError('usage', 'Give --add or --remove', 2);
+      }
+
+      const api = apiFor(program, ctx);
+      const batches: ItemTagsResponse['results'][] = [];
+      if (commandOptions.add !== undefined) {
+        batches.push(
+          (
+            await api.call(
+              api.client.api.resources.tags.$post({
+                json: { ids, tags: commandOptions.add },
+              }),
+            )
+          ).results,
+        );
+      }
+      if (commandOptions.remove !== undefined) {
+        batches.push(
+          (
+            await api.call(
+              api.client.api.resources.tags.$delete({
+                json: { ids, tags: commandOptions.remove },
+              }),
+            )
+          ).results,
+        );
+      }
+      const merged = mergeItemTagResults(...batches);
+
+      const mode = resolveMode(program.opts<GlobalOptions>(), ctx.isTTY);
+      if (mode === 'json') {
+        printResult(ctx, mode, merged);
+      } else {
+        printResult(
+          ctx,
+          mode,
+          merged.map((result) => ({
+            id: result.id,
+            ok: result.ok,
+            tags: result.ok ? result.tags.join(', ') : '',
+            error: result.ok ? '' : result.error.message,
+          })),
+        );
+      }
+      const failed = merged.filter((result) => !result.ok).length;
+      if (failed > 0) throw new BatchFailure(failed, merged.length);
     });
 
   resource

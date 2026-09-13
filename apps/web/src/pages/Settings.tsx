@@ -12,6 +12,7 @@ import { useSearchParams } from 'react-router';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { IconButton } from '@/components/IconButton';
+import { TagSettings } from '@/components/TagSettings';
 import { toast } from '@/components/Toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { errorMessage } from '@/lib/api';
@@ -301,7 +302,9 @@ export function Settings() {
               </div>
             </div>
           </div>
-          <div className="col" />
+          <div className="col">
+            <TagSettings />
+          </div>
         </div>
       )}
       {confirm === 'connect' && (

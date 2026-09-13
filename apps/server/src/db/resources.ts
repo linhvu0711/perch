@@ -22,6 +22,7 @@ import {
   getTableColumns,
   gt,
   gte,
+  inArray,
   lt,
   or,
   type SQL,
@@ -30,12 +31,15 @@ import {
 
 import { decodeCursor, encodeCursor } from './cursor';
 import type { Db } from './index';
-import { postLinks, resources } from './schema';
+import { postLinks, resources, resourceTags } from './schema';
 import { getSettings } from './settings';
+import { addResourceTags, tagIdsByName, tagsForResources } from './tags';
 
 export class InvalidCursorError extends Error {}
 
 type ResourceRow = typeof resources.$inferSelect;
+
+type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 const usedByCount = sql<number>`(select count(*) from post_links where post_links.resource_id = ${resources.id})`;
 
@@ -44,7 +48,7 @@ const resourceColumns = () => ({
   usedBy: usedByCount,
 });
 
-function toResource(row: ResourceRow, usedBy = 0): Resource {
+function toResource(row: ResourceRow, usedBy = 0, tags: string[] = []): Resource {
   if (row.type === 'image') {
     if (
       row.imagePath === null ||
@@ -67,6 +71,7 @@ function toResource(row: ResourceRow, usedBy = 0): Resource {
       width: row.imageWidth,
       height: row.imageHeight,
       ...(usedBy > 0 ? { used_by: usedBy } : {}),
+      tags,
     };
   }
   if (row.type === 'tweet') {
@@ -93,6 +98,7 @@ function toResource(row: ResourceRow, usedBy = 0): Resource {
       text: row.tweetText,
       posted_at: row.tweetPostedAt.toISOString(),
       ...(usedBy > 0 ? { used_by: usedBy } : {}),
+      tags,
     };
     return resource;
   }
@@ -106,11 +112,12 @@ function toResource(row: ResourceRow, usedBy = 0): Resource {
     created_at: row.createdAt.toISOString(),
     body: row.mdBody ?? '',
     used_by: usedBy,
+    tags,
   };
 }
 
 export function createTweet(
-  db: Db,
+  db: Db | Tx,
   userId: number,
   input: {
     url: string;
@@ -120,28 +127,37 @@ export function createTweet(
     text: string;
     title: string;
     postedAt: Date;
+    tags?: string[];
   },
   now: Date,
 ): TweetResource {
-  const row = db
-    .insert(resources)
-    .values({
-      userId,
-      type: 'tweet',
-      title: input.title,
-      notes: '',
-      createdAt: now,
-      tweetUrl: input.url,
-      tweetXId: input.xId,
-      tweetAuthorId: input.authorId,
-      tweetAuthorUsername: input.authorUsername,
-      tweetText: input.text,
-      tweetPostedAt: input.postedAt,
-    })
-    .returning()
-    .get();
-  if (!row) throw new Error('tweet insert failed');
-  return toResource(row) as TweetResource;
+  const row = db.transaction((tx) => {
+    const inserted = tx
+      .insert(resources)
+      .values({
+        userId,
+        type: 'tweet',
+        title: input.title,
+        notes: '',
+        createdAt: now,
+        tweetUrl: input.url,
+        tweetXId: input.xId,
+        tweetAuthorId: input.authorId,
+        tweetAuthorUsername: input.authorUsername,
+        tweetText: input.text,
+        tweetPostedAt: input.postedAt,
+      })
+      .returning()
+      .get();
+    if (!inserted) throw new Error('tweet insert failed');
+    if (input.tags !== undefined) addResourceTags(tx, userId, inserted.id, input.tags);
+    return inserted;
+  });
+  return toResource(
+    row,
+    0,
+    tagsForResources(db, userId, [row.id]).get(row.id) ?? [],
+  ) as TweetResource;
 }
 
 export function findTweetByXId(db: Db, userId: number, xId: string): TweetResource | null {
@@ -152,7 +168,13 @@ export function findTweetByXId(db: Db, userId: number, xId: string): TweetResour
       and(eq(resources.userId, userId), eq(resources.type, 'tweet'), eq(resources.tweetXId, xId)),
     )
     .get();
-  return row ? (toResource(row, row.usedBy) as TweetResource) : null;
+  return row
+    ? (toResource(
+        row,
+        row.usedBy,
+        tagsForResources(db, userId, [row.id]).get(row.id) ?? [],
+      ) as TweetResource)
+    : null;
 }
 
 export function updateTweet(
@@ -207,26 +229,30 @@ export function listTweetAuthors(db: Db, userId: number): ResourceAuthors {
   return { authors };
 }
 
-export function createNote(db: Db, userId: number, input: NoteCreate, now: Date): Resource {
-  const row = db
-    .insert(resources)
-    .values({
-      userId,
-      type: 'md',
-      title: noteTitle(input.body, input.title),
-      notes: input.notes ?? '',
-      createdAt: now,
-      mdBody: input.body,
-    })
-    .returning()
-    .get();
+export function createNote(db: Db | Tx, userId: number, input: NoteCreate, now: Date): Resource {
+  const row = db.transaction((tx) => {
+    const inserted = tx
+      .insert(resources)
+      .values({
+        userId,
+        type: 'md',
+        title: noteTitle(input.body, input.title),
+        notes: input.notes ?? '',
+        createdAt: now,
+        mdBody: input.body,
+      })
+      .returning()
+      .get();
+    if (!inserted) throw new Error('resource insert failed');
+    if (input.tags !== undefined) addResourceTags(tx, userId, inserted.id, input.tags);
+    return inserted;
+  });
 
-  if (!row) throw new Error('resource insert failed');
-  return toResource(row, 0);
+  return toResource(row, 0, tagsForResources(db, userId, [row.id]).get(row.id) ?? []);
 }
 
 export function createImage(
-  db: Db,
+  db: Db | Tx,
   userId: number,
   input: {
     title: string;
@@ -236,38 +262,45 @@ export function createImage(
     bytes: number;
     width: number;
     height: number;
+    tags?: string[];
   },
   now: Date,
 ): Resource {
-  const row = db
-    .insert(resources)
-    .values({
-      userId,
-      type: 'image',
-      title: input.title,
-      notes: input.notes ?? '',
-      createdAt: now,
-      imagePath: input.path,
-      imageMime: input.mime,
-      imageBytes: input.bytes,
-      imageWidth: input.width,
-      imageHeight: input.height,
-    })
-    .returning()
-    .get();
+  const row = db.transaction((tx) => {
+    const inserted = tx
+      .insert(resources)
+      .values({
+        userId,
+        type: 'image',
+        title: input.title,
+        notes: input.notes ?? '',
+        createdAt: now,
+        imagePath: input.path,
+        imageMime: input.mime,
+        imageBytes: input.bytes,
+        imageWidth: input.width,
+        imageHeight: input.height,
+      })
+      .returning()
+      .get();
+    if (!inserted) throw new Error('resource insert failed');
+    if (input.tags !== undefined) addResourceTags(tx, userId, inserted.id, input.tags);
+    return inserted;
+  });
 
-  if (!row) throw new Error('resource insert failed');
-  return toResource(row);
+  return toResource(row, 0, tagsForResources(db, userId, [row.id]).get(row.id) ?? []);
 }
 
-export function getResource(db: Db, userId: number, id: number): Resource | null {
+export function getResource(db: Db | Tx, userId: number, id: number): Resource | null {
   const row = db
     .select(resourceColumns())
     .from(resources)
     .where(and(eq(resources.id, id), eq(resources.userId, userId)))
     .get();
 
-  return row ? toResource(row, row.usedBy) : null;
+  return row
+    ? toResource(row, row.usedBy, tagsForResources(db, userId, [row.id]).get(row.id) ?? [])
+    : null;
 }
 
 export function updateResource(
@@ -307,7 +340,12 @@ export function listAllResources(db: Db, userId: number): Resource[] {
     .orderBy(asc(resources.createdAt), asc(resources.id))
     .all();
 
-  return rows.map((row) => toResource(row, row.usedBy));
+  const tagsById = tagsForResources(
+    db,
+    userId,
+    rows.map((row) => row.id),
+  );
+  return rows.map((row) => toResource(row, row.usedBy, tagsById.get(row.id) ?? []));
 }
 
 export function listResources(db: Db, userId: number, query: ResourceListQuery): ResourceList {
@@ -333,6 +371,24 @@ export function listResources(db: Db, userId: number, query: ResourceListQuery):
     if (query.from)
       filterConditions.push(gte(resources.createdAt, zonedDayStart(query.from, timezone)));
     if (query.to) filterConditions.push(lt(resources.createdAt, zonedDayEnd(query.to, timezone)));
+  }
+  const tagNames = query.tag ?? [];
+  if (tagNames.length > 0) {
+    const byName = tagIdsByName(db, userId);
+    for (const name of tagNames) {
+      const tagId = byName.get(name.toLowerCase());
+      filterConditions.push(
+        tagId === undefined
+          ? inArray(resources.id, [])
+          : inArray(
+              resources.id,
+              db
+                .select({ resourceId: resourceTags.resourceId })
+                .from(resourceTags)
+                .where(and(eq(resourceTags.userId, userId), eq(resourceTags.tagId, tagId))),
+            ),
+      );
+    }
   }
 
   const totalRow = db
@@ -383,8 +439,14 @@ export function listResources(db: Db, userId: number, query: ResourceListQuery):
   const pageRows = hasNextPage ? rows.slice(0, query.limit) : rows;
   const last = pageRows.at(-1);
 
+  const tagsById = tagsForResources(
+    db,
+    userId,
+    pageRows.map((row) => row.id),
+  );
+
   return {
-    items: pageRows.map((row) => toResource(row, row.usedBy)),
+    items: pageRows.map((row) => toResource(row, row.usedBy, tagsById.get(row.id) ?? [])),
     total: totalRow?.value ?? 0,
     next_cursor:
       hasNextPage && last

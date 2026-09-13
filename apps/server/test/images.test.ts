@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type { ImageCreateResponse, Resource } from '@perch/core';
+import type { ImageCreateResponse } from '@perch/core';
 import {
   createTestServer,
   GIF_4X3,
@@ -82,6 +82,7 @@ describe('images', () => {
         bytes: 73,
         width: 3,
         height: 2,
+        tags: [],
       },
     });
     expect(rows[1]).toMatchObject({
@@ -310,5 +311,22 @@ describe('images', () => {
       code: 'unauthorized',
       message: 'Missing or invalid token',
     });
+  });
+
+  test('uploads an image with tags', async () => {
+    const form = new FormData();
+    form.append('files', new File([PNG_3X2.slice().buffer as ArrayBuffer], 'a.png'));
+    form.append('tags', 'design');
+    form.append('tags', 'perch');
+    const response = await request('/api/resources/images', { method: 'POST', body: form });
+    const rows = await results(response);
+    expect(rows[0]?.ok && rows[0].resource.tags).toEqual(['design', 'perch']);
+
+    const bad = new FormData();
+    bad.append('files', new File([PNG_3X2.slice().buffer as ArrayBuffer], 'b.png'));
+    bad.append('tags', '  ');
+    const rejected = await request('/api/resources/images', { method: 'POST', body: bad });
+    expect(rejected.status).toBe(400);
+    expect(await rejected.json()).toMatchObject({ errors: [{ path: 'tags' }] });
   });
 });

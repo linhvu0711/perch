@@ -44,8 +44,9 @@ import {
 import { decodePostCursor, encodePostCursor } from './cursor';
 import type { Db } from './index';
 import { type MediaFiles, mediaForPosts } from './postMedia';
-import { postLinks, postMedia, posts, resources } from './schema';
+import { postLinks, postMedia, posts, postTags, resources } from './schema';
 import { getSettings } from './settings';
+import { addPostTags, tagIdsByName, tagsForPosts, tagsForResources } from './tags';
 import { getConnectedAccount } from './xAccounts';
 
 export class InvalidPostCursorError extends Error {}
@@ -85,6 +86,12 @@ export class PostStatusError extends Error {
 
 export class ScheduleTimeError extends Error {}
 
+export class TagExistsError extends Error {
+  constructor(public tagName: string) {
+    super(`Tag "${tagName}" already exists`);
+  }
+}
+
 type PostRow = typeof posts.$inferSelect;
 
 function toPost(
@@ -92,6 +99,7 @@ function toPost(
   links: PostLink[],
   media: PostMedia[],
   limit: number,
+  tags: string[],
   ready: Ready,
 ): Post {
   return {
@@ -111,6 +119,7 @@ function toPost(
     limit,
     estimated_cost: estimateCost(row.text),
     links,
+    tags,
     media,
     ready,
   };
@@ -197,6 +206,10 @@ export async function createPost(
     for (const resourceId of input.from ?? []) {
       tx.insert(postLinks).values({ postId: inserted.id, resourceId }).onConflictDoNothing().run();
     }
+    addPostTags(tx, userId, inserted.id, [
+      ...(input.tags ?? []),
+      ...[...tagsForResources(tx, userId, input.from ?? []).values()].flat(),
+    ]);
     return inserted;
   });
 
@@ -247,6 +260,7 @@ export function getPost(db: Db, userId: number, id: number): Post | null {
     linksForPosts(db, [row.id]).get(row.id) ?? [],
     media,
     limit,
+    tagsForPosts(db, userId, [row.id]).get(row.id) ?? [],
     readyChecks({
       text: row.text,
       limit,
@@ -294,6 +308,24 @@ export function listPosts(
       sql`EXISTS (select 1 from post_links where post_links.post_id = ${posts.id} and post_links.resource_id = ${query.resource_id})`,
     );
   }
+  const tagNames = query.tag ?? [];
+  if (tagNames.length > 0) {
+    const byName = tagIdsByName(db, userId);
+    for (const name of tagNames) {
+      const tagId = byName.get(name.toLowerCase());
+      filterConditions.push(
+        tagId === undefined
+          ? inArray(posts.id, [])
+          : inArray(
+              posts.id,
+              db
+                .select({ postId: postTags.postId })
+                .from(postTags)
+                .where(and(eq(postTags.userId, userId), eq(postTags.tagId, tagId))),
+            ),
+      );
+    }
+  }
 
   const totalRow = db
     .select({ value: count() })
@@ -334,6 +366,7 @@ export function listPosts(
   const postIds = pageRows.map((row) => row.id);
   const links = linksForPosts(db, postIds);
   const media = mediaForPosts(db, postIds);
+  const postTagsMap = tagsForPosts(db, userId, postIds);
   const items = pageRows.map((row) => {
     const postMedia = media.get(row.id) ?? [];
     const post = toPost(
@@ -341,6 +374,7 @@ export function listPosts(
       links.get(row.id) ?? [],
       postMedia,
       limit,
+      postTagsMap.get(row.id) ?? [],
       readyChecks({
         text: row.text,
         limit,

@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { zValidator } from '@hono/zod-validator';
 import {
+  itemTagsBodySchema,
   NOTE_TITLE_FALLBACK,
   noteCreateSchema,
   RESOURCE_BATCH_MAX,
@@ -9,6 +10,7 @@ import {
   resourceDeleteBodySchema,
   resourceListQuerySchema,
   resourcePatchSchema,
+  tagNameSchema,
   tweetCreateSchema,
 } from '@perch/core';
 import { Hono } from 'hono';
@@ -27,6 +29,7 @@ import {
   listTweetAuthors,
   updateResource,
 } from '../db/resources';
+import { tagResources, untagResources } from '../db/tags';
 import { ApiError, validationHook } from '../errors';
 import { inspectImage, removeImage, storeImage } from '../images';
 
@@ -91,6 +94,20 @@ export function resourcesRoutes(deps: AppDeps) {
         title = parsed.data;
       }
 
+      const tags: string[] = [];
+      for (const value of form.getAll('tags')) {
+        const parsed = tagNameSchema.safeParse(value);
+        if (!parsed.success) {
+          throw new ApiError(400, 'validation', 'Invalid request', [
+            {
+              path: 'tags',
+              message: parsed.error.issues[0]?.message ?? 'Invalid tag',
+            },
+          ]);
+        }
+        tags.push(parsed.data);
+      }
+
       const results = [];
       for (const file of files) {
         const bytes = await file.bytes();
@@ -114,6 +131,7 @@ export function resourcesRoutes(deps: AppDeps) {
               bytes: bytes.length,
               width: inspected.width,
               height: inspected.height,
+              tags,
             },
             deps.clock.now(),
           );
@@ -133,6 +151,14 @@ export function resourcesRoutes(deps: AppDeps) {
           await s.write(`${JSON.stringify(line)}\n`);
         }
       });
+    })
+    .post('/tags', zValidator('json', itemTagsBodySchema, validationHook), (c) => {
+      const body = c.req.valid('json');
+      return c.json(tagResources(deps.db, c.get('user').id, body.ids, body.tags), 200);
+    })
+    .delete('/tags', zValidator('json', itemTagsBodySchema, validationHook), (c) => {
+      const body = c.req.valid('json');
+      return c.json(untagResources(deps.db, c.get('user').id, body.ids, body.tags), 200);
     })
     .get('/:id', zValidator('param', idParamSchema, validationHook), (c) => {
       const { id } = c.req.valid('param');

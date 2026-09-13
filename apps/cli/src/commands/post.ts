@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import {
   formatCost,
+  type ItemTagsResponse,
   POST_LIST_LIMIT_DEFAULT,
   POST_STATUSES,
   type Post,
@@ -16,7 +17,14 @@ import type { Command } from 'commander';
 import { createApi } from '../api';
 import { resolveServerUrl, resolveToken } from '../config';
 import type { CliContext } from '../context';
-import { BatchFailure, CliError, formatTable, printResult, resolveMode } from '../output';
+import {
+  BatchFailure,
+  CliError,
+  formatTable,
+  mergeItemTagResults,
+  printResult,
+  resolveMode,
+} from '../output';
 
 interface GlobalOptions {
   json?: boolean;
@@ -57,6 +65,7 @@ function printPost(ctx: CliContext, options: GlobalOptions, post: Post): void {
       scheduled: post.scheduled_at ?? '',
       published: post.published_at ?? '',
       links: post.links.map((link) => link.resource_id).join(', '),
+      tags: post.tags.join(', '),
       media: post.media.map((item) => item.position).join(', '),
       ready: post.ready.checks
         .map((check) => `${check.ok ? 'ok' : 'no'} ${check.label}`)
@@ -131,6 +140,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
     .option('--text <text>')
     .option('--file <path>')
     .option('--from <rid...>')
+    .option('--tag <name...>')
     .option('--official')
     .action(
       async (
@@ -140,6 +150,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
           text?: string;
           file?: string;
           from?: string[];
+          tag?: string[];
           official?: boolean;
         },
       ) => {
@@ -153,6 +164,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
               ...(commandOptions.title !== undefined ? { title: commandOptions.title } : {}),
               text,
               ...(from.length > 0 ? { from } : {}),
+              ...(commandOptions.tag !== undefined ? { tags: commandOptions.tag } : {}),
               ...(commandOptions.official === true ? { official: true } : {}),
             },
           }),
@@ -168,6 +180,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
     .option('--search <q>')
     .option('--from <d>')
     .option('--to <d>')
+    .option('--tag <name...>')
     .option('--limit <n>', 'page size', String(POST_LIST_LIMIT_DEFAULT))
     .option('--cursor <cursor>')
     .option('--scheduled')
@@ -178,6 +191,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
         search?: string;
         from?: string;
         to?: string;
+        tag?: string[];
         limit: string;
         cursor?: string;
         scheduled?: boolean;
@@ -218,6 +232,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
               ...(commandOptions.search !== undefined ? { search: commandOptions.search } : {}),
               ...(commandOptions.from !== undefined ? { from: commandOptions.from } : {}),
               ...(commandOptions.to !== undefined ? { to: commandOptions.to } : {}),
+              ...(commandOptions.tag !== undefined ? { tag: commandOptions.tag } : {}),
               ...(commandOptions.scheduled === true ? { scheduled: 'true' as const } : {}),
               ...(commandOptions.unscheduled === true ? { scheduled: 'false' as const } : {}),
               limit: String(Number(commandOptions.limit)),
@@ -238,6 +253,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
           title: item.title,
           chars: `${item.character_count} / ${item.limit}`,
           cost: formatCost(item.estimated_cost),
+          tags: item.tags.join(', '),
         }));
         const summary = `${result.items.length} shown · ${result.total} total`;
         if (rows.length === 0) {
@@ -386,6 +402,62 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
       printResult(ctx, resolveMode(program.opts<GlobalOptions>(), ctx.isTTY), response.results);
       const failed = response.results.filter((result) => !result.ok).length;
       if (failed > 0) throw new BatchFailure(failed, response.results.length);
+    });
+
+  post
+    .command('tag <id...>')
+    .description('Add or remove tags on posts')
+    .option('--add <name...>')
+    .option('--remove <name...>')
+    .action(async (idValues: string[], commandOptions: { add?: string[]; remove?: string[] }) => {
+      const ids = idValues.map((value) => positiveId(value, true));
+      if (commandOptions.add === undefined && commandOptions.remove === undefined) {
+        throw new CliError('usage', 'Give --add or --remove', 2);
+      }
+
+      const api = apiFor(program, ctx);
+      const batches: ItemTagsResponse['results'][] = [];
+      if (commandOptions.add !== undefined) {
+        batches.push(
+          (
+            await api.call(
+              api.client.api.posts.tags.$post({
+                json: { ids, tags: commandOptions.add },
+              }),
+            )
+          ).results,
+        );
+      }
+      if (commandOptions.remove !== undefined) {
+        batches.push(
+          (
+            await api.call(
+              api.client.api.posts.tags.$delete({
+                json: { ids, tags: commandOptions.remove },
+              }),
+            )
+          ).results,
+        );
+      }
+      const merged = mergeItemTagResults(...batches);
+
+      const mode = resolveMode(program.opts<GlobalOptions>(), ctx.isTTY);
+      if (mode === 'json') {
+        printResult(ctx, mode, merged);
+      } else {
+        printResult(
+          ctx,
+          mode,
+          merged.map((result) => ({
+            id: result.id,
+            ok: result.ok,
+            tags: result.ok ? result.tags.join(', ') : '',
+            error: result.ok ? '' : result.error.message,
+          })),
+        );
+      }
+      const failed = merged.filter((result) => !result.ok).length;
+      if (failed > 0) throw new BatchFailure(failed, merged.length);
     });
 
   post

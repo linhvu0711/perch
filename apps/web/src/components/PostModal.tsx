@@ -36,8 +36,10 @@ import {
   usePromotePosts,
   useSchedulePost,
   useSettings,
+  useTagPosts,
   useUnlinkResources,
   useUnschedulePosts,
+  useUntagPosts,
   useUpdatePost,
 } from '@/lib/queries';
 
@@ -48,6 +50,7 @@ import { Lightbox } from './Lightbox';
 import { PostPreview } from './PostPreview';
 import { ResourcesDrawer } from './ResourcesDrawer';
 import { StatusPill } from './StatusPill';
+import { TagField } from './TagField';
 import { toast } from './Toast';
 
 const EMPTY_POST: Post = {
@@ -65,6 +68,7 @@ const EMPTY_POST: Post = {
   updated_at: '',
   character_count: 0,
   limit: CHAR_LIMIT_DEFAULT,
+  tags: [],
   estimated_cost: COST_POST_USD,
   links: [],
   media: [],
@@ -93,6 +97,8 @@ export function PostModal(): JSX.Element | null {
   const schedulePost = useSchedulePost();
   const unschedulePosts = useUnschedulePosts();
   const unlinkResources = useUnlinkResources();
+  const tagPosts = useTagPosts();
+  const untagPosts = useUntagPosts();
   const detachMedia = useDetachMedia();
   const modalRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -474,6 +480,7 @@ export function PostModal(): JSX.Element | null {
                 />
               </div>
               <div className="field">
+                {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the links list */}
                 {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the slot grid */}
                 <label>
                   Images{' '}
@@ -633,6 +640,25 @@ export function PostModal(): JSX.Element | null {
                   ))}
                 </div>
               </div>
+              {currentId !== undefined && (
+                <TagField
+                  tags={viewPost.tags}
+                  readOnly={readOnly}
+                  disabled={tagPosts.isPending || untagPosts.isPending}
+                  onAdd={(name) =>
+                    void tagPosts
+                      .mutateAsync({ ids: [currentId], tags: [name] })
+                      .then(() => toast(`Tagged ${name}`))
+                      .catch((error: unknown) => toast(errorMessage(error), 'warn'))
+                  }
+                  onRemove={(name) =>
+                    void untagPosts
+                      .mutateAsync({ ids: [currentId], tags: [name] })
+                      .then(() => toast('Untagged'))
+                      .catch((error: unknown) => toast(errorMessage(error), 'warn'))
+                  }
+                />
+              )}
             </div>
             <div className="previewpane">
               <h2>Preview</h2>

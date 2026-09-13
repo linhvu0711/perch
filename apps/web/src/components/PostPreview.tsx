@@ -30,7 +30,7 @@ export function PostPreview({ post }: { post: Post }) {
   const fold = foldPreview(post.text);
   const visible = expanded ? post.text : fold.visible;
   const paragraphs = visible.split('\n\n');
-  let offset = 0;
+  const offset = 0;
 
   return (
     <div className="xcard">

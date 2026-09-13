@@ -23,6 +23,8 @@ import {
   useDeleteResources,
   usePosts,
   useResource,
+  useTagResources,
+  useUntagResources,
   useUpdateResource,
 } from '@/lib/queries';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -31,6 +33,7 @@ import { IconLink } from './IconLink';
 import { Markdown } from './Markdown';
 import { NoteEditor } from './NoteEditor';
 import { StatusPill } from './StatusPill';
+import { TagField } from './TagField';
 import { toast } from './Toast';
 
 type ConfirmState = 'discard-edit' | 'discard-close' | 'discard-navigation' | 'delete' | null;
@@ -56,6 +59,8 @@ export function ResourceModal(): JSX.Element | null {
   const usedByTotal = parsedId === null ? 0 : (usedBy.data?.pages[0]?.total ?? usedByPosts.length);
   const updateResource = useUpdateResource();
   const deleteResources = useDeleteResources();
+  const tagResources = useTagResources();
+  const untagResources = useUntagResources();
   const modalRef = useRef<HTMLDivElement>(null);
   const allowNavigationRef = useRef(false);
   const [isEditing, setIsEditing] = useState(isNew);
@@ -278,6 +283,7 @@ export function ResourceModal(): JSX.Element | null {
 
   if (!isNew && resourceQuery.isPending) {
     return (
+      // biome-ignore lint/a11y/noStaticElementInteractions: scrim click-to-close
       <div
         className="scrim"
         onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
@@ -316,6 +322,7 @@ export function ResourceModal(): JSX.Element | null {
     !(resourceQuery.error instanceof ApiError && resourceQuery.error.status === 404)
   ) {
     return (
+      // biome-ignore lint/a11y/noStaticElementInteractions: scrim click-to-close
       <div
         className="scrim"
         onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
@@ -353,6 +360,7 @@ export function ResourceModal(): JSX.Element | null {
   if (resource?.type === 'tweet') {
     return (
       <>
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: scrim click-to-close */}
         <div
           className="scrim"
           onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
@@ -440,6 +448,25 @@ export function ResourceModal(): JSX.Element | null {
                     )}
                   </div>
                 </div>
+                {resource !== undefined && (
+                  <TagField
+                    tags={resource.tags}
+                    readOnly={false}
+                    disabled={tagResources.isPending || untagResources.isPending}
+                    onAdd={(name) =>
+                      void tagResources
+                        .mutateAsync({ ids: [resource.id], tags: [name] })
+                        .then(() => toast(`Tagged ${name}`))
+                        .catch((error: unknown) => toast(errorMessage(error), 'warn'))
+                    }
+                    onRemove={(name) =>
+                      void untagResources
+                        .mutateAsync({ ids: [resource.id], tags: [name] })
+                        .then(() => toast('Untagged'))
+                        .catch((error: unknown) => toast(errorMessage(error), 'warn'))
+                    }
+                  />
+                )}
                 <div className="field">
                   <label htmlFor="resource-notes">Private notes</label>
                   <textarea
@@ -488,6 +515,7 @@ export function ResourceModal(): JSX.Element | null {
 
   return (
     <>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: scrim click-to-close */}
       <div
         className="scrim"
         onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
@@ -590,6 +618,7 @@ export function ResourceModal(): JSX.Element | null {
             </div>
           </div>
           <div className="rbody">
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: pane click focuses the editor */}
             <div
               className={editingNote ? 'rmain editing' : 'rmain'}
               onKeyDown={(event) => {
@@ -664,6 +693,25 @@ export function ResourceModal(): JSX.Element | null {
                     )}
                   </div>
                 </div>
+              )}
+              {resource !== undefined && (
+                <TagField
+                  tags={resource.tags}
+                  readOnly={false}
+                  disabled={tagResources.isPending || untagResources.isPending}
+                  onAdd={(name) =>
+                    void tagResources
+                      .mutateAsync({ ids: [resource.id], tags: [name] })
+                      .then(() => toast(`Tagged ${name}`))
+                      .catch((error: unknown) => toast(errorMessage(error), 'warn'))
+                  }
+                  onRemove={(name) =>
+                    void untagResources
+                      .mutateAsync({ ids: [resource.id], tags: [name] })
+                      .then(() => toast('Untagged'))
+                      .catch((error: unknown) => toast(errorMessage(error), 'warn'))
+                  }
+                />
               )}
               <div className="field">
                 <label htmlFor="resource-notes">Private notes</label>

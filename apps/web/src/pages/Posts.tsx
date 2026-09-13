@@ -17,6 +17,7 @@ import { Outlet, useNavigate } from 'react-router';
 import { Empty } from '@/components/Empty';
 import { IconButton } from '@/components/IconButton';
 import { PostRow } from '@/components/PostRow';
+import { TagFilter } from '@/components/TagFilter';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { errorMessage } from '@/lib/api';
 import { POSTS_PAGE_SIZE, usePosts } from '@/lib/queries';
@@ -37,6 +38,7 @@ const STATUS_TABS: Array<{
 export function Posts() {
   const navigate = useNavigate();
   const [status, setStatus] = useState<PostStatus | undefined>();
+  const [tag, setTag] = useState<string | undefined>();
   const [scheduled, setScheduled] = useState<boolean | undefined>();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -51,8 +53,9 @@ export function Posts() {
       ...(status !== undefined ? { status } : {}),
       ...(scheduled !== undefined ? { scheduled } : {}),
       ...(debouncedSearch !== '' ? { search: debouncedSearch } : {}),
+      ...(tag !== undefined ? { tag: [tag] } : {}),
     }),
-    [status, scheduled, debouncedSearch],
+    [status, scheduled, debouncedSearch, tag],
   );
   const posts = usePosts(filters);
   const items = posts.data?.pages.flatMap((page) => page.items) ?? [];
@@ -63,7 +66,7 @@ export function Posts() {
     content = <div className="countline">Loading…</div>;
   } else if (posts.isError) {
     content = <Empty title="Could not load posts" text={errorMessage(posts.error)} />;
-  } else if (total === 0 && status === undefined && search === '') {
+  } else if (total === 0 && status === undefined && search === '' && tag === undefined) {
     content = <Empty title="No posts yet" text="Create one with the New post button." />;
   } else if (total === 0) {
     content = <Empty title="No posts match" text="Change a filter or the search." />;
@@ -127,6 +130,7 @@ export function Posts() {
             </Tooltip>
           ))}
         </fieldset>
+        <TagFilter value={tag} kind="post" onChange={setTag} />
         {/* biome-ignore lint/a11y/useSemanticElements: mirrors the Status filter group above */}
         <div className="seg icons" role="group" aria-label="Scheduled">
           <Tooltip>

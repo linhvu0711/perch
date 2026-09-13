@@ -8,5 +8,6 @@ export * from './postRules';
 export * from './posts';
 export * from './resources';
 export * from './schedule';
+export * from './tags';
 export * from './timezone';
 export * from './tweets';

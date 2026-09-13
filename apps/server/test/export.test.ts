@@ -66,6 +66,7 @@ describe('GET /api/resources/export', () => {
       notes: 'n1',
       created_at: '2026-09-04T10:00:00.000Z',
       body: '# One',
+      tags: [],
     });
     const third = await request('/api/resources/3');
     expect(JSON.parse(lines[2]!)).toEqual(await third.json());

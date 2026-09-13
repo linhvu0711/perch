@@ -41,6 +41,7 @@ const image: Resource = {
   bytes: 73,
   width: 3,
   height: 2,
+  tags: [],
 };
 
 describe('mirrorFile', () => {
@@ -52,6 +53,7 @@ describe('mirrorFile', () => {
       notes: 'why\nsaved',
       created_at: '2026-09-04T10:00:00.000Z',
       body: '# Hello',
+      tags: [],
     };
     expect(mirrorFile(resource)).toEqual({
       path: 'notes/2026-09-04-7-he-said-hi-1.md',
@@ -68,6 +70,7 @@ describe('mirrorFile', () => {
       notes: '',
       created_at: '2026-09-04T10:00:00.000Z',
       body: '# Hello',
+      tags: [],
     };
 
     const file = mirrorFile(note);
@@ -88,6 +91,7 @@ describe('mirrorFile', () => {
       author_username: 'perchtester',
       text: 'hello',
       posted_at: '2026-09-01T12:00:00.000Z',
+      tags: [],
     };
     expect(mirrorFile(resource)).toEqual({
       path: 'tweets/2026-09-04-1-hello.md',

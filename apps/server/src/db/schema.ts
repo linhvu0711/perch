@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   index,
   integer,
@@ -77,6 +78,50 @@ export const posts = sqliteTable(
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (t) => [index('posts_user_scheduled_idx').on(t.userId, t.scheduledAt, t.id)],
+);
+
+export const tags = sqliteTable(
+  'tags',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    name: text('name').notNull(),
+  },
+  (t) => [uniqueIndex('tags_user_name_idx').on(t.userId, sql`lower(${t.name})`)],
+);
+
+export const resourceTags = sqliteTable(
+  'resource_tags',
+  {
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    resourceId: integer('resource_id')
+      .notNull()
+      .references(() => resources.id, { onDelete: 'cascade' }),
+    tagId: integer('tag_id')
+      .notNull()
+      .references(() => tags.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.resourceId, t.tagId] })],
+);
+
+export const postTags = sqliteTable(
+  'post_tags',
+  {
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    postId: integer('post_id')
+      .notNull()
+      .references(() => posts.id, { onDelete: 'cascade' }),
+    tagId: integer('tag_id')
+      .notNull()
+      .references(() => tags.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.postId, t.tagId] })],
 );
 
 export const postLinks = sqliteTable(

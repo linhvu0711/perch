@@ -24,14 +24,18 @@ function write(name: string, body: string): string {
   return file;
 }
 
-async function create(body: string, title?: string): Promise<Resource> {
+async function create(body: string, title?: string, tags?: string[]): Promise<Resource> {
   const response = await server.app.request('/api/resources/notes', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${server.token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ body, ...(title !== undefined ? { title } : {}) }),
+    body: JSON.stringify({
+      body,
+      ...(title !== undefined ? { title } : {}),
+      ...(tags !== undefined ? { tags } : {}),
+    }),
   });
   expect(response.status).toBe(201);
   return (await response.json()) as Resource;
@@ -575,5 +579,65 @@ describe('resource add image', () => {
       1,
     );
     expect(JSON.parse(badDate.err()).code).toBe('bad_value');
+  });
+});
+
+describe('resource tag', () => {
+  test('tags and untags resources', async () => {
+    await create('# One');
+    await create('# Two');
+
+    const first = makeCtx(server);
+    expect(
+      await runCli(['resource', 'tag', '1', '2', '--add', 'a', 'b', '--json'], first.ctx),
+    ).toBe(0);
+    expect(JSON.parse(first.out())).toEqual([
+      { id: 1, ok: true, tags: ['a', 'b'] },
+      { id: 2, ok: true, tags: ['a', 'b'] },
+    ]);
+
+    const second = makeCtx(server);
+    expect(
+      await runCli(['resource', 'tag', '1', '--add', 'c', '--remove', 'a', '--json'], second.ctx),
+    ).toBe(0);
+    expect(JSON.parse(second.out())).toEqual([{ id: 1, ok: true, tags: ['b', 'c'] }]);
+
+    const bare = makeCtx(server);
+    expect(await runCli(['resource', 'tag', '1'], bare.ctx)).toBe(2);
+    expect(bare.err()).toContain('Give --add or --remove');
+  });
+
+  test('reports add and remove failures together', async () => {
+    await create('# One');
+
+    const capture = makeCtx(server);
+    expect(
+      await runCli(
+        ['resource', 'tag', '1', '99', '--add', 'a', '--remove', 'b', '--json'],
+        capture.ctx,
+      ),
+    ).toBe(1);
+    const results = JSON.parse(capture.out());
+    expect(results).toHaveLength(2);
+    expect(results[0]).toEqual({ id: 1, ok: true, tags: ['a'] });
+    expect(results[1]).toMatchObject({ id: 99, ok: false });
+  });
+
+  test('adds a note with --tag', async () => {
+    const file = write('hello.md', '# Hello\n\nbody');
+    const capture = makeCtx(server);
+    expect(
+      await runCli(['resource', 'add', 'md', file, '--tag', 'a', 'b', '--json'], capture.ctx),
+    ).toBe(0);
+    expect(JSON.parse(capture.out())[0].resource.tags).toEqual(['a', 'b']);
+  });
+
+  test('filters the list by --tag', async () => {
+    await create('# One', undefined, ['a']);
+    await create('# Two');
+
+    const capture = makeCtx(server);
+    expect(await runCli(['resource', 'list', '--tag', 'a', '--json'], capture.ctx)).toBe(0);
+    expect(JSON.parse(capture.out()).items.map((i: { id: number }) => i.id)).toEqual([1]);
   });
 });

@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { zValidator } from '@hono/zod-validator';
 import {
+  itemTagsBodySchema,
   postCreateSchema,
   postDeleteBodySchema,
   postIdsBodySchema,
@@ -48,6 +49,7 @@ import {
 } from '../db/posts';
 import { postMedia, posts } from '../db/schema';
 import { getSettings } from '../db/settings';
+import { tagPosts, untagPosts } from '../db/tags';
 import { ApiError, validationHook } from '../errors';
 import { inspectImage, readMedia, removeMedia, removeMediaDir, storeMedia } from '../images';
 
@@ -124,6 +126,14 @@ export function postsRoutes(deps: AppDeps) {
         }
         throw error;
       }
+    })
+    .post('/tags', zValidator('json', itemTagsBodySchema, validationHook), (c) => {
+      const body = c.req.valid('json');
+      return c.json(tagPosts(deps.db, c.get('user').id, body.ids, body.tags), 200);
+    })
+    .delete('/tags', zValidator('json', itemTagsBodySchema, validationHook), (c) => {
+      const body = c.req.valid('json');
+      return c.json(untagPosts(deps.db, c.get('user').id, body.ids, body.tags), 200);
     })
     .post('/promote', zValidator('json', postIdsBodySchema, validationHook), (c) => {
       const userId = c.get('user').id;
