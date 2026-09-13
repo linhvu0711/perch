@@ -4,5 +4,6 @@ export * from './charLimit';
 export * from './cost';
 export * from './costs';
 export * from './mirror';
+export * from './posts';
 export * from './resources';
 export * from './timezone';

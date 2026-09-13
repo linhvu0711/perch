@@ -29,6 +29,13 @@
       "when": 1789272309803,
       "tag": "0003_image_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789275987040,
+      "tag": "0004_posts",
+      "breakpoints": true
     }
   ]
 }

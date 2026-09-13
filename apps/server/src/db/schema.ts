@@ -1,6 +1,7 @@
 import {
   index,
   integer,
+  primaryKey,
   real,
   sqliteTable,
   text,
@@ -39,6 +40,47 @@ export const resources = sqliteTable(
     imageHeight: integer('image_h'),
   },
   (t) => [index('resources_user_created_idx').on(t.userId, t.createdAt, t.id)],
+);
+
+export const posts = sqliteTable(
+  'posts',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    status: text('status', {
+      enum: ['draft', 'official', 'published', 'failed'],
+    })
+      .notNull()
+      .default('draft'),
+    title: text('title').notNull().default(''),
+    text: text('text').notNull().default(''),
+    scheduledAt: integer('scheduled_at', { mode: 'timestamp_ms' }),
+    publishedAt: integer('published_at', { mode: 'timestamp_ms' }),
+    xAccountId: integer('x_account_id'),
+    xPostId: text('x_post_id'),
+    lastError: text('last_error'),
+    retryCount: integer('retry_count').notNull().default(0),
+    parentPostId: integer('parent_post_id'),
+    position: integer('position').notNull().default(0),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('posts_user_scheduled_idx').on(t.userId, t.scheduledAt, t.id)],
+);
+
+export const postLinks = sqliteTable(
+  'post_links',
+  {
+    postId: integer('post_id')
+      .notNull()
+      .references(() => posts.id, { onDelete: 'cascade' }),
+    resourceId: integer('resource_id')
+      .notNull()
+      .references(() => resources.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.postId, t.resourceId] })],
 );
 
 export const xAccounts = sqliteTable(
