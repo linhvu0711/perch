@@ -150,6 +150,7 @@ export function useSaveTweets() {
       void queryClient.invalidateQueries({ queryKey: ['resources', 'list'] });
       void queryClient.invalidateQueries({ queryKey: ['resources', 'authors'] });
       void queryClient.invalidateQueries({ queryKey: ['counts'] });
+      void queryClient.invalidateQueries({ queryKey: ['tags'] });
     },
   });
 }
@@ -237,6 +238,7 @@ export function useDeleteResources() {
       void queryClient.invalidateQueries({ queryKey: ['resources', 'list'] });
       void queryClient.invalidateQueries({ queryKey: ['resources', 'authors'] });
       void queryClient.invalidateQueries({ queryKey: ['counts'] });
+      void queryClient.invalidateQueries({ queryKey: ['tags'] });
     },
   });
 }

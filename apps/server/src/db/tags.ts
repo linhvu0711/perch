@@ -173,7 +173,7 @@ function tagIdsForNames(tx: Db | Tx, userId: number, names: string[]): number[] 
     .map((row) => row.id);
 }
 
-function resourceExists(db: Db, userId: number, resourceId: number): boolean {
+function resourceExists(db: Db | Tx, userId: number, resourceId: number): boolean {
   return (
     db
       .select({ id: resources.id })
@@ -189,19 +189,19 @@ export function tagResources(
   ids: number[],
   names: string[],
 ): ItemTagsResponse {
-  return {
+  return db.transaction((tx) => ({
     results: ids.map((id) => {
-      if (!resourceExists(db, userId, id)) {
+      if (!resourceExists(tx, userId, id)) {
         return {
           id,
           ok: false as const,
           error: { code: 'not_found', message: `Resource ${id} not found` },
         };
       }
-      addResourceTags(db, userId, id, names);
-      return { id, ok: true as const, tags: tagsForResources(db, userId, [id]).get(id) ?? [] };
+      addResourceTags(tx, userId, id, names);
+      return { id, ok: true as const, tags: tagsForResources(tx, userId, [id]).get(id) ?? [] };
     }),
-  };
+  }));
 }
 
 export function untagResources(
@@ -210,19 +210,19 @@ export function untagResources(
   ids: number[],
   names: string[],
 ): ItemTagsResponse {
-  return {
+  return db.transaction((tx) => ({
     results: ids.map((id) => {
-      if (!resourceExists(db, userId, id)) {
+      if (!resourceExists(tx, userId, id)) {
         return {
           id,
           ok: false as const,
           error: { code: 'not_found', message: `Resource ${id} not found` },
         };
       }
-      removeResourceTags(db, userId, id, names);
-      return { id, ok: true as const, tags: tagsForResources(db, userId, [id]).get(id) ?? [] };
+      removeResourceTags(tx, userId, id, names);
+      return { id, ok: true as const, tags: tagsForResources(tx, userId, [id]).get(id) ?? [] };
     }),
-  };
+  }));
 }
 
 export function tagsForPosts(
@@ -272,7 +272,7 @@ export function removePostTags(tx: Db | Tx, userId: number, postId: number, name
     .run();
 }
 
-function postRowStatus(db: Db, userId: number, postId: number): { status: string } | 'not_found' {
+function postRowStatus(db: Db | Tx, userId: number, postId: number): { status: string } | 'not_found' {
   const row = db
     .select({ status: posts.status })
     .from(posts)
@@ -282,9 +282,9 @@ function postRowStatus(db: Db, userId: number, postId: number): { status: string
 }
 
 export function tagPosts(db: Db, userId: number, ids: number[], names: string[]): ItemTagsResponse {
-  return {
+  return db.transaction((tx) => ({
     results: ids.map((id) => {
-      const row = postRowStatus(db, userId, id);
+      const row = postRowStatus(tx, userId, id);
       if (row === 'not_found') {
         return {
           id,
@@ -299,10 +299,10 @@ export function tagPosts(db: Db, userId: number, ids: number[], names: string[])
           error: { code: 'published', message: `Post ${id} is published` },
         };
       }
-      addPostTags(db, userId, id, names);
-      return { id, ok: true as const, tags: tagsForPosts(db, userId, [id]).get(id) ?? [] };
+      addPostTags(tx, userId, id, names);
+      return { id, ok: true as const, tags: tagsForPosts(tx, userId, [id]).get(id) ?? [] };
     }),
-  };
+  }));
 }
 
 export function untagPosts(
@@ -311,9 +311,9 @@ export function untagPosts(
   ids: number[],
   names: string[],
 ): ItemTagsResponse {
-  return {
+  return db.transaction((tx) => ({
     results: ids.map((id) => {
-      const row = postRowStatus(db, userId, id);
+      const row = postRowStatus(tx, userId, id);
       if (row === 'not_found') {
         return {
           id,
@@ -328,10 +328,10 @@ export function untagPosts(
           error: { code: 'published', message: `Post ${id} is published` },
         };
       }
-      removePostTags(db, userId, id, names);
-      return { id, ok: true as const, tags: tagsForPosts(db, userId, [id]).get(id) ?? [] };
+      removePostTags(tx, userId, id, names);
+      return { id, ok: true as const, tags: tagsForPosts(tx, userId, [id]).get(id) ?? [] };
     }),
-  };
+  }));
 }
 
 export function renameTag(db: Db, userId: number, id: number, name: string): Tag | null {
