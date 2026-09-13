@@ -206,10 +206,12 @@ export function useDeleteResources() {
     onSuccess: (data) => {
       for (const result of data.results) {
         if (result.ok) {
-          void queryClient.invalidateQueries({
-            queryKey: ['resources', 'detail', result.id],
-            refetchType: 'none',
-          });
+          void queryClient
+            .invalidateQueries({
+              queryKey: ['resources', 'detail', result.id],
+              refetchType: 'none',
+            })
+            .catch(() => undefined);
         }
       }
       void queryClient.invalidateQueries({ queryKey: ['resources', 'list'] });
@@ -295,10 +297,12 @@ export function useDeletePosts() {
     onSuccess: (data) => {
       for (const result of data.results) {
         if (result.ok) {
-          void queryClient.invalidateQueries({
-            queryKey: ['posts', 'detail', result.id],
-            refetchType: 'none',
-          });
+          void queryClient
+            .invalidateQueries({
+              queryKey: ['posts', 'detail', result.id],
+              refetchType: 'none',
+            })
+            .catch(() => undefined);
         }
       }
       void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
