@@ -72,7 +72,14 @@ export function createApi(ctx: CliContext, serverUrl: string, token: string | un
       responsePromise: Promise<JsonResponse<unknown> & { arrayBuffer(): Promise<ArrayBuffer> }>,
     ): Promise<Uint8Array> {
       const response = await resolve(responsePromise);
-      if (response.ok) return new Uint8Array(await response.arrayBuffer());
+      if (response.ok) {
+        try {
+          return new Uint8Array(await response.arrayBuffer());
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          throw new CliError('unreachable', `Cannot reach ${serverUrl}: ${message}`);
+        }
+      }
       await throwApiError(response);
       throw new CliError('http_error', `HTTP ${response.status}`);
     },
