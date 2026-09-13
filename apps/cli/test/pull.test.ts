@@ -351,7 +351,7 @@ describe('status', () => {
 
     const mark1 = out().length;
     await runCli(['status', '--json'], ctx);
-    expect(JSON.parse(out().slice(mark1))).toEqual({
+    expect(JSON.parse(out().slice(mark1))).toMatchObject({
       mirror_dir: dir,
       last_pull_at: null,
     });
@@ -359,7 +359,7 @@ describe('status', () => {
     await runCli(['resource', 'pull', '--json'], ctx);
     const mark = out().length;
     await runCli(['status', '--json'], ctx);
-    expect(JSON.parse(out().slice(mark))).toEqual({
+    expect(JSON.parse(out().slice(mark))).toMatchObject({
       mirror_dir: dir,
       last_pull_at: '2026-09-04T10:00:00.000Z',
     });

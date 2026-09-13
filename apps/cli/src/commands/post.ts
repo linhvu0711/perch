@@ -188,6 +188,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
     .option('--scheduled')
     .option('--unscheduled')
     .option('--missed')
+    .option('--needs-attention')
     .action(
       async (commandOptions: {
         status?: string;
@@ -200,6 +201,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
         scheduled?: boolean;
         unscheduled?: boolean;
         missed?: boolean;
+        needsAttention?: boolean;
       }) => {
         if (commandOptions.scheduled === true && commandOptions.unscheduled === true) {
           throw new CliError('bad_args', 'Use one of --scheduled or --unscheduled');
@@ -240,6 +242,9 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
               ...(commandOptions.scheduled === true ? { scheduled: 'true' as const } : {}),
               ...(commandOptions.unscheduled === true ? { scheduled: 'false' as const } : {}),
               ...(commandOptions.missed === true ? { missed: 'true' as const } : {}),
+              ...(commandOptions.needsAttention === true
+                ? { needs_attention: 'true' as const }
+                : {}),
               limit: String(Number(commandOptions.limit)),
               ...(commandOptions.cursor !== undefined ? { cursor: commandOptions.cursor } : {}),
             },
@@ -254,6 +259,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
         const rows = result.items.map((item) => ({
           id: item.id,
           status: item.missed ? 'missed' : item.status,
+          reason: item.reason ?? '',
           when: item.scheduled_at ?? item.published_at ?? '',
           title: item.title,
           chars: `${item.character_count} / ${item.limit}`,

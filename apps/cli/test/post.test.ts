@@ -659,3 +659,33 @@ describe('post publish and retry', () => {
     expect(lines).toContain('1 shown · 1 total');
   });
 });
+
+describe('post list needs attention', () => {
+  test('lists needs-attention posts with reasons', async () => {
+    // Given: a missed draft, a due-soon draft, and a later draft
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--text', 'Old', '--json'], setup.ctx);
+    await runCli(['post', 'schedule', '1', '--at', '2026-09-02T09:00:00Z', '--force'], setup.ctx);
+    await runCli(['post', 'create', '--text', 'Soon', '--json'], setup.ctx);
+    await runCli(['post', 'schedule', '2', '--at', '2026-09-06T09:00:00Z'], setup.ctx);
+    await runCli(['post', 'create', '--text', 'Later', '--json'], setup.ctx);
+    await runCli(['post', 'schedule', '3', '--at', '2026-09-12T09:00:00Z'], setup.ctx);
+
+    // When
+    const json = makeCtx(server);
+    expect(await runCli(['post', 'list', '--needs-attention', '--json'], json.ctx)).toBe(0);
+    const table = makeCtx(server, { isTTY: true });
+    expect(await runCli(['post', 'list', '--needs-attention', '--table'], table.ctx)).toBe(0);
+
+    // Then
+    const result = JSON.parse(json.out());
+    expect(result.items.map((item: { id: number }) => item.id)).toEqual([2, 1]);
+    expect(result.items.map((item: { reason: string }) => item.reason)).toEqual([
+      'still a draft',
+      'time passed, still a draft',
+    ]);
+    expect(result.total).toBe(2);
+    expect(table.out()).toContain('still a draft');
+    expect(table.out()).toContain('time passed, still a draft');
+  });
+});
