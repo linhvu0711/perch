@@ -3,6 +3,7 @@ import packageJson from '../package.json' with { type: 'json' };
 
 import { addAccountCommands } from './commands/account';
 import { addAuthCommands } from './commands/auth';
+import { addCalendarCommands } from './commands/calendar';
 import { addConfigCommands } from './commands/config';
 import { addOpenCommands } from './commands/open';
 import { addPostCommands } from './commands/post';
@@ -33,6 +34,7 @@ export async function runCli(argv: string[], ctx: CliContext): Promise<number> {
 
   addAccountCommands(program, ctx);
   addAuthCommands(program, ctx);
+  addCalendarCommands(program, ctx);
   addConfigCommands(program, ctx);
   addPostCommands(program, ctx);
   addResourceCommands(program, ctx);
