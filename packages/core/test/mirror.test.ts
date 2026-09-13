@@ -91,6 +91,7 @@ describe('mirrorFile', () => {
       author_username: 'perchtester',
       text: 'hello',
       posted_at: '2026-09-01T12:00:00.000Z',
+      tags: [],
     };
     expect(mirrorFile(resource)).toEqual({
       path: 'tweets/2026-09-04-1-hello.md',
