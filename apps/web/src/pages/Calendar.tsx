@@ -9,7 +9,7 @@ import {
   zonedParts,
 } from '@perch/core';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { type JSX, useEffect, useState } from 'react';
 import { Link, Outlet } from 'react-router';
 
 import { Empty } from '@/components/Empty';
@@ -44,7 +44,7 @@ export function Calendar() {
   });
   const byDay = new Map((range.data?.days ?? []).map((day) => [day.date, day.posts]));
 
-  let body;
+  let body: JSX.Element;
   if (range.isPending) {
     body = <div className="countline">Loading…</div>;
   } else if (range.isError) {
@@ -122,9 +122,7 @@ export function Calendar() {
             label={view === 'month' ? 'Previous month' : 'Previous week'}
             icon={ChevronLeft}
             onClick={() =>
-              setAnchor(
-                view === 'month' ? addDays(monthOf(anchor).from, -1) : addDays(anchor, -7),
-              )
+              setAnchor(view === 'month' ? addDays(monthOf(anchor).from, -1) : addDays(anchor, -7))
             }
           />
           <IconButton
@@ -139,11 +137,7 @@ export function Calendar() {
           </button>
         </div>
         <fieldset className="seg" aria-label="View">
-          <button
-            type="button"
-            aria-pressed={view === 'month'}
-            onClick={() => setView('month')}
-          >
+          <button type="button" aria-pressed={view === 'month'} onClick={() => setView('month')}>
             Month
           </button>
           <button type="button" aria-pressed={view === 'week'} onClick={() => setView('week')}>

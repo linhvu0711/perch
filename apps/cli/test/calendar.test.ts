@@ -33,10 +33,7 @@ async function seedPosts(): Promise<void> {
   await runCli(['post', 'create', '--text', 'Old', '--json'], setup.ctx);
   await runCli(['post', 'schedule', '1', '--at', '2026-09-10T09:00:00Z'], setup.ctx);
   await runCli(['post', 'schedule', '2', '--at', '2026-09-12T09:00:00Z'], setup.ctx);
-  await runCli(
-    ['post', 'schedule', '3', '--at', '2026-09-02T09:00:00Z', '--force'],
-    setup.ctx,
-  );
+  await runCli(['post', 'schedule', '3', '--at', '2026-09-02T09:00:00Z', '--force'], setup.ctx);
 }
 
 describe('perch calendar', () => {
@@ -67,10 +64,7 @@ describe('perch calendar', () => {
 
     // When
     const run = makeCtx(server);
-    const exit = await runCli(
-      ['calendar', '--week', '--from', '2026-09-10', '--json'],
-      run.ctx,
-    );
+    const exit = await runCli(['calendar', '--week', '--from', '2026-09-10', '--json'], run.ctx);
 
     // Then
     expect(exit).toBe(0);

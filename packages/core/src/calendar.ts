@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { postSchema, listDateSchema, type Post, type PostStatus } from './posts';
+import { listDateSchema, type Post, type PostStatus, postSchema } from './posts';
 import { addDays } from './schedule';
 import { tagFilterSchema } from './tags';
 
@@ -47,7 +47,9 @@ export function postCalendarTime(
   return post.status === 'published' ? post.published_at : post.scheduled_at;
 }
 
-export function calendarMark(post: Pick<CalendarPost, 'status' | 'missed'>): 'MISSED' | 'FAILED' | '' {
+export function calendarMark(
+  post: Pick<CalendarPost, 'status' | 'missed'>,
+): 'MISSED' | 'FAILED' | '' {
   if (post.missed) return 'MISSED';
   if (post.status === 'failed') return 'FAILED';
   return '';

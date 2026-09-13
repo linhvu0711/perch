@@ -37,9 +37,9 @@ describe('isMissed', () => {
   test('isMissed is false for the future, for no time, and for published or failed', () => {
     // Given: now 2026-09-04T10:00:00Z, no account
     // When / Then
-    expect(isMissed({ status: 'draft', scheduled_at: '2026-09-06T09:00:00.000Z' }, NOW, false)).toBe(
-      false,
-    );
+    expect(
+      isMissed({ status: 'draft', scheduled_at: '2026-09-06T09:00:00.000Z' }, NOW, false),
+    ).toBe(false);
     expect(isMissed({ status: 'draft', scheduled_at: null }, NOW, false)).toBe(false);
     expect(
       isMissed({ status: 'published', scheduled_at: '2026-09-02T09:00:00.000Z' }, NOW, false),

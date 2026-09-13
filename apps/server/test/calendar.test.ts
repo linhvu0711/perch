@@ -120,12 +120,8 @@ describe('GET /api/calendar', () => {
     setPost(2, { scheduledAt: new Date('2026-09-10T16:00:00Z') });
 
     // When / Then
-    expect(dayIds(await calendar('?from=2026-09-11&to=2026-09-11'))).toEqual([
-      ['2026-09-11', [1]],
-    ]);
-    expect(dayIds(await calendar('?from=2026-09-10&to=2026-09-10'))).toEqual([
-      ['2026-09-10', [2]],
-    ]);
+    expect(dayIds(await calendar('?from=2026-09-11&to=2026-09-11'))).toEqual([['2026-09-11', [1]]]);
+    expect(dayIds(await calendar('?from=2026-09-10&to=2026-09-10'))).toEqual([['2026-09-10', [2]]]);
     expect(dayIds(await calendar('?from=2026-09-10&to=2026-09-11'))).toEqual([
       ['2026-09-10', [2]],
       ['2026-09-11', [1]],
@@ -145,9 +141,7 @@ describe('GET /api/calendar', () => {
       ['2026-09-12', [2]],
     ]);
     expect(dayIds(await calendar('?from=2026-09-11&to=2026-09-11'))).toEqual([]);
-    expect(dayIds(await calendar('?from=2026-09-12&to=2026-09-12'))).toEqual([
-      ['2026-09-12', [2]],
-    ]);
+    expect(dayIds(await calendar('?from=2026-09-12&to=2026-09-12'))).toEqual([['2026-09-12', [2]]]);
   });
 
   test('filters by tag', async () => {
