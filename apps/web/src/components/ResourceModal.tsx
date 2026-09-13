@@ -282,6 +282,7 @@ export function ResourceModal(): JSX.Element | null {
 
   if (!isNew && resourceQuery.isPending) {
     return (
+      // biome-ignore lint/a11y/noStaticElementInteractions: scrim click-to-close
       <div
         className="scrim"
         onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
@@ -320,6 +321,7 @@ export function ResourceModal(): JSX.Element | null {
     !(resourceQuery.error instanceof ApiError && resourceQuery.error.status === 404)
   ) {
     return (
+      // biome-ignore lint/a11y/noStaticElementInteractions: scrim click-to-close
       <div
         className="scrim"
         onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
@@ -357,6 +359,7 @@ export function ResourceModal(): JSX.Element | null {
   if (resource?.type === 'tweet') {
     return (
       <>
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: scrim click-to-close */}
         <div
           className="scrim"
           onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
@@ -409,6 +412,7 @@ export function ResourceModal(): JSX.Element | null {
               </div>
               <div className="rside">
                 <div className="field">
+                  {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the details list */}
                   <label>Details</label>
                   <div className="kv">
                     <b>author</b>
@@ -420,6 +424,7 @@ export function ResourceModal(): JSX.Element | null {
                   </div>
                 </div>
                 <div className="field">
+                  {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the used-by list */}
                   <label>
                     Used in {usedByTotal} post{usedByTotal === 1 ? '' : 's'}
                   </label>
@@ -463,6 +468,7 @@ export function ResourceModal(): JSX.Element | null {
                   />
                 )}
                 <div className="field">
+                  {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for private notes */}
                   <label>Private notes</label>
                   <textarea
                     aria-label="Private notes"
@@ -509,6 +515,7 @@ export function ResourceModal(): JSX.Element | null {
 
   return (
     <>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: scrim click-to-close */}
       <div
         className="scrim"
         onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
@@ -611,6 +618,7 @@ export function ResourceModal(): JSX.Element | null {
             </div>
           </div>
           <div className="rbody">
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: pane click focuses the editor */}
             <div
               className={editingNote ? 'rmain editing' : 'rmain'}
               onKeyDown={(event) => {
@@ -636,6 +644,7 @@ export function ResourceModal(): JSX.Element | null {
             </div>
             <div className="rside">
               <div className="field">
+                {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the details list */}
                 <label>Details</label>
                 <div className="kv">
                   {isImage ? (
@@ -661,6 +670,7 @@ export function ResourceModal(): JSX.Element | null {
               </div>
               {!isNew && (
                 <div className="field">
+                  {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the used-by list */}
                   <label>
                     Used by {usedByTotal} post{usedByTotal === 1 ? '' : 's'}
                   </label>
@@ -705,6 +715,7 @@ export function ResourceModal(): JSX.Element | null {
                 />
               )}
               <div className="field">
+                {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for private notes */}
                 <label>Private notes</label>
                 <textarea
                   aria-label="Private notes"
