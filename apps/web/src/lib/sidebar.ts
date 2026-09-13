@@ -24,7 +24,7 @@ function setCollapsed(value: boolean): void {
   } catch {
     // Collapse still applies for this page when storage is unavailable.
   }
-  listeners.forEach((listener) => listener());
+  for (const listener of listeners) listener();
 }
 
 export function useSidebarCollapsed(): [boolean, (value: boolean) => void] {
