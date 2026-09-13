@@ -408,3 +408,119 @@ describe('post delete', () => {
     expect(server.xClient.calls).toEqual([]);
   });
 });
+
+describe('post status and schedule', () => {
+  test('promotes and demotes with per-item results', async () => {
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--text', 'Hello', '--json'], setup.ctx);
+    await runCli(['post', 'create', '--json'], setup.ctx);
+
+    const promote = makeCtx(server);
+    expect(await runCli(['post', 'promote', '1', '2', '--json'], promote.ctx)).toBe(1);
+    expect(JSON.parse(promote.out())).toEqual([
+      { id: 1, ok: true },
+      {
+        id: 2,
+        ok: false,
+        error: {
+          code: 'validation',
+          message: 'Post 2 is not ready',
+          errors: [{ path: 'text', message: 'Text is empty' }],
+        },
+      },
+    ]);
+    expect(promote.err()).toBe('');
+
+    const demote = makeCtx(server);
+    expect(await runCli(['post', 'demote', '1', '--json'], demote.ctx)).toBe(0);
+    expect(JSON.parse(demote.out())).toEqual([{ id: 1, ok: true }]);
+  });
+
+  test('schedules with --at and --force', async () => {
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--text', 'Hello', '--json'], setup.ctx);
+
+    const future = makeCtx(server);
+    expect(
+      await runCli(
+        ['post', 'schedule', '1', '--at', '2026-09-10 09:00', '--json'],
+        future.ctx,
+      ),
+    ).toBe(0);
+    expect(JSON.parse(future.out()).scheduled_at).toBe('2026-09-10T09:00:00.000Z');
+
+    const past = makeCtx(server);
+    expect(
+      await runCli(['post', 'schedule', '1', '--at', '2026-09-01 09:00', '--json'], past.ctx),
+    ).toBe(1);
+    expect(JSON.parse(past.err())).toEqual({
+      code: 'validation',
+      message: 'Invalid request',
+      errors: [{ path: 'at', message: 'Time is in the past' }],
+    });
+
+    const forced = makeCtx(server);
+    expect(
+      await runCli(
+        ['post', 'schedule', '1', '--at', '2026-09-01 09:00', '--force', '--json'],
+        forced.ctx,
+      ),
+    ).toBe(0);
+    expect(JSON.parse(forced.out()).scheduled_at).toBe('2026-09-01T09:00:00.000Z');
+  });
+
+  test('unschedules in a batch', async () => {
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--text', 'Hello', '--json'], setup.ctx);
+    await runCli(['post', 'schedule', '1', '--at', '2026-09-10 09:00', '--json'], setup.ctx);
+
+    const unschedule = makeCtx(server);
+    expect(
+      await runCli(['post', 'unschedule', '1', '999', '--json'], unschedule.ctx),
+    ).toBe(1);
+    expect(JSON.parse(unschedule.out())).toEqual([
+      { id: 1, ok: true },
+      { id: 999, ok: false, error: { code: 'not_found', message: 'Post 999 not found' } },
+    ]);
+  });
+
+  test('lists scheduled and unscheduled', async () => {
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--json'], setup.ctx);
+    await runCli(['post', 'create', '--json'], setup.ctx);
+    await runCli(['post', 'schedule', '1', '--at', '+2h', '--json'], setup.ctx);
+
+    const scheduled = makeCtx(server);
+    expect(await runCli(['post', 'list', '--scheduled', '--json'], scheduled.ctx)).toBe(0);
+    expect((JSON.parse(scheduled.out()) as { items: Array<{ id: number }> }).items.map((p) => p.id)).toEqual([1]);
+
+    const unscheduled = makeCtx(server);
+    expect(await runCli(['post', 'list', '--unscheduled', '--json'], unscheduled.ctx)).toBe(0);
+    expect((JSON.parse(unscheduled.out()) as { items: Array<{ id: number }> }).items.map((p) => p.id)).toEqual([2]);
+
+    const both = makeCtx(server);
+    expect(
+      await runCli(['post', 'list', '--scheduled', '--unscheduled', '--json'], both.ctx),
+    ).toBe(1);
+    expect(JSON.parse(both.err())).toEqual({
+      code: 'bad_args',
+      message: 'Use one of --scheduled or --unscheduled',
+    });
+  });
+
+  test('creates an official post', async () => {
+    const ok = makeCtx(server);
+    expect(
+      await runCli(['post', 'create', '--text', 'Hello', '--official', '--json'], ok.ctx),
+    ).toBe(0);
+    expect(JSON.parse(ok.out()).status).toBe('official');
+
+    const empty = makeCtx(server);
+    expect(await runCli(['post', 'create', '--official', '--json'], empty.ctx)).toBe(1);
+    expect(JSON.parse(empty.err())).toEqual({
+      code: 'validation',
+      message: 'Invalid request',
+      errors: [{ path: 'text', message: 'Text is empty' }],
+    });
+  });
+});
