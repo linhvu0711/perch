@@ -214,7 +214,12 @@ export function listResources(
       query.order === 'desc'
         ? or(
             lt(sortValue, key.createdAt),
-            and(eq(sortValue, key.createdAt), lt(resources.id, key.id)),
+            and(
+              eq(sortValue, key.createdAt),
+              sortByUsed
+                ? gt(resources.id, key.id)
+                : lt(resources.id, key.id),
+            ),
           )!
         : or(
             gt(sortValue, key.createdAt),
@@ -229,7 +234,9 @@ export function listResources(
     .where(and(...pageConditions))
     .orderBy(
       ...(query.order === 'desc'
-        ? [desc(sortValue), desc(resources.id)]
+        ? sortByUsed
+          ? [desc(sortValue), asc(resources.id)]
+          : [desc(sortValue), desc(resources.id)]
         : [asc(sortValue), asc(resources.id)]),
     )
     .limit(query.limit + 1)

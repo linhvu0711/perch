@@ -61,7 +61,9 @@ export function PostModal(): JSX.Element | null {
   const deletePosts = useDeletePosts();
   const unlinkResources = useUnlinkResources();
   const modalRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const timerRef = useRef<number>(undefined);
+  const closedRef = useRef(false);
   const savedRef = useRef(false);
   const pendingRef = useRef<{ title?: string; text?: string }>({});
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -97,20 +99,6 @@ export function PostModal(): JSX.Element | null {
     modalRef.current?.focus();
   }, [currentId]);
 
-  const requestClose = useCallback(() => {
-    if (timerRef.current !== undefined) window.clearTimeout(timerRef.current);
-    if (savedRef.current) toast('Saved');
-    navigate('/posts');
-  }, [navigate]);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') requestClose();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [requestClose]);
-
   const flush = useCallback(async () => {
     const patch = pendingRef.current;
     pendingRef.current = {};
@@ -119,7 +107,9 @@ export function PostModal(): JSX.Element | null {
       if (currentId === undefined) {
         const created = await createPost.mutateAsync({});
         savedRef.current = true;
-        navigate(`/posts/${created.id}`, { replace: true });
+        if (!closedRef.current) {
+          navigate(`/posts/${created.id}`, { replace: true });
+        }
         await updatePost.mutateAsync({ id: created.id, patch });
       } else {
         await updatePost.mutateAsync({ id: currentId, patch });
@@ -129,6 +119,23 @@ export function PostModal(): JSX.Element | null {
       toast(errorMessage(error), 'warn');
     }
   }, [createPost, currentId, navigate, updatePost]);
+
+  const requestClose = useCallback(() => {
+    closedRef.current = true;
+    if (timerRef.current !== undefined) window.clearTimeout(timerRef.current);
+    void flush().then(() => {
+      if (savedRef.current) toast('Saved');
+    });
+    navigate('/posts');
+  }, [flush, navigate]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') requestClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [requestClose]);
 
   const scheduleSave = useCallback(
     (patch: { title?: string; text?: string }) => {
@@ -151,9 +158,10 @@ export function PostModal(): JSX.Element | null {
   async function confirmDelete() {
     if (currentId === undefined) return;
     try {
+      navigate('/posts');
       await deletePosts.mutateAsync([currentId]);
       setConfirm(null);
-      navigate('/posts');
+      toast('Deleted');
     } catch (error) {
       toast(errorMessage(error), 'warn');
       setConfirm(null);
@@ -236,6 +244,7 @@ export function PostModal(): JSX.Element | null {
                   label="Delete post"
                   icon={Trash2}
                   variant="ghost"
+                  className="danger"
                   onClick={() => setConfirm('delete')}
                 />
               )}
@@ -266,6 +275,7 @@ export function PostModal(): JSX.Element | null {
                   }}
                 />
                 <textarea
+                  ref={textareaRef}
                   className="ta"
                   aria-label="Text"
                   placeholder="What's happening?"
@@ -382,6 +392,7 @@ export function PostModal(): JSX.Element | null {
                   text: next,
                 }));
                 scheduleSave({ text: next });
+                textareaRef.current?.focus();
               }}
             />
           </div>

@@ -36,7 +36,6 @@ export function Posts() {
   const [status, setStatus] = useState<PostStatus | undefined>();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedSearch(search), 250);
@@ -54,21 +53,6 @@ export function Posts() {
   const items = posts.data?.pages.flatMap((page) => page.items) ?? [];
   const total = Math.max(posts.data?.pages[0]?.total ?? 0, items.length);
 
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (
-        entries[0]?.isIntersecting &&
-        posts.hasNextPage &&
-        !posts.isFetching
-      ) {
-        void posts.fetchNextPage();
-      }
-    });
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [posts.fetchNextPage, posts.hasNextPage, posts.isFetching]);
 
   let content;
   if (posts.isPending) {
@@ -106,7 +90,6 @@ export function Posts() {
             <span>· {Math.min(POSTS_PAGE_SIZE, left)} of {left} left</span>
           </div>
         )}
-        <div ref={sentinelRef} style={{ height: 1 }} />
         <div className="countline">{items.length} of {total} posts</div>
       </>
     );

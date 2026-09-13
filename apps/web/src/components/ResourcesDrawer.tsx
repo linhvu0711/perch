@@ -45,8 +45,7 @@ export function ResourcesDrawer(props: {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [viewId, setViewId] = useState<number | null>(null);
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
+
 
   const linkResources = useLinkResources();
   const unlinkResources = useUnlinkResources();
@@ -74,22 +73,6 @@ export function ResourcesDrawer(props: {
   const resources = useResources(filters, DRAWER_PAGE_SIZE);
   const items = resources.data?.pages.flatMap((page) => page.items) ?? [];
   const detail = useResource(viewId);
-
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (
-        entries[0]?.isIntersecting &&
-        resources.hasNextPage &&
-        !resources.isFetching
-      ) {
-        void resources.fetchNextPage();
-      }
-    });
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [resources.fetchNextPage, resources.hasNextPage, resources.isFetching]);
 
   const linkedIds = new Set(props.post?.links.map((link) => link.resource_id) ?? []);
 
@@ -254,7 +237,7 @@ export function ResourcesDrawer(props: {
               onClick={props.onClose}
             />
           </div>
-          <div className="dlist" ref={listRef}>
+          <div className="dlist">
             {items.map((resource) => (
               <div key={resource.id} className="ditem">
                 <button
@@ -291,18 +274,28 @@ export function ResourcesDrawer(props: {
             {resources.isPending && (
               <div className="countline">Loading…</div>
             )}
-            {resources.hasNextPage && (
-              <div className="loadmore">
-                <button
-                  type="button"
-                  disabled={resources.isFetchingNextPage}
-                  onClick={() => void resources.fetchNextPage()}
-                >
-                  Load more
-                </button>
-              </div>
-            )}
-            <div ref={sentinelRef} style={{ height: 1 }} />
+            {resources.hasNextPage &&
+              (() => {
+                const total = Math.max(
+                  resources.data?.pages[0]?.total ?? 0,
+                  items.length,
+                );
+                const left = total - items.length;
+                return (
+                  <div className="loadmore">
+                    <button
+                      type="button"
+                      disabled={resources.isFetchingNextPage}
+                      onClick={() => void resources.fetchNextPage()}
+                    >
+                      Load more
+                    </button>
+                    <span>
+                      · {Math.min(DRAWER_PAGE_SIZE, left)} of {left} left
+                    </span>
+                  </div>
+                );
+              })()}
           </div>
         </>
       )}

@@ -253,6 +253,8 @@ export function ResourceModal(): JSX.Element | null {
   async function confirmDelete(): Promise<void> {
     if (parsedId === null) return;
     try {
+      allowNavigationRef.current = true;
+      navigate('/resources');
       const response = await deleteResources.mutateAsync([parsedId]);
       const result = response.results[0];
       if (result?.ok) {
@@ -261,8 +263,6 @@ export function ResourceModal(): JSX.Element | null {
             ? `Deleted. Unlinked from ${result.unlinked_post_ids.map((id) => `#${id}`).join(', ')}`
             : 'Deleted',
         );
-        allowNavigationRef.current = true;
-        navigate('/resources');
       } else if (result && !result.ok) {
         toast(result.error.message, 'warn');
         setConfirm(null);
@@ -464,7 +464,7 @@ export function ResourceModal(): JSX.Element | null {
               {!isNew && (
                 <div className="field">
                   <label>
-                    Used in {usedByPosts.length} post
+                    Used by {usedByPosts.length} post
                     {usedByPosts.length === 1 ? '' : 's'}
                   </label>
                   <div className="linked">
