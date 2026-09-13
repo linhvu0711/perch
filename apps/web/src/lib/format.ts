@@ -17,6 +17,15 @@ export function formatMonthTitle(ymd: string): string {
   });
 }
 
+/** `"Sep 2026"` for a `YYYY-MM` month string. */
+export function formatMonthShort(ym: string): string {
+  return new Date(`${ym}-01T00:00:00Z`).toLocaleDateString('en-GB', {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 /** `"Sat 6 Sep"` for a `YYYY-MM-DD` calendar date. */
 export function formatDayTitle(ymd: string): string {
   return new Date(`${ymd}T00:00:00Z`).toLocaleDateString('en-GB', {

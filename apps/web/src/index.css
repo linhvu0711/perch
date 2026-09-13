@@ -755,6 +755,30 @@ main {
 .loadmore button:hover {
   background: var(--indigo-soft);
 }
+.pager {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 14px;
+  color: var(--text-3);
+  font-size: 12.5px;
+  border-top: 1px solid var(--line);
+}
+.pager button {
+  color: var(--indigo-text);
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 6px;
+}
+.pager button:hover {
+  background: var(--indigo-soft);
+}
+.pager button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .loadmore button:disabled {
   opacity: 0.5;
   cursor: default;

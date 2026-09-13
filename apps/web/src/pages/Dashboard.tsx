@@ -1,4 +1,11 @@
-import { addDays, DEFAULT_TIMEZONE, postCalendarTime, zonedParts } from '@perch/core';
+import {
+  addDays,
+  DEFAULT_TIMEZONE,
+  formatCost,
+  postCalendarTime,
+  X_COSTS_USD,
+  zonedParts,
+} from '@perch/core';
 import { TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
@@ -7,8 +14,21 @@ import { AttentionRow } from '@/components/AttentionRow';
 import { Empty } from '@/components/Empty';
 import { PostRow } from '@/components/PostRow';
 import { errorMessage } from '@/lib/api';
-import { formatDayTitle, formatMonthTitle, formatSchedule, formatUsd } from '@/lib/format';
-import { useAccount, useCalendar, usePosts, useSettings, useStatus } from '@/lib/queries';
+import {
+  formatDayTitle,
+  formatMonthShort,
+  formatMonthTitle,
+  formatSchedule,
+  formatUsd,
+} from '@/lib/format';
+import {
+  useAccount,
+  useCalendar,
+  useCostMonths,
+  usePosts,
+  useSettings,
+  useStatus,
+} from '@/lib/queries';
 
 function greeting(now: Date, timezone: string): string {
   const hour = Number(
@@ -26,6 +46,7 @@ export function Dashboard() {
   const account = useAccount();
   const status = useStatus();
   const attention = usePosts({ needs_attention: true });
+  const costMonths = useCostMonths();
   const timezone = settings.data?.timezone ?? DEFAULT_TIMEZONE;
   const [now, setNow] = useState(() => new Date());
 
@@ -55,6 +76,8 @@ export function Dashboard() {
     (snapshot?.missed_count ?? 0) + (snapshot?.failed_count ?? 0) + (snapshot?.due_soon_count ?? 0);
   const attentionItems = attention.data?.pages.flatMap((page) => page.items) ?? [];
   const attentionListTotal = attention.data?.pages[0]?.total ?? 0;
+  const costItems = costMonths.data?.pages.flatMap((page) => page.items) ?? [];
+  const costTotal = costMonths.data?.pages[0]?.total ?? 0;
 
   const upcomingDays = (calendar.data?.days ?? [])
     .map((day) => ({
@@ -185,6 +208,59 @@ export function Dashboard() {
                 (failed). Nothing is deleted.
               </div>
             )}
+          </div>
+          <div className="section">
+            <h2>
+              Cost<small>X API spend by month</small>
+            </h2>
+            <div className="card list">
+              {costMonths.isPending ? (
+                <div className="empty">
+                  <b>Loading…</b>
+                </div>
+              ) : costItems.length === 0 ? (
+                <div className="empty">
+                  <b>No calls yet</b>Perch has not called the X API.
+                </div>
+              ) : (
+                <>
+                  {costItems.map((row) => (
+                    <div className="row" key={row.month}>
+                      <div className="txt">
+                        <b>
+                          {formatMonthShort(row.month)} · {row.calls} calls ·{' '}
+                          {formatUsd(row.total_usd)}
+                        </b>
+                        <span className="why">
+                          Publishing {formatUsd(row.publish_usd)} · Saving tweets{' '}
+                          {formatUsd(row.save_tweet_usd)} · Connecting {formatUsd(row.connect_usd)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="pager">
+                    <span>
+                      {costItems.length} of {costTotal} months
+                    </span>
+                    {costMonths.hasNextPage && (
+                      <button
+                        type="button"
+                        disabled={costMonths.isFetchingNextPage}
+                        onClick={() => costMonths.fetchNextPage()}
+                      >
+                        {costMonths.isFetchingNextPage ? 'Loading…' : 'Show more'}
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="note">
+              X charges per call: post {formatCost(X_COSTS_USD.publish)} / post with a link{' '}
+              {formatCost(X_COSTS_USD.publishWithUrl)} / save a tweet{' '}
+              {formatCost(X_COSTS_USD.saveTweet)} / connect an account{' '}
+              {formatCost(X_COSTS_USD.getMe)}. Media uploads are free.
+            </div>
           </div>
           <div className="section">
             <h2>

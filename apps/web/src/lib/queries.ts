@@ -324,6 +324,37 @@ export function useStatus() {
   });
 }
 
+export function useCostSummary() {
+  const me = useMe();
+  return useQuery({
+    queryKey: ['costs', 'summary'],
+    queryFn: () => unwrap(api.api.costs.$get({ query: {} })),
+    refetchInterval: 30_000,
+    enabled: me.data != null,
+  });
+}
+
+export const COST_MONTHS_PAGE_SIZE = 10;
+
+export function useCostMonths() {
+  const me = useMe();
+  return useInfiniteQuery({
+    queryKey: ['costs', 'months'],
+    queryFn: ({ pageParam }) =>
+      unwrap(
+        api.api.costs.months.$get({
+          query: {
+            limit: String(COST_MONTHS_PAGE_SIZE),
+            ...(pageParam !== undefined ? { cursor: pageParam } : {}),
+          },
+        }),
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
+    enabled: me.data != null,
+  });
+}
+
 export function usePost(id: number | null) {
   return useQuery({
     queryKey: ['posts', 'detail', id],
