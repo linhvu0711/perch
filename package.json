@@ -16,10 +16,15 @@
     "build": "bun run --filter @perch/web build",
     "test": "bun test",
     "typecheck": "bun run --filter '*' typecheck",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome check .",
+    "check:changed": "biome check --changed",
     "db:generate": "bun run --filter @perch/server db:generate",
     "cli:build": "bun run --filter @perch/cli build"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.13",
     "@types/bun": "1.4.0",
     "typescript": "5.9.3"
   }

@@ -202,13 +202,7 @@ Build Perch v1: a single-user tool that keeps my Resources (Tweet Resources, Ima
 All decisions below come from the design session and are recorded in the ADRs and the design log. This spec is the build order for them.
 
 **Repository and stack**
-- One Bun-workspaces monorepo with four packages: a server app, a web app, a CLI app, and a shared core package.
-- TypeScript everywhere. Bun is the runtime, package manager, test runner, and bundler. The CLI ships as a single compiled binary.
-- Server: Hono. It exposes the HTTP API under an `/api` prefix, serves the built web app as static files for every other path, hosts the OAuth callback, and runs the Scheduler loop in the same process.
-- Web: React and Vite single-page app with TanStack Query and shadcn/ui components, Lucide icons, Inter and JetBrains Mono fonts.
-- CLI: Commander. It is a thin client: every command is one or more calls to the HTTP API through Hono's typed RPC client. It never calls X.
-- Core package: Zod schemas for every API type, the weighted character counter (twitter-text), the Cost estimator, the needs-attention rule, the time-parsing rules, and the status/validation rules. All three apps import them so the CLI, the web UI, and the server agree.
-- Database: SQLite through Drizzle ORM on bun:sqlite, migrations generated from the schema. One file on a persistent volume in production, a local file in development, an in-memory or temp file in tests.
+- The monorepo layout, the stack, and what `packages/core` holds are in `CODING_STANDARDS.md`. The deploy shape is below.
 - Deploy: Railway service with a volume, deploying from the GitHub repo on push. Litestream sidecar streams the database to Cloudflare R2; images are copied to the same bucket after upload. Environment holds the shared secret, the X client id and secret, the public host, and the R2 credentials.
 
 **Domain model (tables)**
@@ -265,7 +259,7 @@ All decisions below come from the design session and are recorded in the ADRs an
 - The Scheduler's tick is a plain function the tests call with a fixed "now"; the timer only calls it.
 
 **X client**
-- One internal interface with the five calls Perch makes: get tweet by id (with the fields needed to detect media, article, note tweet, referenced tweets, and author), get me (with subscription type), upload media, create post, revoke token, plus the OAuth exchange and refresh. The real implementation uses the official X SDK where it fits and raw fetch elsewhere. Tests substitute a fake that records calls and returns canned results.
+- One internal interface with the five calls Perch makes: get tweet by id (with the fields needed to detect media, article, note tweet, referenced tweets, and author), get me (with subscription type), upload media, create post, revoke token, plus the OAuth exchange and refresh. The real implementation is raw `fetch` behind that interface (ADR-0010). Tests substitute a fake that records calls and returns canned results.
 - Every real call writes an api_calls row with the price from the Cost table in the design log. Duplicate tweet saves make no call and log nothing.
 
 **CLI conventions**
@@ -277,20 +271,12 @@ All decisions below come from the design session and are recorded in the ADRs an
 **Web UI**
 - The web UI spec and the clickable mockup in the repo docs are the contract for pages, layout, colors, icons, confirmations, tooltips, paging sizes (posts 50, resources 30, drawer 20), Calendar caps, and the custom date-time picker. Where the spec and the mockup disagree, the spec wins.
 - Modals are routes rendered over their list page. Theme is three CSS token sets (light, dark, system).
-- All rules that decide something (character count, Cost, ready checklist, needs attention, dismiss) are imported from the core package, never re-implemented in the web app.
 
 ## Testing Decisions
 
-**What a good test is here**
-- A test drives Perch the way a client does and asserts on what a client can see: HTTP responses, rows the next request returns, files that exist, and the calls the fake X client received. It never asserts on internal function calls, table layouts, or component state.
-- Every test starts from an empty temp database and an empty temp upload directory, with an injected clock and a fake X client, so tests are hermetic, parallel, and fast.
+- How a test is written, the seam, and the hermetic rules are in `CODING_STANDARDS.md` under "Tests". The list below is what must be covered.
 
-**The seam**
-- One seam: the server's composition root. Building the server with a database path, an upload directory, a clock, and an X client yields the Hono app plus the Scheduler tick function. Tests send requests to the app in-process (no network) and call the tick with a chosen "now".
-- The CLI is tested through the same seam by injecting the in-process app as its fetch. CLI tests assert on stdout, stderr, and exit codes for both table and JSON modes, and on batch per-item results.
-- No second seam for the web app in v1. The rules it depends on are tested through the HTTP seam and, for the pure counting and Cost functions, a small set of direct table-driven tests in the core package. A smoke test that the built web app is served at the root path belongs to the HTTP seam.
-
-**What gets tested (all through the seam above)**
+**What gets tested**
 - Auth: no secret is rejected; cookie and bearer both resolve to user 1.
 - Resources: tweet save accepts standalone text (including note tweets), rejects each of the five reasons with the reason named, returns the existing row for a duplicate URL with no X call, re-fetches with refresh; image upload validates size and type and records dimensions; notes default their title from the first heading; list filters, sorts, search, and cursor paging return stable pages when rows are inserted mid-walk; delete reports unlinked posts and leaves Media copies in place.
 - Posts: create defaults to Draft and copies tags from linked resources; promote returns every failing check; demote clears errors; schedule rejects past times without force and rejects Published Posts; link and attach honor the four-Media cap and the copy-and-link rule; publish on a Draft promotes first, uploads media, creates the post, stores the X ids, clears the time, and logs the Cost with the URL price when a link is present; Published Posts reject edits; delete never calls X.
@@ -300,9 +286,6 @@ All decisions below come from the design session and are recorded in the ADRs an
 - Calendar and cost: range query groups by day in the configured time zone; month summaries match the api_calls rows.
 - X Account: connect stores tokens and subscription type and sets the limit; a second connect disconnects the first; refresh persists a rotated token; disconnect revokes and keeps the row; Published Posts keep their account after disconnect.
 - Core package: weighted character counting (URLs 23, wide characters 2, limit boundaries), Cost estimation (mentions and hashtags are not URLs), time parsing in a time zone, needs-attention window edges.
-
-**Prior art**
-- None in this repository; it has no code yet. The conventions above set the pattern: Bun's test runner, one helper that builds the server from a temp directory, a fake X client, and request-level assertions.
 
 ## Out of Scope
 
@@ -322,7 +305,7 @@ All decisions below come from the design session and are recorded in the ADRs an
 ## Further Notes
 
 - Vocabulary is fixed by the glossary in the repo: Resource, Tweet Resource, Image Resource, Note, Tag, Post, Draft, Official, Published, Failed, Scheduled, Missed, Publish, Promote, Demote, Link, Media, Attach, Detach, Scheduler, Schedule Time, Cost. Code, API fields, and UI copy use these words and not the "avoid" alternatives.
-- The repo docs are the detailed contracts: the CLI spec for every command and flag, the web UI spec and mockup for every screen, the design log for the full decision table, the X API research for endpoints, fields, prices, and limits, and ADRs 0001 to 0008 for the constraints that must not be broken.
+- The repo docs are the detailed contracts: the CLI spec for every command and flag, the web UI spec and mockup for every screen, the design log for the full decision table, the X API research for endpoints, fields, prices, and limits, the ADRs for the constraints that must not be broken, and `CODING_STANDARDS.md` for how code is written.
 - X prices assumed: save a tweet $0.005, publish $0.015, publish with a URL $0.200, connect $0.010, media upload free. They are configuration, not constants, so a price change is a one-line edit.
 - Suggested build order: core package (schemas, counting, Cost, time parsing); server database and auth; Resources API; Posts API with validation; X client and OAuth; publish and Scheduler; Tags, Calendar, Cost, Status; CLI; web UI shell and pages; Railway and Litestream deployment.
 - After this spec is accepted, split it into build tickets by the order above so each ticket is one seam-tested slice.
