@@ -549,3 +549,79 @@ describe('missed', () => {
     expect((await getPost(2)).missed).toBe(false);
   });
 });
+
+describe('retry', () => {
+  test('retry sends a failed post once and publishes it', async () => {
+    // Given: a connected account and a failed post that already tried four times
+    connectTestAccount(server);
+    await createPost({ text: 'Hello' });
+    setPost(1, {
+      status: 'failed',
+      lastError: 'old',
+      retryCount: 4,
+      scheduledAt: new Date('2026-09-04T10:30:00Z'),
+    });
+
+    // When: retrying it
+    const response = await request('/api/posts/1/retry', { method: 'POST' });
+
+    // Then: sent once and published; the schedule time is cleared, the count kept
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      status: 'published',
+      x_post_id: '2',
+      last_error: null,
+      scheduled_at: null,
+      retry_count: 4,
+    });
+    expect(server.xClient.calls.map((call) => call.name)).toEqual(['createPost']);
+    expect(await monthCostUsd()).toBeCloseTo(0.015);
+  });
+
+  test('retry keeps failed with the new error and counts the try', async () => {
+    // Given: a failed post and X answering 429
+    connectTestAccount(server);
+    await createPost({ text: 'Hello' });
+    setPost(1, {
+      status: 'failed',
+      lastError: 'old',
+      retryCount: 4,
+      scheduledAt: new Date('2026-09-04T10:30:00Z'),
+    });
+    server.xClient.createPostError = new XError('http', 429, 'Too Many Requests');
+
+    // When: retrying it
+    const response = await request('/api/posts/1/retry', { method: 'POST' });
+
+    // Then: 502 with the X error; the post stays failed with the time kept and the try counted
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({
+      code: 'publish_failed',
+      message: 'Too Many Requests',
+    });
+    expect(await getPost(1)).toMatchObject({
+      status: 'failed',
+      last_error: 'Too Many Requests',
+      retry_count: 5,
+      scheduled_at: '2026-09-04T10:30:00.000Z',
+    });
+  });
+
+  test('retry rejects a post that is not failed', async () => {
+    // Given: a connected account and an official post
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+
+    // When: retrying it
+    const response = await request('/api/posts/1/retry', { method: 'POST' });
+
+    // Then: 400 naming the status, nothing sent
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      code: 'validation',
+      message: 'Invalid request',
+      errors: [{ path: 'status', message: 'Post 1 is official' }],
+    });
+    expect(server.xClient.calls).toEqual([]);
+  });
+});

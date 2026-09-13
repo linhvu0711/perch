@@ -215,6 +215,22 @@ export function postsRoutes(deps: AppDeps) {
         throw error;
       }
     })
+    .post('/:id/retry', zValidator('param', idParamSchema, validationHook), async (c) => {
+      const { id } = c.req.valid('param');
+      const userId = c.get('user').id;
+      try {
+        const post = await deps.publisher.retry(userId, id);
+        if (!post) throw notFound(id);
+        return c.json(post, 200);
+      } catch (error) {
+        if (error instanceof PostStatusError) {
+          throw new ApiError(400, 'validation', 'Invalid request', [
+            { path: 'status', message: error.message },
+          ]);
+        }
+        throw error;
+      }
+    })
     .get('/:id', zValidator('param', idParamSchema, validationHook), (c) => {
       const { id } = c.req.valid('param');
       const post = getPost(deps.db, c.get('user').id, id, deps.clock.now());

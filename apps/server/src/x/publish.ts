@@ -6,6 +6,7 @@ import {
   nextAttemptAt,
   type Post,
   PUBLISH_FROM,
+  RETRY_FROM,
   X_COSTS_USD,
   X_ENDPOINTS,
 } from '@perch/core';
@@ -25,6 +26,7 @@ import type { XClient } from './client';
 
 export interface PublishService {
   publishNow(userId: number, id: number): Promise<Post | null>;
+  retry(userId: number, id: number): Promise<Post | null>;
   sendDue(now: Date): Promise<void>;
 }
 
@@ -128,6 +130,38 @@ export function createPublishService(deps: {
             .update(posts)
             .set({
               status: 'failed',
+              lastError: sent.message,
+              retryCount: row.retryCount + 1,
+              updatedAt: now,
+            })
+            .where(and(eq(posts.id, id), eq(posts.userId, userId)))
+            .run();
+          throw new ApiError(502, 'publish_failed', sent.message);
+        }
+        return getPost(deps.db, userId, id, now);
+      } finally {
+        inFlight.delete(id);
+      }
+    },
+
+    async retry(userId, id) {
+      const row = getPostRow(deps.db, userId, id);
+      if (!row) return null;
+      if (!(RETRY_FROM as readonly string[]).includes(row.status)) {
+        throw new PostStatusError(id, row.status);
+      }
+      if (inFlight.has(id)) {
+        throw new ApiError(409, 'in_flight', `Post ${id} is being sent`);
+      }
+      inFlight.add(id);
+      try {
+        const { account, accessToken } = await deps.accounts.accessTokenFor(userId);
+        const now = deps.clock.now();
+        const sent = await send(row, account, accessToken, now);
+        if (!sent.ok) {
+          deps.db
+            .update(posts)
+            .set({
               lastError: sent.message,
               retryCount: row.retryCount + 1,
               updatedAt: now,
