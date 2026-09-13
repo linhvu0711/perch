@@ -48,6 +48,8 @@ export function ResourceModal(): JSX.Element | null {
     parsedId === null
       ? []
       : (usedBy.data?.pages.flatMap((page) => page.items) ?? []);
+  const usedByTotal =
+    parsedId === null ? 0 : (usedBy.data?.pages[0]?.total ?? usedByPosts.length);
   const updateResource = useUpdateResource();
   const deleteResources = useDeleteResources();
   const modalRef = useRef<HTMLDivElement>(null);
@@ -464,8 +466,7 @@ export function ResourceModal(): JSX.Element | null {
               {!isNew && (
                 <div className="field">
                   <label>
-                    Used by {usedByPosts.length} post
-                    {usedByPosts.length === 1 ? '' : 's'}
+                    Used by {usedByTotal} post{usedByTotal === 1 ? '' : 's'}
                   </label>
                   <div className="linked">
                     {usedByPosts.length === 0 ? (
@@ -486,6 +487,11 @@ export function ResourceModal(): JSX.Element | null {
                           <StatusPill status={post.status} />
                         </Link>
                       ))
+                    )}
+                    {usedByTotal > usedByPosts.length && (
+                      <span className="note">
+                        …and {usedByTotal - usedByPosts.length} more
+                      </span>
                     )}
                   </div>
                 </div>
@@ -520,11 +526,12 @@ export function ResourceModal(): JSX.Element | null {
         <ConfirmDialog
           title={`Delete ${resource.title}?`}
           body={
-            usedByPosts.length > 0 ? (
+            usedByTotal > 0 ? (
               <p>
-                It is unlinked from {usedByPosts.length} post
-                {usedByPosts.length === 1 ? '' : 's'} (
-                {usedByPosts.map((post) => `#${post.id}`).join(', ')}).
+                It is unlinked from {usedByTotal} post
+                {usedByTotal === 1 ? '' : 's'} (
+                {usedByPosts.map((post) => `#${post.id}`).join(', ')}
+                {usedByTotal > usedByPosts.length ? ', …' : ''}).
               </p>
             ) : (
               <p>It is not used by any post.</p>

@@ -47,7 +47,25 @@ export const postCreateSchema = z.object({
 });
 export type PostCreate = z.infer<typeof postCreateSchema>;
 
-const listDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const listDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine(
+    (value) => {
+      const [year, month, day] = value.split('-').map(Number) as [
+        number,
+        number,
+        number,
+      ];
+      const parsed = new Date(Date.UTC(year, month - 1, day));
+      return (
+        parsed.getUTCFullYear() === year &&
+        parsed.getUTCMonth() === month - 1 &&
+        parsed.getUTCDate() === day
+      );
+    },
+    { message: 'Invalid calendar date' },
+  );
 
 export const postListQuerySchema = z.object({
   status: postStatusSchema.optional(),

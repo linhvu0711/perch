@@ -18,6 +18,7 @@ import {
   linkResources,
   listPosts,
   MissingResourceError,
+  PostImmutableError,
   previewPost,
   unlinkResources,
   updatePost,
@@ -29,6 +30,15 @@ const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
 function notFound(id: number): ApiError {
   return new ApiError(404, 'not_found', `Post ${id} not found`);
+}
+
+function immutable(error: unknown): ApiError {
+  if (error instanceof PostImmutableError) {
+    return new ApiError(400, 'validation', 'Invalid request', [
+      { path: 'status', message: `Post ${error.postId} is published` },
+    ]);
+  }
+  throw error;
 }
 
 export function postsRoutes(deps: AppDeps) {
@@ -108,15 +118,19 @@ export function postsRoutes(deps: AppDeps) {
       zValidator('json', postPatchSchema, validationHook),
       (c) => {
         const { id } = c.req.valid('param');
-        const post = updatePost(
-          deps.db,
-          c.get('user').id,
-          id,
-          c.req.valid('json'),
-          deps.clock.now(),
-        );
-        if (!post) throw notFound(id);
-        return c.json(post, 200);
+        try {
+          const post = updatePost(
+            deps.db,
+            c.get('user').id,
+            id,
+            c.req.valid('json'),
+            deps.clock.now(),
+          );
+          if (!post) throw notFound(id);
+          return c.json(post, 200);
+        } catch (error) {
+          throw immutable(error);
+        }
       },
     )
     .post(
@@ -125,14 +139,18 @@ export function postsRoutes(deps: AppDeps) {
       zValidator('json', postLinksBodySchema, validationHook),
       (c) => {
         const { id } = c.req.valid('param');
-        const result = linkResources(
-          deps.db,
-          c.get('user').id,
-          id,
-          c.req.valid('json').resource_ids,
-        );
-        if (!result) throw notFound(id);
-        return c.json(result, 200);
+        try {
+          const result = linkResources(
+            deps.db,
+            c.get('user').id,
+            id,
+            c.req.valid('json').resource_ids,
+          );
+          if (!result) throw notFound(id);
+          return c.json(result, 200);
+        } catch (error) {
+          throw immutable(error);
+        }
       },
     )
     .delete(
@@ -141,14 +159,18 @@ export function postsRoutes(deps: AppDeps) {
       zValidator('json', postLinksBodySchema, validationHook),
       (c) => {
         const { id } = c.req.valid('param');
-        const result = unlinkResources(
-          deps.db,
-          c.get('user').id,
-          id,
-          c.req.valid('json').resource_ids,
-        );
-        if (!result) throw notFound(id);
-        return c.json(result, 200);
+        try {
+          const result = unlinkResources(
+            deps.db,
+            c.get('user').id,
+            id,
+            c.req.valid('json').resource_ids,
+          );
+          if (!result) throw notFound(id);
+          return c.json(result, 200);
+        } catch (error) {
+          throw immutable(error);
+        }
       },
     )
     .delete(

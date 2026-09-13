@@ -99,26 +99,48 @@ export function PostModal(): JSX.Element | null {
     modalRef.current?.focus();
   }, [currentId]);
 
-  const flush = useCallback(async () => {
-    const patch = pendingRef.current;
-    pendingRef.current = {};
-    if (patch.title === undefined && patch.text === undefined) return;
-    try {
-      if (currentId === undefined) {
-        const created = await createPost.mutateAsync({});
+  const createRef = useRef<Promise<Post> | null>(null);
+
+  const ensureCreated = useCallback((): Promise<Post> => {
+    createRef.current ??= createPost
+      .mutateAsync({})
+      .then((created) => {
         savedRef.current = true;
         if (!closedRef.current) {
           navigate(`/posts/${created.id}`, { replace: true });
         }
-        await updatePost.mutateAsync({ id: created.id, patch });
-      } else {
-        await updatePost.mutateAsync({ id: currentId, patch });
-        savedRef.current = true;
+        return created;
+      })
+      .catch((error: unknown) => {
+        createRef.current = null;
+        throw error;
+      });
+    return createRef.current;
+  }, [createPost, navigate]);
+
+  const flush = useCallback(async () => {
+    const patch = pendingRef.current;
+    pendingRef.current = {};
+    let id = currentId;
+    if (id === undefined) {
+      const hasChanges =
+        patch.title !== undefined || patch.text !== undefined;
+      if (!hasChanges && createRef.current === null) return;
+      try {
+        id = (await ensureCreated()).id;
+      } catch (error) {
+        toast(errorMessage(error), 'warn');
+        return;
       }
+    }
+    if (patch.title === undefined && patch.text === undefined) return;
+    try {
+      await updatePost.mutateAsync({ id, patch });
+      savedRef.current = true;
     } catch (error) {
       toast(errorMessage(error), 'warn');
     }
-  }, [createPost, currentId, navigate, updatePost]);
+  }, [currentId, ensureCreated, updatePost]);
 
   const requestClose = useCallback(() => {
     closedRef.current = true;
@@ -152,8 +174,14 @@ export function PostModal(): JSX.Element | null {
       timerRef.current = undefined;
     }
     await flush();
-    return postQuery.data?.id ?? currentId ?? null;
-  }, [currentId, flush, postQuery.data?.id]);
+    if (currentId !== undefined) return currentId;
+    try {
+      return (await ensureCreated()).id;
+    } catch (error) {
+      toast(errorMessage(error), 'warn');
+      return null;
+    }
+  }, [currentId, ensureCreated, flush]);
 
   async function confirmDelete() {
     if (currentId === undefined) return;

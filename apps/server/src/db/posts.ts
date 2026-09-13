@@ -24,6 +24,12 @@ import { postLinks, posts, resources } from './schema';
 
 export class InvalidPostCursorError extends Error {}
 
+export class PostImmutableError extends Error {
+  constructor(public postId: number) {
+    super(`Post ${postId} is published`);
+  }
+}
+
 export class MissingResourceError extends Error {
   constructor(public resourceId: number) {
     super(`Resource ${resourceId} not found`);
@@ -98,26 +104,29 @@ export function createPost(
     if (!resource) throw new MissingResourceError(resourceId);
   }
 
-  const row = db
-    .insert(posts)
-    .values({
-      userId,
-      status: 'draft',
-      title: input.title ?? '',
-      text: input.text ?? '',
-      createdAt: now,
-      updatedAt: now,
-    })
-    .returning()
-    .get();
-  if (!row) throw new Error('post insert failed');
+  const row = db.transaction((tx) => {
+    const inserted = tx
+      .insert(posts)
+      .values({
+        userId,
+        status: 'draft',
+        title: input.title ?? '',
+        text: input.text ?? '',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning()
+      .get();
+    if (!inserted) throw new Error('post insert failed');
 
-  for (const resourceId of input.from ?? []) {
-    db.insert(postLinks)
-      .values({ postId: row.id, resourceId })
-      .onConflictDoNothing()
-      .run();
-  }
+    for (const resourceId of input.from ?? []) {
+      tx.insert(postLinks)
+        .values({ postId: inserted.id, resourceId })
+        .onConflictDoNothing()
+        .run();
+    }
+    return inserted;
+  });
 
   const post = getPost(db, userId, row.id);
   if (!post) throw new Error('post insert failed');
@@ -237,12 +246,9 @@ export function updatePost(
   patch: PostPatch,
   now: Date,
 ): Post | null {
-  const current = db
-    .select({ id: posts.id })
-    .from(posts)
-    .where(and(eq(posts.id, id), eq(posts.userId, userId)))
-    .get();
+  const current = getPostRow(db, userId, id);
   if (!current) return null;
+  if (current.status === 'published') throw new PostImmutableError(id);
 
   db.update(posts)
     .set({
@@ -280,7 +286,9 @@ export function linkResources(
   postId: number,
   ids: number[],
 ): PostLinksResponse | null {
-  if (!getPostRow(db, userId, postId)) return null;
+  const postRow = getPostRow(db, userId, postId);
+  if (!postRow) return null;
+  if (postRow.status === 'published') throw new PostImmutableError(postId);
 
   return {
     results: ids.map((id) => {
@@ -306,7 +314,9 @@ export function unlinkResources(
   postId: number,
   ids: number[],
 ): PostLinksResponse | null {
-  if (!getPostRow(db, userId, postId)) return null;
+  const postRow = getPostRow(db, userId, postId);
+  if (!postRow) return null;
+  if (postRow.status === 'published') throw new PostImmutableError(postId);
 
   return {
     results: ids.map((id) => {

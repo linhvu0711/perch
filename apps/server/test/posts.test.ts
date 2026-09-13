@@ -363,6 +363,34 @@ describe('posts', () => {
     expect(server.xClient.calls).toEqual([]);
   });
 
+  test('rejects edits and link changes on published posts', async () => {
+    await createNote('# One');
+    await seedTimedPosts();
+
+    const patched = await request('/api/posts/5', {
+      method: 'PATCH',
+      body: JSON.stringify({ text: 'changed' }),
+    });
+    expect(patched.status).toBe(400);
+  });
+
+  test('rejects link changes on published posts', async () => {
+    await createNote('# One');
+    await seedTimedPosts();
+
+    const linked = await request('/api/posts/5/links', {
+      method: 'POST',
+      body: JSON.stringify({ resource_ids: [1] }),
+    });
+    expect(linked.status).toBe(400);
+
+    const unlinked = await request('/api/posts/5/links', {
+      method: 'DELETE',
+      body: JSON.stringify({ resource_ids: [1] }),
+    });
+    expect(unlinked.status).toBe(400);
+  });
+
   test('previews as segments', async () => {
     await createPost({ text: 'Check https://x.com @bob #news' });
 
