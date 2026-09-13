@@ -1,4 +1,8 @@
-import type { Settings } from '@perch/core';
+import {
+  CHAR_LIMIT_MAX,
+  charLimitOverrideSchema,
+  type Settings,
+} from '@perch/core';
 import type { Command } from 'commander';
 
 import { createApi } from '../api';
@@ -81,13 +85,17 @@ export function addConfigCommands(program: Command, ctx: CliContext): void {
           );
           resultValue = settings.timezone;
         } else {
-          if (value !== 'none' && !/^\d+$/.test(value)) {
+          const parsedLimit = charLimitOverrideSchema.safeParse(
+            value === 'none' ? null : Number(value),
+          );
+          if (!parsedLimit.success) {
             throw new CliError(
-              'bad_value',
-              'char-limit must be a whole number or "none"',
+              'usage',
+              `char-limit must be a whole number from 1 to ${CHAR_LIMIT_MAX}, or "none"`,
+              2,
             );
           }
-          const charLimit = value === 'none' ? null : Number(value);
+          const charLimit = parsedLimit.data;
           settings = await api.call(
             api.client.api.settings.$patch({
               json: { char_limit_override: charLimit },

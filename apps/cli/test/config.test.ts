@@ -72,12 +72,33 @@ describe('config commands', () => {
     expect(JSON.parse(clear.out()).value).toBeNull();
   });
 
+  test('rejects char-limit over the maximum as a usage error', async () => {
+    // Given: a test server
+    // When: char-limit exceeds the core maximum
+    const capture = makeCtx(server);
+    expect(
+      await runCli(
+        ['config', 'set', 'char-limit', '30000', '--json'],
+        capture.ctx,
+      ),
+    ).toBe(2);
+    // Then
+    expect(JSON.parse(capture.err())).toEqual({
+      code: 'usage',
+      message: 'char-limit must be a whole number from 1 to 25000, or "none"',
+    });
+    const response = await server.app.request('/api/settings', {
+      headers: { Authorization: `Bearer ${server.token}` },
+    });
+    expect((await response.json()).char_limit_override).toBeNull();
+  });
+
   test('rejects invalid values and keys', async () => {
     const badValue = makeCtx(server);
     expect(
       await runCli(['config', 'set', 'char-limit', 'abc', '--json'], badValue.ctx),
-    ).toBe(1);
-    expect(JSON.parse(badValue.err()).code).toBe('bad_value');
+    ).toBe(2);
+    expect(JSON.parse(badValue.err()).code).toBe('usage');
 
     const badKey = makeCtx(server);
     expect(await runCli(['config', 'get', 'nope', '--json'], badKey.ctx)).toBe(1);
