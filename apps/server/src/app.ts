@@ -7,6 +7,7 @@ import { errorHandler, notFoundHandler } from './errors';
 import { accountRoutes } from './routes/account';
 import { authRoutes } from './routes/auth';
 import { calendarRoutes } from './routes/calendar';
+import { costsRoutes } from './routes/costs';
 import { countsRoutes } from './routes/counts';
 import { postsRoutes } from './routes/posts';
 import { resourcesRoutes } from './routes/resources';
@@ -46,6 +47,7 @@ function createRoutes(deps: AppDeps) {
     .route('/tags', tagsRoutes(deps))
     .route('/calendar', calendarRoutes(deps))
     .route('/counts', countsRoutes(deps))
+    .route('/costs', costsRoutes(deps))
     .all('*', notFoundHandler);
 }
 

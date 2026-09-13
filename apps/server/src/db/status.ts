@@ -38,6 +38,6 @@ export function statusSnapshot(db: Db, userId: number, timeZone: string, now: Da
     ),
     week_official_count: countWhere(db, and(week, eq(posts.status, 'official'))!),
     week_draft_count: countWhere(db, and(week, eq(posts.status, 'draft'))!),
-    month_cost_usd: monthCostUsd(db, userId, now),
+    month_cost_usd: monthCostUsd(db, userId, timeZone, now),
   };
 }

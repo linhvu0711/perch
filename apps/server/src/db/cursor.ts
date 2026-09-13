@@ -48,3 +48,23 @@ export function decodePostCursor(cursor: string): PostCursorKey | null {
     return null;
   }
 }
+
+export function encodeMonthCursor(month: string): string {
+  return Buffer.from(JSON.stringify({ m: month })).toString('base64url');
+}
+
+export function decodeMonthCursor(cursor: string): string | null {
+  if (!/^[A-Za-z0-9_-]+$/.test(cursor)) return null;
+
+  try {
+    const value: unknown = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+
+    const { m } = value as Record<string, unknown>;
+    if (typeof m !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(m)) return null;
+
+    return m;
+  } catch {
+    return null;
+  }
+}
