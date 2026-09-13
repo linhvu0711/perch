@@ -54,6 +54,24 @@ function printResource(
     return;
   }
 
+  if (resource.type === 'image') {
+    ctx.stdout.write(
+      `${formatTable({
+        id: resource.id,
+        type: resource.type,
+        title: resource.title,
+        notes: resource.notes,
+        created: resource.created_at,
+        path: resource.path,
+        mime: resource.mime,
+        bytes: resource.bytes,
+        width: resource.width,
+        height: resource.height,
+      })}\n`,
+    );
+    return;
+  }
+
   ctx.stdout.write(
     `${formatTable({
       id: resource.id,
@@ -61,16 +79,16 @@ function printResource(
       title: resource.title,
       notes: resource.notes,
       created: resource.created_at,
-    })}\n\n${resource.type === 'md' ? resource.body : ''}\n`,
+    })}\n\n${resource.body}\n`,
   );
 }
 
 export function addResourceCommands(program: Command, ctx: CliContext): void {
   const resource = program.command('resource').description('Manage resources');
 
-  resource
-    .command('add')
-    .description('Add a resource')
+  const add = resource.command('add').description('Add a resource');
+
+  add
     .command('md <path...>')
     .description('Add Markdown notes')
     .option('--title <title>')
@@ -120,6 +138,110 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
             }),
           );
           results.push({ path: inputPath, ok: true, resource: created });
+        } catch (error) {
+          if (
+            error instanceof CliError &&
+            (error.code === 'unreachable' || error.code === 'unauthorized')
+          ) {
+            throw error;
+          }
+          results.push({
+            path: inputPath,
+            ok: false,
+            error: {
+              code: error instanceof CliError ? error.code : 'internal',
+              message: error instanceof Error ? error.message : String(error),
+            },
+          });
+        }
+      }
+
+      if (mode === 'json') {
+        printResult(ctx, mode, results);
+      } else {
+        printResult(
+          ctx,
+          mode,
+          results.map((result) => ({
+            path: result.path,
+            id: result.ok ? result.resource.id : '',
+            title: result.ok ? result.resource.title : '',
+            error: result.ok ? '' : result.error.message,
+          })),
+        );
+      }
+
+      const failed = results.filter((result) => !result.ok).length;
+      if (failed > 0) throw new BatchFailure(failed, results.length);
+    });
+
+  add
+    .command('image <path...>')
+    .description('Add image files')
+    .option('--title <title>')
+    .action(async (paths: string[], commandOptions: { title?: string }) => {
+      const options = program.opts<GlobalOptions>();
+      const mode = resolveMode(options, ctx.isTTY);
+      if (commandOptions.title !== undefined && paths.length !== 1) {
+        throw new CliError('bad_args', '--title needs exactly one path');
+      }
+
+      const api = apiFor(program, ctx);
+      const results: Array<
+        | { path: string; ok: true; resource: Resource }
+        | { path: string; ok: false; error: { code: string; message: string } }
+      > = [];
+
+      for (const inputPath of paths) {
+        if (inputPath === '-') {
+          throw new CliError(
+            'bad_args',
+            'stdin (-) is not supported for images',
+          );
+        }
+
+        let bytes: Uint8Array;
+        try {
+          bytes = fs.readFileSync(inputPath);
+        } catch (error) {
+          results.push({
+            path: inputPath,
+            ok: false,
+            error: {
+              code: 'read_failed',
+              message: error instanceof Error ? error.message : String(error),
+            },
+          });
+          continue;
+        }
+
+        try {
+          const response = await api.call(
+            api.client.api.resources.images.$post({
+              form: {
+                files: new File(
+                  [bytes.slice().buffer as ArrayBuffer],
+                  path.basename(inputPath),
+                ),
+                ...(commandOptions.title !== undefined
+                  ? { title: commandOptions.title }
+                  : {}),
+              },
+            }),
+          );
+          const one = response.results[0];
+          if (one?.ok) {
+            results.push({ path: inputPath, ok: true, resource: one.resource });
+          } else {
+            results.push({
+              path: inputPath,
+              ok: false,
+              error: one?.error ?? {
+                code: 'internal',
+                message: 'No result returned',
+              },
+            });
+          }
         } catch (error) {
           if (
             error instanceof CliError &&

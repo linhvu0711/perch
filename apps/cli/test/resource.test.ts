@@ -328,3 +328,122 @@ describe('resource delete', () => {
     expect(JSON.parse(capture.err()).code).toBe('bad_args');
   });
 });
+
+describe('resource add image', () => {
+  function writeBytes(name: string, bytes: Uint8Array): string {
+    const file = path.join(server.dir, name);
+    fs.writeFileSync(file, bytes);
+    return file;
+  }
+
+  test('uploads image files and persists them', async () => {
+    const { PNG_3X2, GIF_4X3 } = await import('@perch/server/testing');
+    const a = writeBytes('a.png', PNG_3X2);
+    const d = writeBytes('d.gif', GIF_4X3);
+    const capture = makeCtx(server);
+
+    expect(
+      await runCli(['resource', 'add', 'image', a, d, '--json'], capture.ctx),
+    ).toBe(0);
+    const rows = JSON.parse(capture.out());
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      path: a,
+      ok: true,
+      resource: {
+        id: 1,
+        type: 'image',
+        title: 'a.png',
+        mime: 'image/png',
+        bytes: 73,
+        width: 3,
+        height: 2,
+      },
+    });
+    expect(rows[1]).toMatchObject({
+      ok: true,
+      resource: { id: 2, title: 'd.gif', mime: 'image/gif', width: 4, height: 3 },
+    });
+
+    const response = await server.app.request('/api/resources/1', {
+      headers: { Authorization: `Bearer ${server.token}` },
+    });
+    expect(await response.json()).toEqual(rows[0].resource);
+  });
+
+  test('reports a wrong-type file and continues', async () => {
+    const { PNG_3X2 } = await import('@perch/server/testing');
+    const notesTxt = write('notes.txt', 'hello');
+    const okPng = writeBytes('ok.png', PNG_3X2);
+    const capture = makeCtx(server);
+
+    expect(
+      await runCli(
+        ['resource', 'add', 'image', notesTxt, okPng, '--json'],
+        capture.ctx,
+      ),
+    ).toBe(1);
+    expect(capture.err()).toBe('');
+    const rows = JSON.parse(capture.out());
+    expect(rows[0]).toEqual({
+      path: notesTxt,
+      ok: false,
+      error: { code: 'bad_type', message: 'Only PNG, JPG, WebP, or GIF' },
+    });
+    expect(rows[1]).toMatchObject({ ok: true, resource: { id: 1 } });
+  });
+
+  test('lets an explicit title win for one file and rejects it for many', async () => {
+    const { PNG_3X2 } = await import('@perch/server/testing');
+    const a = writeBytes('a.png', PNG_3X2);
+    const b = writeBytes('b.png', PNG_3X2);
+
+    const single = makeCtx(server);
+    expect(
+      await runCli(
+        ['resource', 'add', 'image', a, '--title', 'Beach', '--json'],
+        single.ctx,
+      ),
+    ).toBe(0);
+    expect(JSON.parse(single.out())[0].resource.title).toBe('Beach');
+
+    const many = makeCtx(server);
+    expect(
+      await runCli(
+        ['resource', 'add', 'image', a, b, '--title', 'X', '--json'],
+        many.ctx,
+      ),
+    ).toBe(1);
+    expect(JSON.parse(many.err())).toMatchObject({
+      code: 'bad_args',
+      message: '--title needs exactly one path',
+    });
+
+    const stdin = makeCtx(server);
+    expect(
+      await runCli(['resource', 'add', 'image', '-', '--json'], stdin.ctx),
+    ).toBe(1);
+    expect(JSON.parse(stdin.err())).toMatchObject({
+      code: 'bad_args',
+      message: 'stdin (-) is not supported for images',
+    });
+  });
+
+  test('shows an image resource', async () => {
+    const { PNG_3X2 } = await import('@perch/server/testing');
+    const a = writeBytes('a.png', PNG_3X2);
+    await runCli(['resource', 'add', 'image', a, '--json'], makeCtx(server).ctx);
+
+    const capture = makeCtx(server);
+    expect(await runCli(['resource', 'show', '1', '--json'], capture.ctx)).toBe(0);
+    const shown = JSON.parse(capture.out());
+    expect(shown).toMatchObject({
+      id: 1,
+      type: 'image',
+      mime: 'image/png',
+      width: 3,
+      height: 2,
+    });
+    expect(shown).not.toHaveProperty('body');
+  });
+});
