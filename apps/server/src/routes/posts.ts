@@ -1,5 +1,6 @@
 import { zValidator } from '@hono/zod-validator';
 import {
+  itemTagsBodySchema,
   postCreateSchema,
   postDeleteBodySchema,
   postLinksBodySchema,
@@ -24,6 +25,7 @@ import {
   updatePost,
 } from '../db/posts';
 import { getSettings } from '../db/settings';
+import { tagPosts, untagPosts } from '../db/tags';
 import { ApiError, validationHook } from '../errors';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
@@ -73,6 +75,14 @@ export function postsRoutes(deps: AppDeps) {
         }
         throw error;
       }
+    })
+    .post('/tags', zValidator('json', itemTagsBodySchema, validationHook), (c) => {
+      const body = c.req.valid('json');
+      return c.json(tagPosts(deps.db, c.get('user').id, body.ids, body.tags), 200);
+    })
+    .delete('/tags', zValidator('json', itemTagsBodySchema, validationHook), (c) => {
+      const body = c.req.valid('json');
+      return c.json(untagPosts(deps.db, c.get('user').id, body.ids, body.tags), 200);
     })
     .get('/:id', zValidator('param', idParamSchema, validationHook), (c) => {
       const { id } = c.req.valid('param');

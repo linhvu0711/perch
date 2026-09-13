@@ -21,6 +21,7 @@ import { decodePostCursor, encodePostCursor } from './cursor';
 import type { Db } from './index';
 import { postLinks, posts, resources } from './schema';
 import { getSettings } from './settings';
+import { tagsForPosts } from './tags';
 import { getConnectedAccount } from './xAccounts';
 
 export class InvalidPostCursorError extends Error {}
@@ -45,7 +46,7 @@ export class TagExistsError extends Error {
 
 type PostRow = typeof posts.$inferSelect;
 
-function toPost(row: PostRow, links: PostLink[], limit: number): Post {
+function toPost(row: PostRow, links: PostLink[], limit: number, tags: string[]): Post {
   return {
     id: row.id,
     status: row.status,
@@ -63,6 +64,7 @@ function toPost(row: PostRow, links: PostLink[], limit: number): Post {
     limit,
     estimated_cost: estimateCost(row.text),
     links,
+    tags,
     media: [],
   };
 }
@@ -143,7 +145,12 @@ export function getPost(db: Db, userId: number, id: number): Post | null {
     .get();
   if (!row) return null;
 
-  return toPost(row, linksForPosts(db, [row.id]).get(row.id) ?? [], postLimit(db, userId));
+  return toPost(
+    row,
+    linksForPosts(db, [row.id]).get(row.id) ?? [],
+    postLimit(db, userId),
+    tagsForPosts(db, [row.id]).get(row.id) ?? [],
+  );
 }
 
 export function listPosts(
@@ -219,8 +226,12 @@ export function listPosts(
     db,
     pageRows.map((row) => row.id),
   );
+  const postTagsMap = tagsForPosts(
+    db,
+    pageRows.map((row) => row.id),
+  );
   const items = pageRows.map((row) => {
-    const post = toPost(row, links.get(row.id) ?? [], limit);
+    const post = toPost(row, links.get(row.id) ?? [], limit, postTagsMap.get(row.id) ?? []);
     return { ...post, title: postListTitle(post.title, post.text) };
   });
 

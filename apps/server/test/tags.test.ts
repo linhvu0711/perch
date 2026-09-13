@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import path from 'node:path';
 import type { ItemTagsResponse, TagList } from '@perch/core';
+import { eq } from 'drizzle-orm';
 
+import { openDb } from '../src/db';
+import { posts } from '../src/db/schema';
 import { createTestServer, type TestServer } from '../src/testing';
 
 let server: TestServer;
@@ -167,5 +171,69 @@ describe('tags', () => {
     });
     expect(noTags.status).toBe(400);
     expect(await noTags.json()).toMatchObject({ code: 'validation' });
+  });
+
+  test('adds and removes tags on posts in one batch', async () => {
+    for (const text of ['one', 'two']) {
+      const created = await request('/api/posts', {
+        method: 'POST',
+        body: JSON.stringify({ text }),
+      });
+      expect(created.status).toBe(201);
+    }
+    const { db, sqlite } = openDb(path.join(server.dir, 'perch.db'));
+    db.update(posts)
+      .set({ status: 'published', publishedAt: new Date('2026-09-01T09:00:00Z') })
+      .where(eq(posts.id, 2))
+      .run();
+    sqlite.close();
+
+    const added = await request('/api/posts/tags', {
+      method: 'POST',
+      body: JSON.stringify({ ids: [1, 2, 999], tags: ['news'] }),
+    });
+    expect(added.status).toBe(200);
+    expect(await added.json()).toEqual({
+      results: [
+        { id: 1, ok: true, tags: ['news'] },
+        { id: 2, ok: false, error: { code: 'published', message: 'Post 2 is published' } },
+        { id: 999, ok: false, error: { code: 'not_found', message: 'Post 999 not found' } },
+      ],
+    });
+
+    const removed = await request('/api/posts/tags', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids: [1], tags: ['news'] }),
+    });
+    expect(removed.status).toBe(200);
+    expect(await removed.json()).toEqual({
+      results: [{ id: 1, ok: true, tags: [] }],
+    });
+
+    const post = await (await request('/api/posts/1')).json();
+    expect(post.tags).toEqual([]);
+  });
+
+  test('shares one tag set across resources and posts', async () => {
+    await request('/api/resources/notes', {
+      method: 'POST',
+      body: JSON.stringify({ body: '# One' }),
+    });
+    await request('/api/posts', { method: 'POST', body: JSON.stringify({ text: 'hi' }) });
+
+    await request('/api/resources/tags', {
+      method: 'POST',
+      body: JSON.stringify({ ids: [1], tags: ['shared'] }),
+    });
+    await request('/api/posts/tags', {
+      method: 'POST',
+      body: JSON.stringify({ ids: [1], tags: ['Shared'] }),
+    });
+
+    expect(await (await request('/api/tags')).json()).toEqual({
+      items: [{ id: 1, name: 'shared', resource_count: 1, post_count: 1 }],
+      total: 1,
+      next_cursor: null,
+    });
   });
 });

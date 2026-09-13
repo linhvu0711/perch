@@ -98,6 +98,7 @@ describe('posts', () => {
       limit: 280,
       estimated_cost: 0.015,
       links: [{ resource_id: 1, type: 'md', title: 'Idea' }],
+      tags: [],
       media: [],
     };
     expect(await created.json()).toEqual(expected);

@@ -43,6 +43,7 @@ const EMPTY_POST: Post = {
   updated_at: '',
   character_count: 0,
   limit: CHAR_LIMIT_DEFAULT,
+  tags: [],
   estimated_cost: COST_POST_USD,
   links: [],
   media: [],

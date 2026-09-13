@@ -36,6 +36,7 @@ export const postSchema = z.object({
   limit: z.number().int(),
   estimated_cost: z.number(),
   links: z.array(postLinkSchema),
+  tags: z.array(z.string()),
   media: z.array(z.never()),
 });
 export type Post = z.infer<typeof postSchema>;

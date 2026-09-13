@@ -3,7 +3,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import type { Db } from './index';
 import { TagExistsError } from './posts';
-import { resources, resourceTags, tags } from './schema';
+import { posts, postTags, resources, resourceTags, tags } from './schema';
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
@@ -176,6 +176,103 @@ export function untagResources(
       }
       removeResourceTags(db, userId, id, names);
       return { id, ok: true as const, tags: tagsForResources(db, [id]).get(id) ?? [] };
+    }),
+  };
+}
+
+export function tagsForPosts(db: Db | Tx, postIds: number[]): Map<number, string[]> {
+  const result = new Map<number, string[]>();
+  if (postIds.length === 0) return result;
+
+  const rows = db
+    .select({ postId: postTags.postId, name: tags.name })
+    .from(postTags)
+    .innerJoin(tags, eq(postTags.tagId, tags.id))
+    .where(inArray(postTags.postId, postIds))
+    .orderBy(sql`lower(${tags.name})`)
+    .all();
+
+  for (const row of rows) {
+    const list = result.get(row.postId) ?? [];
+    list.push(row.name);
+    result.set(row.postId, list);
+  }
+  return result;
+}
+
+export function addPostTags(tx: Db | Tx, userId: number, postId: number, names: string[]): void {
+  const tagIds = ensureTags(tx, userId, names);
+  for (const tagId of tagIds.values()) {
+    tx.insert(postTags).values({ postId, tagId }).onConflictDoNothing().run();
+  }
+}
+
+export function removePostTags(tx: Db | Tx, userId: number, postId: number, names: string[]): void {
+  const tagIds = tagIdsForNames(tx, userId, names);
+  if (tagIds.length === 0) return;
+  tx.delete(postTags)
+    .where(and(eq(postTags.postId, postId), inArray(postTags.tagId, tagIds)))
+    .run();
+}
+
+function postRowStatus(db: Db, userId: number, postId: number): { status: string } | 'not_found' {
+  const row = db
+    .select({ status: posts.status })
+    .from(posts)
+    .where(and(eq(posts.id, postId), eq(posts.userId, userId)))
+    .get();
+  return row ?? 'not_found';
+}
+
+export function tagPosts(db: Db, userId: number, ids: number[], names: string[]): ItemTagsResponse {
+  return {
+    results: ids.map((id) => {
+      const row = postRowStatus(db, userId, id);
+      if (row === 'not_found') {
+        return {
+          id,
+          ok: false as const,
+          error: { code: 'not_found', message: `Post ${id} not found` },
+        };
+      }
+      if (row.status === 'published') {
+        return {
+          id,
+          ok: false as const,
+          error: { code: 'published', message: `Post ${id} is published` },
+        };
+      }
+      addPostTags(db, userId, id, names);
+      return { id, ok: true as const, tags: tagsForPosts(db, [id]).get(id) ?? [] };
+    }),
+  };
+}
+
+export function untagPosts(
+  db: Db,
+  userId: number,
+  ids: number[],
+  names: string[],
+): ItemTagsResponse {
+  return {
+    results: ids.map((id) => {
+      const row = postRowStatus(db, userId, id);
+      if (row === 'not_found') {
+        return {
+          id,
+          ok: false as const,
+          error: { code: 'not_found', message: `Post ${id} not found` },
+        };
+      }
+      if (row.status === 'published') {
+        return {
+          id,
+          ok: false as const,
+          error: { code: 'published', message: `Post ${id} is published` },
+        };
+      }
+      removePostTags(db, userId, id, names);
+      return { id, ok: true as const, tags: tagsForPosts(db, [id]).get(id) ?? [] };
     }),
   };
 }
