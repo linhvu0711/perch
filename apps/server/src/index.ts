@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { systemClock } from './clock';
+import { parseServerEnv } from './env';
 import { buildServer } from './server';
 import { createRealXClient } from './x/real';
 
@@ -10,37 +11,26 @@ export type { AppType } from './app';
 export type { BuildServerOptions, PerchServer } from './server';
 
 if (import.meta.main) {
-  const token = process.env.PERCH_TOKEN;
-  if (!token) {
-    console.error('PERCH_TOKEN is required');
+  const parsed = parseServerEnv(process.env);
+  if (!parsed.ok) {
+    console.error(parsed.message);
     process.exit(1);
   }
+  const env = parsed.env;
 
-  const secureCookiesValue = (
-    process.env.PERCH_SECURE_COOKIES || 'true'
-  ).toLowerCase();
-  if (secureCookiesValue !== 'true' && secureCookiesValue !== 'false') {
-    console.error('PERCH_SECURE_COOKIES must be true or false');
-    process.exit(1);
-  }
-
-  const dbPath = path.resolve(
-    process.env.PERCH_DB_PATH || './data/perch.db',
-  );
-  const uploadDir = path.resolve(
-    process.env.PERCH_UPLOAD_DIR || './data/uploads',
-  );
+  const dbPath = path.resolve(env.PERCH_DB_PATH);
+  const uploadDir = path.resolve(env.PERCH_UPLOAD_DIR);
   const webDist = path.resolve(
-    process.env.PERCH_WEB_DIST ||
-      path.resolve(import.meta.dir, '../../web/dist'),
+    env.PERCH_WEB_DIST ?? path.resolve(import.meta.dir, '../../web/dist'),
   );
-  const port = Number(process.env.PORT || '3000');
+  const port = env.PORT;
 
-  const xClientId = process.env.PERCH_X_CLIENT_ID;
-  const xClientSecret = process.env.PERCH_X_CLIENT_SECRET;
-  const publicUrl = (
-    process.env.PERCH_PUBLIC_URL || `http://127.0.0.1:${port}`
-  ).replace(/\/$/, '');
+  const xClientId = env.PERCH_X_CLIENT_ID;
+  const xClientSecret = env.PERCH_X_CLIENT_SECRET;
+  const publicUrl = (env.PERCH_PUBLIC_URL ?? `http://127.0.0.1:${port}`).replace(
+    /\/$/,
+    '',
+  );
   const xOAuth =
     xClientId && xClientSecret
       ? {
@@ -65,8 +55,8 @@ if (import.meta.main) {
       clientSecret: xClientSecret ?? '',
     }),
     xOAuth,
-    token,
-    secureCookies: secureCookiesValue === 'true',
+    token: env.PERCH_TOKEN,
+    secureCookies: env.PERCH_SECURE_COOKIES,
     webDist,
   });
 
