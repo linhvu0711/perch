@@ -2,9 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
+  type ImageResource,
   MIRROR_MANIFEST_FILE,
   type MirrorManifest,
   mirrorFile,
+  mirrorImagePath,
   mirrorManifestSchema,
   type Resource,
 } from '@perch/core';
@@ -19,13 +21,12 @@ function writeManifest(dir: string, manifest: MirrorManifest): void {
   fs.renameSync(temporaryPath, manifestPath);
 }
 
-export function applyMirror(
+export async function applyMirror(
   dir: string,
   resources: Resource[],
   now: Date,
-): { added: number; updated: number; removed: number; pulled_at: string } {
-  fs.mkdirSync(dir, { recursive: true });
-
+  fetchImage: (id: number) => Promise<Uint8Array>,
+): Promise<{ added: number; updated: number; removed: number; pulled_at: string }> {
   const manifestPath = path.join(dir, MIRROR_MANIFEST_FILE);
   let old: MirrorManifest = { pulled_at: null, paths: [] };
   if (fs.existsSync(manifestPath)) {
@@ -44,8 +45,20 @@ export function applyMirror(
     old = parsed.data;
   }
 
-  const entries = resources.map(mirrorFile).filter((e): e is NonNullable<typeof e> => e !== null);
-  const nextPaths = entries.map((e) => e.path).sort();
+  const entries = resources.map(mirrorFile);
+  const images = resources
+    .filter((r): r is ImageResource => r.type === 'image')
+    .map((r) => ({ id: r.id, path: mirrorImagePath(r), bytes: r.bytes }));
+  const nextPaths = [...entries.map((e) => e.path), ...images.map((i) => i.path)].sort();
+
+  const fetched = new Map<string, Uint8Array>();
+  for (const image of images) {
+    const full = path.join(dir, image.path);
+    if (fs.existsSync(full) && fs.statSync(full).size === image.bytes) continue;
+    fetched.set(image.path, await fetchImage(image.id));
+  }
+
+  fs.mkdirSync(dir, { recursive: true });
 
   writeManifest(dir, {
     pulled_at: old.pulled_at,
@@ -74,6 +87,24 @@ export function applyMirror(
     }
     written.push(entry.path);
     if (old.paths.includes(entry.path)) updated += 1;
+    else added += 1;
+  }
+  for (const [imagePath, bytes] of fetched) {
+    const full = path.join(dir, imagePath);
+    try {
+      fs.mkdirSync(path.dirname(full), { recursive: true });
+      fs.writeFileSync(full, bytes);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new CliError(
+        'write_failed',
+        `Disk error at ${imagePath}: ${message}. Written before the error: ${written.join(', ') || 'none'}`,
+        1,
+        written.map((p) => ({ path: p, message: 'written' })),
+      );
+    }
+    written.push(imagePath);
+    if (old.paths.includes(imagePath)) updated += 1;
     else added += 1;
   }
 

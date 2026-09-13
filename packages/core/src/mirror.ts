@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { Resource } from './resources';
+import type { ImageResource, Resource } from './resources';
 
 export function slugify(title: string): string {
   return (
@@ -16,8 +16,16 @@ export function slugify(title: string): string {
   );
 }
 
+export function mirrorBaseName(r: Pick<Resource, 'id' | 'title' | 'created_at'>): string {
+  return `${r.created_at.slice(0, 10)}-${r.id}-${slugify(r.title)}`;
+}
+
 export function mirrorFileName(r: Pick<Resource, 'id' | 'title' | 'created_at'>): string {
-  return `${r.created_at.slice(0, 10)}-${r.id}-${slugify(r.title)}.md`;
+  return `${mirrorBaseName(r)}.md`;
+}
+
+export function mirrorImagePath(r: ImageResource): string {
+  return `images/${mirrorBaseName(r)}${r.path.slice(r.path.lastIndexOf('.'))}`;
 }
 
 export function mirrorFrontMatter(r: Resource): string {
@@ -34,12 +42,37 @@ export function mirrorFrontMatter(r: Resource): string {
   } else {
     lines.push('notes: |', ...r.notes.split('\n').map((line) => `  ${line}`));
   }
+  if (r.type === 'tweet') {
+    lines.push(
+      `url: ${JSON.stringify(r.url)}`,
+      `author: ${JSON.stringify(r.author_username)}`,
+      `author_id: ${JSON.stringify(r.author_id)}`,
+      `posted_at: ${JSON.stringify(r.posted_at)}`,
+    );
+  }
+  if (r.type === 'image') {
+    lines.push(
+      `file: ${JSON.stringify(mirrorImagePath(r))}`,
+      `mime: ${JSON.stringify(r.mime)}`,
+      `bytes: ${r.bytes}`,
+      `width: ${r.width}`,
+      `height: ${r.height}`,
+    );
+  }
   lines.push('---');
   return `${lines.join('\n')}\n`;
 }
 
-export function mirrorFile(r: Resource): { path: string; content: string } | null {
-  if (r.type !== 'md') return null;
+export function mirrorFile(r: Resource): { path: string; content: string } {
+  if (r.type === 'tweet') {
+    return {
+      path: `tweets/${mirrorFileName(r)}`,
+      content: mirrorFrontMatter(r) + r.text + (r.text.endsWith('\n') ? '' : '\n'),
+    };
+  }
+  if (r.type === 'image') {
+    return { path: `images/${mirrorFileName(r)}`, content: mirrorFrontMatter(r) };
+  }
   return {
     path: `notes/${mirrorFileName(r)}`,
     content: mirrorFrontMatter(r) + r.body + (r.body.endsWith('\n') ? '' : '\n'),
