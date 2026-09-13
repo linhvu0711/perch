@@ -300,3 +300,42 @@ describe('post delete', () => {
     expect(server.xClient.calls).toEqual([]);
   });
 });
+
+describe('post tag', () => {
+  test('tags and untags posts', async () => {
+    for (const text of ['one', 'two']) {
+      const c = makeCtx(server);
+      await runCli(['post', 'create', '--text', text, '--json'], c.ctx);
+    }
+
+    const added = makeCtx(server);
+    expect(await runCli(['post', 'tag', '1', '2', '--add', 'a', '--json'], added.ctx)).toBe(0);
+    expect(JSON.parse(added.out())).toEqual([
+      { id: 1, ok: true, tags: ['a'] },
+      { id: 2, ok: true, tags: ['a'] },
+    ]);
+
+    const removed = makeCtx(server);
+    expect(await runCli(['post', 'tag', '1', '--remove', 'a', '--json'], removed.ctx)).toBe(0);
+    expect(JSON.parse(removed.out())).toEqual([{ id: 1, ok: true, tags: [] }]);
+  });
+
+  test('creates a post with --tag', async () => {
+    const capture = makeCtx(server);
+    expect(
+      await runCli(['post', 'create', '--text', 'hi', '--tag', 'a', 'b', '--json'], capture.ctx),
+    ).toBe(0);
+    expect(JSON.parse(capture.out()).tags).toEqual(['a', 'b']);
+  });
+
+  test('filters the list by --tag', async () => {
+    const first = makeCtx(server);
+    await runCli(['post', 'create', '--text', 'one', '--tag', 'a', '--json'], first.ctx);
+    const second = makeCtx(server);
+    await runCli(['post', 'create', '--text', 'two', '--json'], second.ctx);
+
+    const capture = makeCtx(server);
+    expect(await runCli(['post', 'list', '--tag', 'a', '--json'], capture.ctx)).toBe(0);
+    expect(JSON.parse(capture.out()).items.map((i: { id: number }) => i.id)).toEqual([1]);
+  });
+});

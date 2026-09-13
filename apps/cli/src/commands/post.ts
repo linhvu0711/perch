@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 import {
   formatCost,
+  type ItemTagsResponse,
   POST_LIST_LIMIT_DEFAULT,
   POST_STATUSES,
   type Post,
@@ -55,6 +56,7 @@ function printPost(ctx: CliContext, options: GlobalOptions, post: Post): void {
       scheduled: post.scheduled_at ?? '',
       published: post.published_at ?? '',
       links: post.links.map((link) => link.resource_id).join(', '),
+      tags: post.tags.join(', '),
       created: post.created_at,
       updated: post.updated_at,
     })}\n\n${post.text}\n`,
@@ -125,6 +127,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
     .option('--text <text>')
     .option('--file <path>')
     .option('--from <rid...>')
+    .option('--tag <name...>')
     .action(
       async (
         stdinArg: string | undefined,
@@ -133,6 +136,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
           text?: string;
           file?: string;
           from?: string[];
+          tag?: string[];
         },
       ) => {
         const text = await readTextInput(ctx, commandOptions, stdinArg);
@@ -145,6 +149,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
               ...(commandOptions.title !== undefined ? { title: commandOptions.title } : {}),
               text,
               ...(from.length > 0 ? { from } : {}),
+              ...(commandOptions.tag !== undefined ? { tags: commandOptions.tag } : {}),
             },
           }),
         );
@@ -159,6 +164,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
     .option('--search <q>')
     .option('--from <d>')
     .option('--to <d>')
+    .option('--tag <name...>')
     .option('--limit <n>', 'page size', String(POST_LIST_LIMIT_DEFAULT))
     .option('--cursor <cursor>')
     .action(
@@ -167,6 +173,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
         search?: string;
         from?: string;
         to?: string;
+        tag?: string[];
         limit: string;
         cursor?: string;
       }) => {
@@ -202,6 +209,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
               ...(commandOptions.search !== undefined ? { search: commandOptions.search } : {}),
               ...(commandOptions.from !== undefined ? { from: commandOptions.from } : {}),
               ...(commandOptions.to !== undefined ? { to: commandOptions.to } : {}),
+              ...(commandOptions.tag !== undefined ? { tag: commandOptions.tag } : {}),
               limit: String(Number(commandOptions.limit)),
               ...(commandOptions.cursor !== undefined ? { cursor: commandOptions.cursor } : {}),
             },
@@ -220,6 +228,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
           title: item.title,
           chars: `${item.character_count} / ${item.limit}`,
           cost: formatCost(item.estimated_cost),
+          tags: item.tags.join(', '),
         }));
         const summary = `${result.items.length} shown · ${result.total} total`;
         if (rows.length === 0) {
@@ -368,6 +377,57 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
       printResult(ctx, resolveMode(program.opts<GlobalOptions>(), ctx.isTTY), response.results);
       const failed = response.results.filter((result) => !result.ok).length;
       if (failed > 0) throw new BatchFailure(failed, response.results.length);
+    });
+
+  post
+    .command('tag <id...>')
+    .description('Add or remove tags on posts')
+    .option('--add <name...>')
+    .option('--remove <name...>')
+    .action(async (idValues: string[], commandOptions: { add?: string[]; remove?: string[] }) => {
+      const ids = idValues.map((value) => positiveId(value, true));
+      if (commandOptions.add === undefined && commandOptions.remove === undefined) {
+        throw new CliError('usage', 'Give --add or --remove', 2);
+      }
+
+      const api = apiFor(program, ctx);
+      let results: ItemTagsResponse['results'] = [];
+      if (commandOptions.add !== undefined) {
+        results = (
+          await api.call(
+            api.client.api.posts.tags.$post({
+              json: { ids, tags: commandOptions.add },
+            }),
+          )
+        ).results;
+      }
+      if (commandOptions.remove !== undefined) {
+        results = (
+          await api.call(
+            api.client.api.posts.tags.$delete({
+              json: { ids, tags: commandOptions.remove },
+            }),
+          )
+        ).results;
+      }
+
+      const mode = resolveMode(program.opts<GlobalOptions>(), ctx.isTTY);
+      if (mode === 'json') {
+        printResult(ctx, mode, results);
+      } else {
+        printResult(
+          ctx,
+          mode,
+          results.map((result) => ({
+            id: result.id,
+            ok: result.ok,
+            tags: result.ok ? result.tags.join(', ') : '',
+            error: result.ok ? '' : result.error.message,
+          })),
+        );
+      }
+      const failed = results.filter((result) => !result.ok).length;
+      if (failed > 0) throw new BatchFailure(failed, results.length);
     });
 
   post
