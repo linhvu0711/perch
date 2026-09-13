@@ -595,6 +595,7 @@ export function promotePosts(
   ids: number[],
   fileExists: (path: string) => boolean,
   now: Date,
+  commit = true,
 ): PostStatusResponse {
   return {
     results: ids.map((id) => {
@@ -621,6 +622,7 @@ export function promotePosts(
       if (checks.length > 0) {
         return statusResultError(id, 'validation', `Post ${id} is not ready`, checks);
       }
+      if (!commit) return { id, ok: true as const };
       db.update(posts)
         .set({ status: 'official', updatedAt: now })
         .where(and(eq(posts.id, id), eq(posts.userId, userId)))

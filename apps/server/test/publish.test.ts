@@ -262,6 +262,19 @@ describe('publish', () => {
     expect(server.xClient.calls.map((call) => call.name)).toEqual(['createPost']);
   });
 
+  test('leaves a valid draft a draft when no account is connected', async () => {
+    // Given: no account and a valid draft
+    await createPost({ text: 'Hello' });
+
+    // When: publishing it now
+    const response = await request('/api/posts/1/publish', { method: 'POST' });
+
+    // Then: 404 and the post is still a draft
+    expect(response.status).toBe(404);
+    expect((await getPost(1)).status).toBe('draft');
+    expect(server.xClient.calls).toEqual([]);
+  });
+
   test('returns the promote checks for an invalid draft even with no account', async () => {
     // Given: no account and an empty draft
     await createPost({});

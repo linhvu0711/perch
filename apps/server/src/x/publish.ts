@@ -112,7 +112,7 @@ export function createPublishService(deps: {
       try {
         const now = deps.clock.now();
         if (row.status === 'draft') {
-          const { results } = promotePosts(deps.db, userId, [id], fileExists, now);
+          const { results } = promotePosts(deps.db, userId, [id], fileExists, now, false);
           const result = results[0];
           if (result && result.ok === false) {
             throw new ApiError(
@@ -124,6 +124,9 @@ export function createPublishService(deps: {
           }
         }
         const { account, accessToken } = await deps.accounts.accessTokenFor(userId);
+        if (row.status === 'draft') {
+          promotePosts(deps.db, userId, [id], fileExists, now);
+        }
         const sent = await send(row, account, accessToken, now);
         if (!sent.ok) {
           deps.db
