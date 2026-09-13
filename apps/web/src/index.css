@@ -161,6 +161,14 @@ main { padding:36px 40px 60px; min-width:0; } .wrap { max-width:1280px; margin:0
 .scrim.top { z-index:60; }
 .modal { background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); width:min(1180px,100%); height:min(780px,100%); display:grid; grid-template-rows:auto 1fr; overflow:hidden; position:relative; outline:none; }
 .modal.sm { width:min(520px,100%); height:auto; }
+.drop { border:1.5px dashed var(--border-strong); border-radius:10px; padding:34px; text-align:center; color:var(--text-2); display:flex; flex-direction:column; gap:6px; align-items:center; cursor:pointer; }
+.drop:hover { background:var(--surface-2); }
+.drop small { color:var(--text-3); }
+.files { display:flex; flex-direction:column; gap:6px; }
+.file { display:flex; gap:12px; align-items:center; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; }
+.file .u { font-family:var(--mono); font-size:12px; color:var(--text-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+.file .sz { font-family:var(--mono); font-size:12px; color:var(--text-3); }
+.file .error { color:var(--failed); font-size:12.5px; }
 .mhead { display:flex; align-items:center; gap:12px; padding:14px 20px; border-bottom:1px solid var(--border); }
 .mhead .id { font-family:var(--mono); color:var(--text-3); font-size:12.5px; }
 .mhead .kind { background:none; padding:0; gap:6px; }

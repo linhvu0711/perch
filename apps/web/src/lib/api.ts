@@ -24,7 +24,7 @@ export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-interface JsonResponse<T> {
+export interface JsonResponse<T> {
   ok: boolean;
   status: number;
   json(): Promise<T>;

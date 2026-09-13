@@ -26,6 +26,12 @@ export function noteExcerpt(body: string): string {
     .slice(0, 200);
 }
 
+export function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1048576) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1048576).toFixed(1)} MB`;
+}
+
 export function wordCount(body: string): number {
   return body.trim() === '' ? 0 : body.trim().split(/\s+/).length;
 }

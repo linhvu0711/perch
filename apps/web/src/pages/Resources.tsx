@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ResourceType } from '@perch/core';
-import { FilePlus, FileText, LayoutGrid, Search } from 'lucide-react';
+import { FilePlus, FileText, Image, LayoutGrid, Search, Upload } from 'lucide-react';
 import { Outlet, useNavigate } from 'react-router';
 
 import { Empty } from '@/components/Empty';
 import { IconButton } from '@/components/IconButton';
 import { ResourceCard } from '@/components/ResourceCard';
+import { UploadImagesModal } from '@/components/UploadImagesModal';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { errorMessage } from '@/lib/api';
 import { RESOURCES_PAGE_SIZE, useResources } from '@/lib/queries';
@@ -16,6 +17,7 @@ export function Resources() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [order, setOrder] = useState<'asc' | 'desc'>('desc');
+  const [uploadOpen, setUploadOpen] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -59,7 +61,7 @@ export function Resources() {
       <Empty title="Could not load resources" text={errorMessage(resources.error)} />
     );
   } else if (total === 0 && type === undefined && search === '') {
-    content = <Empty title="No notes yet" text="Create one with the New note button." />;
+    content = <Empty title="No resources yet" text="Upload images or create a note." />;
   } else if (total === 0) {
     content = <Empty title="No resources match" text="Change a filter or the search." />;
   } else {
@@ -94,6 +96,11 @@ export function Resources() {
       <div className="head">
         <h1>Resources</h1>
         <IconButton
+          label="Upload images"
+          icon={Upload}
+          onClick={() => setUploadOpen(true)}
+        />
+        <IconButton
           label="New note"
           icon={FilePlus}
           variant="primary"
@@ -114,6 +121,19 @@ export function Resources() {
               </button>
             </TooltipTrigger>
             <TooltipContent>All</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="Images"
+                aria-pressed={type === 'image'}
+                onClick={() => setType('image')}
+              >
+                <Image size={16} strokeWidth={1.75} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Images</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -156,6 +176,7 @@ export function Resources() {
         </div>
       </div>
       {content}
+      <UploadImagesModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
       <Outlet />
     </>
   );

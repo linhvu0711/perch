@@ -1,4 +1,5 @@
 import type {
+  ImageCreateResponse,
   NoteCreate,
   ResourcePatch,
   ResourceType,
@@ -11,7 +12,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 
-import { api, ApiError, unwrap } from './api';
+import { api, ApiError, type JsonResponse, unwrap } from './api';
 
 export function useMe() {
   return useQuery({
@@ -143,6 +144,26 @@ export function useCreateNote() {
     onSuccess: (data) => {
       queryClient.setQueryData(['resources', 'detail', data.id], data);
       void queryClient.invalidateQueries({ queryKey: ['resources', 'list'] });
+    },
+  });
+}
+
+export function useUploadImages() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (files: File[]) => {
+      const form = new FormData();
+      for (const file of files) form.append('files', file);
+      return unwrap(
+        fetch('/api/resources/images', {
+          method: 'POST',
+          body: form,
+          credentials: 'same-origin',
+        }) as Promise<JsonResponse<ImageCreateResponse>>,
+      );
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['resources'] });
     },
   });
 }
