@@ -350,13 +350,13 @@ h1 {
   color: var(--on-accent);
   flex: none;
 }
-.brand .collapse {
+.brand .sidecollapse {
   color: var(--text-3);
   padding: 4px;
   border-radius: 4px;
   margin-left: auto;
 }
-.brand .collapse:hover {
+.brand .sidecollapse:hover {
   background: var(--surface-2);
   color: var(--text);
 }
@@ -436,7 +436,7 @@ h1 {
 .collapsed .acct {
   justify-content: center;
 }
-.collapsed .brand .collapse {
+.collapsed .brand .sidecollapse {
   display: none;
 }
 .collapsed .side {
