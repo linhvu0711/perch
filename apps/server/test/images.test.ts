@@ -325,9 +325,9 @@ describe('images', () => {
     const rows = ((await response.json()) as ImageCreateResponse).results;
     expect(rows[0]!.ok).toBe(true);
     if (!rows[0]!.ok) throw new Error('upload failed');
-    expect(
-      fs.statSync(path.join(server.dir, 'uploads', rows[0]!.resource.path)).size,
-    ).toBe(PNG_3X2.byteLength);
+    expect(fs.statSync(path.join(server.dir, 'uploads', rows[0]!.resource.path)).size).toBe(
+      PNG_3X2.byteLength,
+    );
     expect(server.errors.map((e) => (e as Error).message)).toEqual(['r2 down']);
     expect(server.r2.objects.size).toBe(0);
   });

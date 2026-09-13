@@ -339,7 +339,9 @@ describe('post media', () => {
 
     // Then: the media row and file survive and the failure is logged
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { results: Array<{ ok: boolean; media?: { id: number } }> };
+    const body = (await response.json()) as {
+      results: Array<{ ok: boolean; media?: { id: number } }>;
+    };
     expect(body.results[0]?.media?.id).toBe(1);
     expect(mediaFiles(1)).toHaveLength(1);
     expect((server.errors[0] as Error).message).toBe('r2 down');
