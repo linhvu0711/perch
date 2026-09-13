@@ -1,13 +1,13 @@
 import type { Post, PostMedia } from '@perch/core';
 import {
   CHAR_LIMIT_DEFAULT,
-  X_COSTS_USD,
   DEFAULT_TIMEZONE,
   estimateCost,
   formatCost,
   POST_MEDIA_MAX,
   readyChecks,
   weightedLength,
+  X_COSTS_USD,
 } from '@perch/core';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -794,13 +794,14 @@ export function PostModal(): JSX.Element | null {
               <div className="note">
                 {hasUrl ? (
                   <>
-                    <b>This post has a link.</b> X bills it at {formatCost(X_COSTS_USD.publishWithUrl)}{' '}
-                    instead of {formatCost(X_COSTS_USD.publish)}.
+                    <b>This post has a link.</b> X bills it at{' '}
+                    {formatCost(X_COSTS_USD.publishWithUrl)} instead of{' '}
+                    {formatCost(X_COSTS_USD.publish)}.
                   </>
                 ) : (
                   <>
-                    <b>Cost rule.</b> A post is {formatCost(X_COSTS_USD.publish)}. Any http(s) link makes
-                    it {formatCost(X_COSTS_USD.publishWithUrl)}. Images are free.
+                    <b>Cost rule.</b> A post is {formatCost(X_COSTS_USD.publish)}. Any http(s) link
+                    makes it {formatCost(X_COSTS_USD.publishWithUrl)}. Images are free.
                   </>
                 )}
               </div>

@@ -60,7 +60,12 @@ export const costSummaryQuerySchema = z.object({ month: costMonthSchema.optional
 export type CostSummaryQuery = z.infer<typeof costSummaryQuerySchema>;
 
 export const costHistoryQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(COST_MONTHS_LIMIT_MAX).default(COST_MONTHS_LIMIT_DEFAULT),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(COST_MONTHS_LIMIT_MAX)
+    .default(COST_MONTHS_LIMIT_DEFAULT),
   cursor: z.string().min(1).optional(),
 });
 export type CostHistoryQuery = z.infer<typeof costHistoryQuerySchema>;
