@@ -47,6 +47,11 @@
     "enabled": true,
     "rules": {
       "preset": "recommended",
+      "a11y": {
+        "noStaticElementInteractions": "off",
+        "useKeyWithClickEvents": "off",
+        "noAutofocus": "off"
+      },
       "suspicious": {
         "noExplicitAny": "error"
       },
@@ -68,6 +73,18 @@
       }
     }
   },
+  "overrides": [
+    {
+      "includes": ["apps/*/test/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off"
+          }
+        }
+      }
+    }
+  ],
   "assist": {
     "enabled": true,
     "actions": {

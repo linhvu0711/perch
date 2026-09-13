@@ -9,7 +9,7 @@ let nextId = 1;
 const listeners = new Set<() => void>();
 
 function emit(): void {
-  listeners.forEach((listener) => listener());
+  for (const listener of listeners) listener();
 }
 
 export function toast(message: string, icon: 'check' | 'warn' = 'check'): void {

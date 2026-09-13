@@ -122,16 +122,10 @@ export function UploadImagesModal(props: { open: boolean; onClose(): void }): JS
           </div>
         </div>
         <div className="sbody">
-          <div
+          <button
+            type="button"
             className="drop"
-            role="button"
-            tabIndex={0}
             onClick={() => !upload.isPending && inputRef.current?.click()}
-            onKeyDown={(event) => {
-              if (!upload.isPending && (event.key === 'Enter' || event.key === ' ')) {
-                inputRef.current?.click();
-              }
-            }}
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => {
               event.preventDefault();
@@ -143,7 +137,7 @@ export function UploadImagesModal(props: { open: boolean; onClose(): void }): JS
               Drop images here or <b>choose files</b>
             </span>
             <small>PNG, JPG, WebP, GIF · 5 MB each · upload is free</small>
-          </div>
+          </button>
           <input
             ref={inputRef}
             type="file"

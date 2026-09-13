@@ -239,7 +239,7 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
       > = [];
 
       for (const inputPath of paths) {
-        let bytes: Uint8Array;
+        let bytes: Buffer;
         try {
           bytes = fs.readFileSync(inputPath);
         } catch (error) {

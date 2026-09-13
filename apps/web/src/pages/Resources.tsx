@@ -127,7 +127,7 @@ export function Resources() {
         />
       </div>
       <div className="filters">
-        <div className="seg icons" role="group" aria-label="Type">
+        <fieldset className="seg icons" aria-label="Type">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -180,7 +180,7 @@ export function Resources() {
             </TooltipTrigger>
             <TooltipContent>Notes</TooltipContent>
           </Tooltip>
-        </div>
+        </fieldset>
         <AuthorFilter
           value={author}
           disabled={type !== undefined && type !== 'tweet'}
