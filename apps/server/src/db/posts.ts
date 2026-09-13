@@ -1,6 +1,10 @@
 import {
+  type CalendarPost,
+  type CalendarQuery,
+  type CalendarRange,
   DEMOTE_FROM,
   dayBoundsUtc,
+  isMissed,
   effectiveCharLimit,
   estimateCost,
   POST_MEDIA_MAX,
@@ -19,6 +23,7 @@ import {
   type PostStatusResponse,
   PROMOTE_FROM,
   parseScheduleTime,
+  postCalendarTime,
   postListTitle,
   previewSegments,
   promoteChecks,
@@ -26,6 +31,7 @@ import {
   readyChecks,
   SCHEDULE_FROM,
   weightedLength,
+  zonedParts,
 } from '@perch/core';
 import {
   and,
@@ -308,24 +314,7 @@ export function listPosts(
       sql`EXISTS (select 1 from post_links where post_links.post_id = ${posts.id} and post_links.resource_id = ${query.resource_id})`,
     );
   }
-  const tagNames = query.tag ?? [];
-  if (tagNames.length > 0) {
-    const byName = tagIdsByName(db, userId);
-    for (const name of tagNames) {
-      const tagId = byName.get(name.toLowerCase());
-      filterConditions.push(
-        tagId === undefined
-          ? inArray(posts.id, [])
-          : inArray(
-              posts.id,
-              db
-                .select({ postId: postTags.postId })
-                .from(postTags)
-                .where(and(eq(postTags.userId, userId), eq(postTags.tagId, tagId))),
-            ),
-      );
-    }
-  }
+  filterConditions.push(...tagFilterConditions(db, userId, query.tag ?? []));
 
   const totalRow = db
     .select({ value: count() })
@@ -361,29 +350,7 @@ export function listPosts(
   const pageRows = hasNextPage ? rows.slice(0, query.limit) : rows;
   const last = pageRows.at(-1);
 
-  const limit = postLimit(db, userId);
-  const accountConnected = getConnectedAccount(db, userId) !== null;
-  const postIds = pageRows.map((row) => row.id);
-  const links = linksForPosts(db, postIds);
-  const media = mediaForPosts(db, postIds);
-  const postTagsMap = tagsForPosts(db, userId, postIds);
-  const items = pageRows.map((row) => {
-    const postMedia = media.get(row.id) ?? [];
-    const post = toPost(
-      row,
-      links.get(row.id) ?? [],
-      postMedia,
-      limit,
-      postTagsMap.get(row.id) ?? [],
-      readyChecks({
-        text: row.text,
-        limit,
-        mediaCount: postMedia.length,
-        accountConnected,
-      }),
-    );
-    return { ...post, title: postListTitle(post.title, post.text) };
-  });
+  const { items } = postsFromRows(db, userId, pageRows);
 
   const sortTimeOf = (row: PostRow): number | null => {
     const value = row.status === 'published' ? row.publishedAt : row.scheduledAt;
@@ -395,6 +362,101 @@ export function listPosts(
     total: totalRow?.value ?? 0,
     next_cursor:
       hasNextPage && last ? encodePostCursor({ time: sortTimeOf(last), id: last.id }) : null,
+  };
+}
+
+function tagFilterConditions(db: Db, userId: number, tagNames: string[]): SQL[] {
+  const conditions: SQL[] = [];
+  if (tagNames.length === 0) return conditions;
+  const byName = tagIdsByName(db, userId);
+  for (const name of tagNames) {
+    const tagId = byName.get(name.toLowerCase());
+    conditions.push(
+      tagId === undefined
+        ? inArray(posts.id, [])
+        : inArray(
+            posts.id,
+            db
+              .select({ postId: postTags.postId })
+              .from(postTags)
+              .where(and(eq(postTags.userId, userId), eq(postTags.tagId, tagId))),
+          ),
+    );
+  }
+  return conditions;
+}
+
+function postsFromRows(
+  db: Db,
+  userId: number,
+  rows: PostRow[],
+): { items: Post[]; accountConnected: boolean } {
+  const limit = postLimit(db, userId);
+  const accountConnected = getConnectedAccount(db, userId) !== null;
+  const postIds = rows.map((row) => row.id);
+  const links = linksForPosts(db, postIds);
+  const media = mediaForPosts(db, postIds);
+  const postTagsMap = tagsForPosts(db, userId, postIds);
+  const items = rows.map((row) => {
+    const mediaItems = media.get(row.id) ?? [];
+    const post = toPost(
+      row,
+      links.get(row.id) ?? [],
+      mediaItems,
+      limit,
+      postTagsMap.get(row.id) ?? [],
+      readyChecks({
+        text: row.text,
+        limit,
+        mediaCount: mediaItems.length,
+        accountConnected,
+      }),
+    );
+    return { ...post, title: postListTitle(post.title, post.text) };
+  });
+  return { items, accountConnected };
+}
+
+/** Posts in `[query.from, query.to]` grouped by calendar day in `timeZone`, ascending. */
+export function calendarDays(
+  db: Db,
+  userId: number,
+  query: CalendarQuery,
+  timeZone: string,
+  now: Date,
+): CalendarRange {
+  const sortTime = sql`CASE WHEN ${posts.status} = 'published' THEN ${posts.publishedAt} ELSE ${posts.scheduledAt} END`;
+
+  const conditions: SQL[] = [
+    eq(posts.userId, userId),
+    sql`${sortTime} >= ${dayBoundsUtc(query.from, timeZone).start.getTime()}`,
+    sql`${sortTime} <= ${dayBoundsUtc(query.to, timeZone).end.getTime()}`,
+    ...tagFilterConditions(db, userId, query.tag ?? []),
+  ];
+
+  const rows = db
+    .select()
+    .from(posts)
+    .where(and(...conditions))
+    .orderBy(asc(sortTime), asc(posts.id))
+    .all();
+
+  const { items, accountConnected } = postsFromRows(db, userId, rows);
+
+  const byDay = new Map<string, CalendarPost[]>();
+  for (const post of items) {
+    const at = postCalendarTime(post);
+    if (at === null) continue;
+    const date = zonedParts(new Date(at), timeZone).date;
+    const day = byDay.get(date) ?? [];
+    day.push({ ...post, missed: isMissed(post, now, accountConnected) });
+    byDay.set(date, day);
+  }
+
+  return {
+    from: query.from,
+    to: query.to,
+    days: [...byDay].map(([date, dayPosts]) => ({ date, posts: dayPosts })),
   };
 }
 
