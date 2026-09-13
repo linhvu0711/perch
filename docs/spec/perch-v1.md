@@ -256,7 +256,7 @@ All decisions below come from the design session and are recorded in the ADRs an
 - The Scheduler's tick is a plain function the tests call with a fixed "now"; the timer only calls it.
 
 **X client**
-- One internal interface with the five calls Perch makes: get tweet by id (with the fields needed to detect media, article, note tweet, referenced tweets, and author), get me (with subscription type), upload media, create post, revoke token, plus the OAuth exchange and refresh. The real implementation uses the official X SDK where it fits and raw fetch elsewhere. Tests substitute a fake that records calls and returns canned results.
+- One internal interface with the five calls Perch makes: get tweet by id (with the fields needed to detect media, article, note tweet, referenced tweets, and author), get me (with subscription type), upload media, create post, revoke token, plus the OAuth exchange and refresh. The real implementation is raw `fetch` behind that interface (ADR-0010). Tests substitute a fake that records calls and returns canned results.
 - Every real call writes an api_calls row with the price from the Cost table in the design log. Duplicate tweet saves make no call and log nothing.
 
 **CLI conventions**

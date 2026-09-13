@@ -13,5 +13,6 @@ max_line_length = 100
 trim_trailing_whitespace = false
 max_line_length = off
 
-[*.sql]
+# drizzle-kit writes these with tabs; they are generated and never formatted
+[apps/server/drizzle/**.sql]
 indent_style = tab

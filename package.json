@@ -19,6 +19,7 @@
     "lint": "biome lint .",
     "format": "biome format --write .",
     "check": "biome check .",
+    "check:changed": "biome check --changed",
     "db:generate": "bun run --filter @perch/server db:generate",
     "cli:build": "bun run --filter @perch/cli build"
   },
