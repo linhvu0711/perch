@@ -6,9 +6,9 @@ import {
   formatUsd,
   X_COSTS_USD,
 } from '@perch/core';
-import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { LogOut, type LucideIcon, Monitor, Moon, Sun } from 'lucide-react';
+import { type KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { LogOut, Monitor, Moon, Sun, type LucideIcon } from 'lucide-react';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { IconButton } from '@/components/IconButton';
@@ -23,13 +23,33 @@ import {
   useSettings,
   useUpdateSettings,
 } from '@/lib/queries';
-import { useTheme, type Theme } from '@/lib/theme';
+import { type Theme, useTheme } from '@/lib/theme';
 
-function ThemeChoice({ label, icon: Icon, value, theme, setTheme }: { label: string; icon: LucideIcon; value: Theme; theme: Theme; setTheme(value: Theme): void }) {
+function ThemeChoice({
+  label,
+  icon: Icon,
+  value,
+  theme,
+  setTheme,
+}: {
+  label: string;
+  icon: LucideIcon;
+  value: Theme;
+  theme: Theme;
+  setTheme(value: Theme): void;
+}) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button type="button" aria-label={label} aria-pressed={theme === value} onClick={() => { setTheme(value); toast(`Theme: ${label}`); }}>
+        <button
+          type="button"
+          aria-label={label}
+          aria-pressed={theme === value}
+          onClick={() => {
+            setTheme(value);
+            toast(`Theme: ${label}`);
+          }}
+        >
           <Icon size={16} strokeWidth={1.75} />
         </button>
       </TooltipTrigger>
@@ -81,25 +101,40 @@ export function Settings() {
             <div className="k">@{account.data.account.username}</div>
             <div className="d">X rejected the saved token. Reconnect to keep publishing.</div>
           </div>
-          <button className="btn primary" onClick={() => setConfirm('connect')}>Reconnect X</button>
+          <button className="btn primary" onClick={() => setConfirm('connect')}>
+            Reconnect X
+          </button>
         </>
       ) : account.data?.account ? (
         <>
           <div>
             <div className="k">@{account.data.account.username}</div>
             <div className="d">
-              {account.data.account.subscription_type} · {account.data.char_limit.toLocaleString('en-US')} characters · connected {new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(account.data.account.connected_at))}
+              {account.data.account.subscription_type} ·{' '}
+              {account.data.char_limit.toLocaleString('en-US')} characters · connected{' '}
+              {new Intl.DateTimeFormat('en-GB', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              }).format(new Date(account.data.account.connected_at))}
             </div>
           </div>
-          <button className="btn danger" onClick={() => setConfirm('disconnect')}>Disconnect</button>
+          <button className="btn danger" onClick={() => setConfirm('disconnect')}>
+            Disconnect
+          </button>
         </>
       ) : (
         <>
           <div>
             <div className="k">No account connected</div>
-            <div className="d">Connect an X account to publish. One account at a time. Costs {formatUsd(X_COSTS_USD.getMe)} once.</div>
+            <div className="d">
+              Connect an X account to publish. One account at a time. Costs{' '}
+              {formatUsd(X_COSTS_USD.getMe)} once.
+            </div>
           </div>
-          <button className="btn primary" onClick={() => setConfirm('connect')}>Connect X</button>
+          <button className="btn primary" onClick={() => setConfirm('connect')}>
+            Connect X
+          </button>
         </>
       )}
     </div>
@@ -107,7 +142,10 @@ export function Settings() {
 
   const timezone = settings.data?.timezone ?? DEFAULT_TIMEZONE;
   const timezones = useMemo(() => {
-    const supported = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [DEFAULT_TIMEZONE, timezone];
+    const supported =
+      typeof Intl.supportedValuesOf === 'function'
+        ? Intl.supportedValuesOf('timeZone')
+        : [DEFAULT_TIMEZONE, timezone];
     const values = new Set(supported);
     values.add(DEFAULT_TIMEZONE);
     values.add(timezone);
@@ -156,7 +194,10 @@ export function Settings() {
 
   return (
     <>
-      <div className="head"><h1>Settings</h1><IconButton label="Sign out" icon={LogOut} variant="ghost" onClick={signOut} /></div>
+      <div className="head">
+        <h1>Settings</h1>
+        <IconButton label="Sign out" icon={LogOut} variant="ghost" onClick={signOut} />
+      </div>
       {settings.isError ? (
         <div className="card">
           <div className="empty">
@@ -169,15 +210,26 @@ export function Settings() {
           <div className="col">
             {accountCard}
             <div className="card set">
-              <div><div className="k">Time zone</div><div className="d">All times are shown and entered in this zone.</div></div>
-              <select aria-label="Time zone" value="" disabled><option value="" /></select>
+              <div>
+                <div className="k">Time zone</div>
+                <div className="d">All times are shown and entered in this zone.</div>
+              </div>
+              <select aria-label="Time zone" value="" disabled>
+                <option value="" />
+              </select>
             </div>
             <div className="card set">
-              <div><div className="k">Character limit</div><div className="d">Set from your X plan when you connect. Override if needed.</div></div>
+              <div>
+                <div className="k">Character limit</div>
+                <div className="d">Set from your X plan when you connect. Override if needed.</div>
+              </div>
               <input aria-label="Character limit" className="mono" value="" disabled readOnly />
             </div>
             <div className="card set">
-              <div><div className="k">Theme</div><div className="d">Follows your system by default.</div></div>
+              <div>
+                <div className="k">Theme</div>
+                <div className="d">Follows your system by default.</div>
+              </div>
               <div className="seg icons">
                 <button type="button" aria-label="Light" disabled />
                 <button type="button" aria-label="System" disabled />
@@ -192,19 +244,60 @@ export function Settings() {
           <div className="col">
             {accountCard}
             <div className="card set">
-              <div><div className="k">Time zone</div><div className="d">All times are shown and entered in this zone.</div></div>
-              <select value={timezone} onChange={(event) => void saveTimezone(event.target.value)}>{timezones.map((value) => <option key={value} value={value}>{value}</option>)}</select>
+              <div>
+                <div className="k">Time zone</div>
+                <div className="d">All times are shown and entered in this zone.</div>
+              </div>
+              <select value={timezone} onChange={(event) => void saveTimezone(event.target.value)}>
+                {timezones.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="card set">
-              <div><div className="k">Character limit</div><div className="d">Set from your X plan when you connect. Override if needed.</div></div>
-              <input className="mono" inputMode="numeric" placeholder={String(CHAR_LIMIT_DEFAULT)} value={limit} onChange={(event) => setLimit(event.target.value)} onBlur={() => void saveLimit()} onKeyDown={submitLimit} />
+              <div>
+                <div className="k">Character limit</div>
+                <div className="d">Set from your X plan when you connect. Override if needed.</div>
+              </div>
+              <input
+                className="mono"
+                inputMode="numeric"
+                placeholder={String(CHAR_LIMIT_DEFAULT)}
+                value={limit}
+                onChange={(event) => setLimit(event.target.value)}
+                onBlur={() => void saveLimit()}
+                onKeyDown={submitLimit}
+              />
             </div>
             <div className="card set">
-              <div><div className="k">Theme</div><div className="d">Follows your system by default.</div></div>
+              <div>
+                <div className="k">Theme</div>
+                <div className="d">Follows your system by default.</div>
+              </div>
               <div className="seg icons">
-                <ThemeChoice label="Light" icon={Sun} value="light" theme={theme} setTheme={setTheme} />
-                <ThemeChoice label="System" icon={Monitor} value="system" theme={theme} setTheme={setTheme} />
-                <ThemeChoice label="Dark" icon={Moon} value="dark" theme={theme} setTheme={setTheme} />
+                <ThemeChoice
+                  label="Light"
+                  icon={Sun}
+                  value="light"
+                  theme={theme}
+                  setTheme={setTheme}
+                />
+                <ThemeChoice
+                  label="System"
+                  icon={Monitor}
+                  value="system"
+                  theme={theme}
+                  setTheme={setTheme}
+                />
+                <ThemeChoice
+                  label="Dark"
+                  icon={Moon}
+                  value="dark"
+                  theme={theme}
+                  setTheme={setTheme}
+                />
               </div>
             </div>
           </div>
@@ -215,7 +308,10 @@ export function Settings() {
         <ConfirmDialog
           title="Connect an X account"
           body={
-            <p>You will be sent to X to approve Perch. Scopes: read and write posts, upload media, read your profile. The plan check costs <b>{formatUsd(X_COSTS_USD.getMe)}</b> once.</p>
+            <p>
+              You will be sent to X to approve Perch. Scopes: read and write posts, upload media,
+              read your profile. The plan check costs <b>{formatUsd(X_COSTS_USD.getMe)}</b> once.
+            </p>
           }
           ok="Continue to X"
           onCancel={() => setConfirm(null)}
@@ -236,7 +332,10 @@ export function Settings() {
         <ConfirmDialog
           title={`Disconnect @${account.data.account.username}?`}
           body={
-            <p>Scheduled official posts will be <b>missed</b> until you connect an account again. Nothing is deleted.</p>
+            <p>
+              Scheduled official posts will be <b>missed</b> until you connect an account again.
+              Nothing is deleted.
+            </p>
           }
           ok="Disconnect"
           danger
