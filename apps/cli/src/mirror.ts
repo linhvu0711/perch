@@ -87,7 +87,14 @@ export function applyMirror(
   for (const p of old.paths) {
     if (nextPaths.includes(p)) continue;
     const full = path.resolve(root, p);
-    if (!full.startsWith(`${root}${path.sep}`)) continue;
+    const relative = path.relative(root, full);
+    if (
+      relative === '' ||
+      relative === '..' ||
+      relative.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(relative)
+    )
+      continue;
     if (fs.existsSync(full)) {
       fs.rmSync(full);
       removed += 1;
