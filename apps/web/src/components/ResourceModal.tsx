@@ -98,6 +98,7 @@ export function ResourceModal(): JSX.Element | null {
     setNotesDraft(resource.notes);
   }, [isEditing, resource]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies(resourceId): focus moves to the modal when the resource changes
   useEffect(() => {
     if (!isEditing) modalRef.current?.focus();
   }, [isEditing]);
@@ -157,7 +158,7 @@ export function ResourceModal(): JSX.Element | null {
       if (saved) proceed();
       else reset();
     });
-  }, [blocker.state, dirty, saveNotes, blocker]);
+  }, [blocker, dirty, saveNotes]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
