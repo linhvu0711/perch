@@ -429,10 +429,7 @@ describe('post tag', () => {
 
     const merged = makeCtx(server);
     expect(
-      await runCli(
-        ['post', 'tag', '1', '99', '--add', 'b', '--remove', 'a', '--json'],
-        merged.ctx,
-      ),
+      await runCli(['post', 'tag', '1', '99', '--add', 'b', '--remove', 'a', '--json'], merged.ctx),
     ).toBe(1);
     expect(JSON.parse(merged.out())).toEqual([
       { id: 1, ok: true, tags: ['b'] },

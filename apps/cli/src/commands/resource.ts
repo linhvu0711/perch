@@ -20,7 +20,14 @@ import { createApi } from '../api';
 import { resolveMirrorDir, resolveServerUrl, resolveToken } from '../config';
 import type { CliContext } from '../context';
 import { applyMirror } from '../mirror';
-import { BatchFailure, CliError, formatTable, mergeItemTagResults, printResult, resolveMode } from '../output';
+import {
+  BatchFailure,
+  CliError,
+  formatTable,
+  mergeItemTagResults,
+  printResult,
+  resolveMode,
+} from '../output';
 
 interface GlobalOptions {
   json?: boolean;

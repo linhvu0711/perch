@@ -272,7 +272,11 @@ export function removePostTags(tx: Db | Tx, userId: number, postId: number, name
     .run();
 }
 
-function postRowStatus(db: Db | Tx, userId: number, postId: number): { status: string } | 'not_found' {
+function postRowStatus(
+  db: Db | Tx,
+  userId: number,
+  postId: number,
+): { status: string } | 'not_found' {
   const row = db
     .select({ status: posts.status })
     .from(posts)

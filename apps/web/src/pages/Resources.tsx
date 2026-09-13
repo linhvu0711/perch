@@ -75,7 +75,13 @@ export function Resources() {
     content = <div className="countline">Loading…</div>;
   } else if (resources.isError) {
     content = <Empty title="Could not load resources" text={errorMessage(resources.error)} />;
-  } else if (total === 0 && type === undefined && search === '' && author === undefined && tag === undefined) {
+  } else if (
+    total === 0 &&
+    type === undefined &&
+    search === '' &&
+    author === undefined &&
+    tag === undefined
+  ) {
     content = (
       <Empty title="No resources yet" text="Save tweets or create a note with the buttons above." />
     );

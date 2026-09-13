@@ -17,7 +17,14 @@ import type { Command } from 'commander';
 import { createApi } from '../api';
 import { resolveServerUrl, resolveToken } from '../config';
 import type { CliContext } from '../context';
-import { BatchFailure, CliError, formatTable, mergeItemTagResults, printResult, resolveMode } from '../output';
+import {
+  BatchFailure,
+  CliError,
+  formatTable,
+  mergeItemTagResults,
+  printResult,
+  resolveMode,
+} from '../output';
 
 interface GlobalOptions {
   json?: boolean;
