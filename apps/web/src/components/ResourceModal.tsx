@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
-import { firstMarkdownHeading, noteTitle } from '@perch/core';
+import { firstMarkdownHeading, NOTE_TITLE_FALLBACK, noteTitle } from '@perch/core';
 import { Check, CopyPlus, FileText, Image, Pencil, PenLine, Trash2, Undo2, X } from 'lucide-react';
 import { Link, useBlocker, useNavigate, useParams } from 'react-router';
 
@@ -349,7 +349,7 @@ export function ResourceModal(): JSX.Element | null {
               <input
                 className="rtitle"
                 aria-label="Title"
-                placeholder="Untitled"
+                placeholder={NOTE_TITLE_FALLBACK}
                 value={titleDraft}
                 onChange={(event) => {
                   setTitleTouched(true);
