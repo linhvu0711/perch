@@ -2027,3 +2027,6 @@ ul.checks li.ok svg {
 .legend i.missed {
   background: var(--missed);
 }
+.cal .days.week {
+  grid-auto-rows: 420px;
+}

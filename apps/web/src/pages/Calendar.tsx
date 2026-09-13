@@ -5,6 +5,7 @@ import {
   monthGrid,
   monthOf,
   postCalendarTime,
+  weekGrid,
   zonedParts,
 } from '@perch/core';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -15,7 +16,7 @@ import { Empty } from '@/components/Empty';
 import { IconButton } from '@/components/IconButton';
 import { TagFilter } from '@/components/TagFilter';
 import { errorMessage } from '@/lib/api';
-import { formatMonthTitle } from '@/lib/format';
+import { formatMonthTitle, formatWeekTitle } from '@/lib/format';
 import { useCalendar, useSettings } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +26,7 @@ const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 export function Calendar() {
   const timeZone = useSettings().data?.timezone ?? DEFAULT_TIMEZONE;
   const [anchor, setAnchor] = useState(() => zonedParts(new Date(), timeZone).date);
+  const [view, setView] = useState<'month' | 'week'>('month');
   const [tag, setTag] = useState<string | undefined>();
   const [now, setNow] = useState(() => new Date());
 
@@ -34,7 +36,7 @@ export function Calendar() {
   }, []);
 
   const today = zonedParts(now, timeZone).date;
-  const cells = monthGrid(anchor);
+  const cells = view === 'month' ? monthGrid(anchor) : weekGrid(anchor);
   const range = useCalendar({
     from: cells[0] ?? anchor,
     to: cells[cells.length - 1] ?? anchor,
@@ -55,11 +57,11 @@ export function Calendar() {
             <div key={d}>{d}</div>
           ))}
         </div>
-        <div className="days">
+        <div className={cn('days', view === 'week' && 'week')}>
           {cells.map((cell) => {
             const posts = byDay.get(cell) ?? [];
-            const show = posts.slice(0, CALENDAR_DAY_CAP);
-            const out = cell.slice(0, 7) !== anchor.slice(0, 7);
+            const show = view === 'month' ? posts.slice(0, CALENDAR_DAY_CAP) : posts;
+            const out = view === 'month' && cell.slice(0, 7) !== anchor.slice(0, 7);
             return (
               <div
                 key={cell}
@@ -87,7 +89,15 @@ export function Calendar() {
                   );
                 })}
                 {posts.length > show.length && (
-                  <button type="button" className="ev moreev" title="Open this week">
+                  <button
+                    type="button"
+                    className="ev moreev"
+                    title="Open this week"
+                    onClick={() => {
+                      setAnchor(cell);
+                      setView('week');
+                    }}
+                  >
                     +{posts.length - show.length} more
                   </button>
                 )}
@@ -103,21 +113,43 @@ export function Calendar() {
     <>
       <div className="head">
         <div className="calnav">
-          <h1>{formatMonthTitle(anchor)}</h1>
+          <h1>
+            {view === 'month'
+              ? formatMonthTitle(anchor)
+              : formatWeekTitle(cells[0] ?? anchor, cells[6] ?? anchor)}
+          </h1>
           <IconButton
-            label="Previous month"
+            label={view === 'month' ? 'Previous month' : 'Previous week'}
             icon={ChevronLeft}
-            onClick={() => setAnchor(addDays(monthOf(anchor).from, -1))}
+            onClick={() =>
+              setAnchor(
+                view === 'month' ? addDays(monthOf(anchor).from, -1) : addDays(anchor, -7),
+              )
+            }
           />
           <IconButton
-            label="Next month"
+            label={view === 'month' ? 'Next month' : 'Next week'}
             icon={ChevronRight}
-            onClick={() => setAnchor(addDays(monthOf(anchor).to, 1))}
+            onClick={() =>
+              setAnchor(view === 'month' ? addDays(monthOf(anchor).to, 1) : addDays(anchor, 7))
+            }
           />
           <button type="button" className="btn ghost sm" onClick={() => setAnchor(today)}>
             Today
           </button>
         </div>
+        <fieldset className="seg" aria-label="View">
+          <button
+            type="button"
+            aria-pressed={view === 'month'}
+            onClick={() => setView('month')}
+          >
+            Month
+          </button>
+          <button type="button" aria-pressed={view === 'week'} onClick={() => setView('week')}>
+            Week
+          </button>
+        </fieldset>
         <div className="legend">
           {LEGEND_STATUSES.map((s) => (
             <span key={s}>
