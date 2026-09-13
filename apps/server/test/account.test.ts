@@ -20,6 +20,13 @@ async function request(path: string, init: RequestInit = {}): Promise<Response> 
   return server.app.request(path, { ...init, headers });
 }
 
+async function connect(): Promise<Response> {
+  const start = await request('/api/account/connect', { method: 'POST' });
+  const { authorize_url } = await start.json();
+  const state = new URL(authorize_url).searchParams.get('state')!;
+  return server.app.request(`/auth/x/callback?code=abc&state=${state}`);
+}
+
 describe('account', () => {
   test('returns the default account status and requires authentication', async () => {
     const res = await request('/api/account');
@@ -148,6 +155,59 @@ describe('account', () => {
     });
     const status = await request('/api/status');
     expect((await status.json()).month_cost_usd).toBe(0);
+  });
+
+  test('disconnects another X user on connect and reuses the row of the same one', async () => {
+    await connect();
+
+    server.xClient.me = {
+      id: '2000',
+      username: 'second',
+      name: 'Second',
+      subscriptionType: 'Basic',
+    };
+    server.xClient.tokens = {
+      accessToken: 'access-b',
+      refreshToken: 'refresh-b',
+      expiresIn: 7200,
+      scope:
+        'tweet.read tweet.write users.read media.write offline.access',
+    };
+    server.clock.set(new Date('2026-09-04T11:00:00Z'));
+    await connect();
+
+    let res = await request('/api/account');
+    let body = await res.json();
+    expect(body.account.id).toBe(2);
+    expect(body.account.username).toBe('second');
+    expect(body.char_limit).toBe(280);
+
+    const names = server.xClient.calls.map((c) => c.name);
+    const afterSecondGetMe = names.slice(names.lastIndexOf('getMe') + 1);
+    expect(afterSecondGetMe).toEqual(['revokeToken', 'revokeToken']);
+    const revokeArgs = server.xClient.calls
+      .filter((c) => c.name === 'revokeToken')
+      .map((c) => c.args[0]);
+    expect(revokeArgs).toEqual(['refresh-1', 'access-1']);
+
+    server.xClient.me = {
+      id: '1000',
+      username: 'perchtester',
+      name: 'Perch Tester',
+      subscriptionType: 'Premium',
+    };
+    server.clock.set(new Date('2026-09-04T12:00:00Z'));
+    await connect();
+
+    res = await request('/api/account');
+    body = await res.json();
+    expect(body.account.id).toBe(1);
+    expect(body.account.username).toBe('perchtester');
+    expect(body.account.connected_at).toBe('2026-09-04T12:00:00.000Z');
+    expect(body.char_limit).toBe(25000);
+
+    const status = await request('/api/status');
+    expect((await status.json()).month_cost_usd).toBe(0.03);
   });
 
   test('returns 503 when X OAuth is not configured', async () => {
