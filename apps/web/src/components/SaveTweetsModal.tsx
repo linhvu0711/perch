@@ -14,6 +14,7 @@ export function SaveTweetsModal(): JSX.Element {
   const navigate = useNavigate();
   const mutation = useSaveTweets();
   const [value, setValue] = useState('');
+  const [dirty, setDirty] = useState(false);
   const urls = value
     .split(/\r?\n/)
     .map((url) => url.trim())
@@ -34,6 +35,7 @@ export function SaveTweetsModal(): JSX.Element {
   });
 
   async function save(): Promise<void> {
+    setDirty(false);
     try {
       const data = await mutation.mutateAsync({ urls, refresh: false });
       const saved = data.results.filter(
@@ -45,7 +47,7 @@ export function SaveTweetsModal(): JSX.Element {
     }
   }
 
-  const results = mutation.data?.results;
+  const results = dirty ? undefined : mutation.data?.results;
   const saved = results?.filter((result) => result.ok && result.status !== 'existing').length ?? 0;
 
   return (
@@ -72,6 +74,7 @@ export function SaveTweetsModal(): JSX.Element {
               value={value}
               onChange={(event) => {
                 setValue(event.target.value);
+                setDirty(true);
                 if (mutation.data) mutation.reset();
               }}
             />

@@ -269,6 +269,41 @@ describe('tweet resources', () => {
     expect(status.month_cost_usd).toBe(0.025);
   });
 
+  test('settles a concurrent save of the same tweet into one resource', async () => {
+    // Given: two batches racing on the same tweet URL
+    await connect();
+
+    // When
+    const [a, b] = await Promise.all([
+      request('/api/resources/tweets', {
+        method: 'POST',
+        body: JSON.stringify({ urls: ['https://x.com/perchtester/status/1'] }),
+      }),
+      request('/api/resources/tweets', {
+        method: 'POST',
+        body: JSON.stringify({ urls: ['https://x.com/perchtester/status/1'] }),
+      }),
+    ]);
+
+    // Then: one wins the insert, the other recovers onto the existing row
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+    const results = [
+      ...((await a.json()) as { results: Array<{ status: string; resource: { id: number } }> })
+        .results,
+      ...((await b.json()) as { results: Array<{ status: string; resource: { id: number } }> })
+        .results,
+    ];
+    expect(results.map((result) => result.status).sort()).toEqual(['created', 'existing']);
+    expect(results.map((result) => result.resource.id)).toEqual([1, 1]);
+    expect((await list()).total).toBe(1);
+    expect(server.xClient.calls.filter((call) => call.name === 'getTweet')).toHaveLength(2);
+    const status = (await (await request('/api/status')).json()) as {
+      month_cost_usd: number;
+    };
+    expect(status.month_cost_usd).toBe(0.04);
+  });
+
   test('refreshes on purpose and updates the text', async () => {
     // Given: one saved tweet whose text changed on X
     await connect();
