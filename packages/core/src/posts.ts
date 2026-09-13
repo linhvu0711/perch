@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
+import { readySchema } from './postRules';
 import { batchErrorSchema, IMAGE_MIME_TYPES, resourceTypeSchema } from './resources';
+import { isCalendarDate } from './schedule';
 
 export const POST_STATUSES = ['draft', 'official', 'published', 'failed'] as const;
 export const postStatusSchema = z.enum(POST_STATUSES);
@@ -48,6 +50,7 @@ export const postSchema = z.object({
   estimated_cost: z.number(),
   links: z.array(postLinkSchema),
   media: z.array(postMediaSchema),
+  ready: readySchema,
 });
 export type Post = z.infer<typeof postSchema>;
 
@@ -55,6 +58,7 @@ export const postCreateSchema = z.object({
   title: z.string().trim().max(POST_TITLE_MAX).optional(),
   text: z.string().max(POST_TEXT_MAX).optional(),
   from: z.array(z.number().int().positive()).max(POST_BATCH_MAX).optional(),
+  official: z.boolean().optional(),
 });
 export type PostCreate = z.infer<typeof postCreateSchema>;
 
@@ -64,12 +68,7 @@ const listDateSchema = z
   .refine(
     (value) => {
       const [year, month, day] = value.split('-').map(Number) as [number, number, number];
-      const parsed = new Date(Date.UTC(year, month - 1, day));
-      return (
-        parsed.getUTCFullYear() === year &&
-        parsed.getUTCMonth() === month - 1 &&
-        parsed.getUTCDate() === day
-      );
+      return isCalendarDate(year, month, day);
     },
     { message: 'Invalid calendar date' },
   );
@@ -80,6 +79,10 @@ export const postListQuerySchema = z.object({
   from: listDateSchema.optional(),
   to: listDateSchema.optional(),
   resource_id: z.coerce.number().int().positive().optional(),
+  scheduled: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .optional(),
   limit: z.coerce.number().int().min(1).max(POST_LIST_LIMIT_MAX).default(POST_LIST_LIMIT_DEFAULT),
   cursor: z.string().min(1).optional(),
 });
@@ -179,6 +182,33 @@ export const postDeleteResponseSchema = z.object({
   results: z.array(postDeleteResultSchema),
 });
 export type PostDeleteResponse = z.infer<typeof postDeleteResponseSchema>;
+
+export const postIdsBodySchema = postDeleteBodySchema;
+export type PostIdsBody = z.infer<typeof postIdsBodySchema>;
+
+export const postStatusResultSchema = z.discriminatedUnion('ok', [
+  z.object({ id: z.number().int(), ok: z.literal(true) }),
+  z.object({
+    id: z.number().int(),
+    ok: z.literal(false),
+    error: z.object({
+      code: z.string(),
+      message: z.string(),
+      errors: z.array(z.object({ path: z.string(), message: z.string() })).optional(),
+    }),
+  }),
+]);
+export const postStatusResponseSchema = z.object({
+  results: z.array(postStatusResultSchema),
+});
+export type PostStatusResult = z.infer<typeof postStatusResultSchema>;
+export type PostStatusResponse = z.infer<typeof postStatusResponseSchema>;
+
+export const postScheduleBodySchema = z.object({
+  at: z.string().trim().min(1),
+  force: z.boolean().optional(),
+});
+export type PostScheduleBody = z.infer<typeof postScheduleBodySchema>;
 
 export const previewSegmentSchema = z.object({
   kind: z.enum(['text', 'url', 'mention', 'hashtag']),
