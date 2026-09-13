@@ -1,9 +1,9 @@
 import {
-  costKindOf,
   type CostHistory,
   type CostMonth,
   type CostMonthRow,
   type CostSummary,
+  costKindOf,
   zonedParts,
 } from '@perch/core';
 import { asc, eq } from 'drizzle-orm';
@@ -47,7 +47,11 @@ function emptyMonthRow(month: CostMonth): CostMonthRow {
 
 function monthRows(db: Db, userId: number, timeZone: string): CostMonthRow[] {
   const rows = db
-    .select({ endpoint: apiCalls.endpoint, costUsd: apiCalls.costUsd, createdAt: apiCalls.createdAt })
+    .select({
+      endpoint: apiCalls.endpoint,
+      costUsd: apiCalls.costUsd,
+      createdAt: apiCalls.createdAt,
+    })
     .from(apiCalls)
     .where(eq(apiCalls.userId, userId))
     .orderBy(asc(apiCalls.createdAt))

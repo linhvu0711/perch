@@ -110,10 +110,7 @@ export function insertTestApiCall(
       userId: 1,
       endpoint: input.endpoint,
       costUsd: input.costUsd ?? 0.01,
-      createdAt:
-        input.createdAt === undefined
-          ? server.clock.now()
-          : new Date(input.createdAt),
+      createdAt: input.createdAt === undefined ? server.clock.now() : new Date(input.createdAt),
     })
     .run();
   sqlite.close();

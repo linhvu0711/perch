@@ -56,7 +56,9 @@ export function addCostCommands(program: Command, ctx: CliContext): void {
           printResult(ctx, mode, summary);
           return;
         }
-        ctx.stdout.write(`${formatTable([costRow(summary)])}\nall time ${formatCost(summary.all_time_usd)}\n`);
+        ctx.stdout.write(
+          `${formatTable([costRow(summary)])}\nall time ${formatCost(summary.all_time_usd)}\n`,
+        );
         return;
       }
 
@@ -65,9 +67,7 @@ export function addCostCommands(program: Command, ctx: CliContext): void {
         throw new CliError('usage', '--months must be a positive number', 2);
       }
       const [history, summary] = await Promise.all([
-        api.call(
-          api.client.api.costs.months.$get({ query: { limit: String(months) } }),
-        ),
+        api.call(api.client.api.costs.months.$get({ query: { limit: String(months) } })),
         api.call(api.client.api.costs.$get({ query: {} })),
       ]);
       if (mode === 'json') {
