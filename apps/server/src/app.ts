@@ -4,11 +4,13 @@ import { authMiddleware, type User } from './auth';
 import type { Clock } from './clock';
 import type { Db } from './db';
 import { errorHandler, notFoundHandler } from './errors';
+import type { R2Client } from './r2/client';
 import { accountRoutes } from './routes/account';
 import { authRoutes } from './routes/auth';
 import { calendarRoutes } from './routes/calendar';
 import { costsRoutes } from './routes/costs';
 import { countsRoutes } from './routes/counts';
+import { healthRoutes } from './routes/health';
 import { postsRoutes } from './routes/posts';
 import { resourcesRoutes } from './routes/resources';
 import { settingsRoutes } from './routes/settings';
@@ -32,6 +34,8 @@ export interface AppDeps {
   accounts: XAccountService;
   tweets: TweetService;
   publisher: PublishService;
+  r2: R2Client | null;
+  logError: (error: unknown) => void;
 }
 
 function createRoutes(deps: AppDeps) {
@@ -58,6 +62,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   app.route('/', createRoutes(deps));
   app.onError(errorHandler);
   app.notFound(notFoundHandler);
+  app.route('/health', healthRoutes());
   app.get('/auth/x/callback', xCallbackHandler(deps));
   app.get('*', staticHandler(deps.webDist));
   return app;

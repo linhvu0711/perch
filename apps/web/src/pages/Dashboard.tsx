@@ -1,8 +1,11 @@
 import {
+  ATTENTION_LIST_LIMIT,
+  ATTENTION_WINDOW_DAYS,
   addDays,
   DEFAULT_TIMEZONE,
   formatCost,
   postCalendarTime,
+  STATUS_WEEK_DAYS,
   X_COSTS_USD,
   zonedParts,
 } from '@perch/core';
@@ -56,7 +59,7 @@ export function Dashboard() {
   }, []);
 
   const today = zonedParts(now, timezone).date;
-  const calendar = useCalendar({ from: today, to: addDays(today, 3) });
+  const calendar = useCalendar({ from: today, to: addDays(today, ATTENTION_WINDOW_DAYS) });
 
   const dayLong = new Intl.DateTimeFormat('en-GB', {
     weekday: 'long',
@@ -153,7 +156,7 @@ export function Dashboard() {
               </div>
             </div>
             <div className="card stat">
-              <div className="lbl">Scheduled, next 7 days</div>
+              <div className="lbl">Scheduled, next {STATUS_WEEK_DAYS} days</div>
               <div className="val">
                 {status.isPending
                   ? '…'
@@ -176,7 +179,10 @@ export function Dashboard() {
           <div className="section">
             <h2>
               Needs attention
-              <small>missed, failed, or still a draft with a time in the next 3 days</small>
+              <small>
+                missed, failed, or still a draft with a time in the next {ATTENTION_WINDOW_DAYS}{' '}
+                days
+              </small>
             </h2>
             <div className="card list">
               {attention.isPending ? (
@@ -189,10 +195,10 @@ export function Dashboard() {
                 </div>
               ) : (
                 <>
-                  {attentionItems.slice(0, 10).map((post) => (
+                  {attentionItems.slice(0, ATTENTION_LIST_LIMIT).map((post) => (
                     <AttentionRow key={post.id} post={post} />
                   ))}
-                  {attentionListTotal > 10 && (
+                  {attentionListTotal > ATTENTION_LIST_LIMIT && (
                     <div className="loadmore">
                       <Link to="/posts?status=attention">
                         See all {attentionListTotal} in Posts
@@ -264,12 +270,13 @@ export function Dashboard() {
           </div>
           <div className="section">
             <h2>
-              Next 3 days<small>until {formatDayTitle(addDays(today, 3))}</small>
+              Next {ATTENTION_WINDOW_DAYS} days
+              <small>until {formatDayTitle(addDays(today, ATTENTION_WINDOW_DAYS))}</small>
             </h2>
             <div className="card list">
               {upcomingDays.length === 0 ? (
                 <div className="empty">
-                  <b>Nothing scheduled</b>No posts in the next 3 days.
+                  <b>Nothing scheduled</b>No posts in the next {ATTENTION_WINDOW_DAYS} days.
                 </div>
               ) : (
                 upcomingDays.map((day) => (

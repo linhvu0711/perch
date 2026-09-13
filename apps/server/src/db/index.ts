@@ -24,10 +24,10 @@ export function migrateDb(db: Db): void {
   });
 }
 
-export function seedDb(db: Db, now: Date): void {
+export function seedDb(db: Db, now: Date, timezone: string): void {
   db.insert(schema.users).values({ id: 1, createdAt: now }).onConflictDoNothing().run();
   db.insert(schema.settings)
-    .values({ userId: 1, timezone: 'UTC', charLimitOverride: null })
+    .values({ userId: 1, timezone, charLimitOverride: null })
     .onConflictDoNothing()
     .run();
 }

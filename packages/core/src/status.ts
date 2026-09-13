@@ -4,7 +4,8 @@ import { xAccountSchema } from './api';
 import { postSchema } from './posts';
 
 export const STATUS_NEXT_DUE = 5;
-export const STATUS_WEEK_MS = 7 * 86_400_000;
+export const STATUS_WEEK_DAYS = 7;
+export const STATUS_WEEK_MS = STATUS_WEEK_DAYS * 86_400_000;
 
 export const statusSchema = z.object({
   timezone: z.string(),

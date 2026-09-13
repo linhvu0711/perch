@@ -39,10 +39,13 @@ const STATUS_TABS: Array<{
 
 export function Posts() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const [status, setStatus] = useState<PostStatus | 'attention' | undefined>(
-    searchParams.get('status') === 'attention' ? 'attention' : undefined,
-  );
+  const [searchParams, setSearchParams] = useSearchParams();
+  const statusParam = searchParams.get('status');
+  const status: PostStatus | 'attention' | undefined = STATUS_TABS.some(
+    (tab) => tab.value === statusParam,
+  )
+    ? (statusParam as PostStatus | 'attention')
+    : undefined;
   const [tag, setTag] = useState<string | undefined>();
   const [scheduled, setScheduled] = useState<boolean | undefined>();
   const [search, setSearch] = useState('');
@@ -130,7 +133,9 @@ export function Posts() {
                   aria-label={tab.label}
                   aria-pressed={status === tab.value}
                   data-status={tab.dataStatus}
-                  onClick={() => setStatus(tab.value)}
+                  onClick={() =>
+                    setSearchParams(tab.value === undefined ? {} : { status: tab.value })
+                  }
                 >
                   <tab.icon size={16} strokeWidth={1.75} />
                 </button>

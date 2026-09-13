@@ -478,8 +478,13 @@ export function calendarDays(
   ];
 
   const rows = db
-    .select()
+    .select({
+      ...getTableColumns(posts),
+      username: xAccounts.username,
+      missed: sql<number>`${missedSql(userId, now)}`,
+    })
     .from(posts)
+    .leftJoin(xAccounts, eq(xAccounts.id, posts.xAccountId))
     .where(and(...conditions))
     .orderBy(asc(sortTime), asc(posts.id))
     .all();
@@ -846,29 +851,37 @@ export function dismissPosts(db: Db, userId: number, ids: number[], now: Date): 
       if (!needsAttention(post, now)) {
         return statusResultError(id, 'invalid_status', `Post ${id} needs no attention`);
       }
-      if (dismissAction(post.status) === 'demote') {
-        db.update(posts)
-          .set({
-            status: 'draft',
-            scheduledAt: null,
-            nextAttemptAt: null,
-            lastError: null,
-            retryCount: 0,
-            updatedAt: now,
-          })
-          .where(and(eq(posts.id, id), eq(posts.userId, userId)))
-          .run();
-      } else {
-        db.update(posts)
-          .set({
-            scheduledAt: null,
-            nextAttemptAt: null,
-            lastError: null,
-            retryCount: 0,
-            updatedAt: now,
-          })
-          .where(and(eq(posts.id, id), eq(posts.userId, userId)))
-          .run();
+      const action = dismissAction(post.status);
+      const guard = and(eq(posts.id, id), eq(posts.userId, userId), eq(posts.status, post.status));
+      const updated =
+        action === 'demote'
+          ? db
+              .update(posts)
+              .set({
+                status: 'draft',
+                scheduledAt: null,
+                nextAttemptAt: null,
+                lastError: null,
+                retryCount: 0,
+                updatedAt: now,
+              })
+              .where(guard)
+              .returning({ id: posts.id })
+              .all().length
+          : db
+              .update(posts)
+              .set({
+                scheduledAt: null,
+                nextAttemptAt: null,
+                lastError: null,
+                retryCount: 0,
+                updatedAt: now,
+              })
+              .where(guard)
+              .returning({ id: posts.id })
+              .all().length;
+      if (updated === 0) {
+        return statusResultError(id, 'invalid_status', `Post ${id} changed; try again`);
       }
       return { id, ok: true as const };
     }),
