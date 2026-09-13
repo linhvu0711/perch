@@ -149,6 +149,17 @@ export function updateResource(
   return toResource(row);
 }
 
+export function listAllResources(db: Db, userId: number): Resource[] {
+  const rows = db
+    .select()
+    .from(resources)
+    .where(eq(resources.userId, userId))
+    .orderBy(asc(resources.createdAt), asc(resources.id))
+    .all();
+
+  return rows.map(toResource);
+}
+
 export function listResources(
   db: Db,
   userId: number,

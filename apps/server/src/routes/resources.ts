@@ -12,6 +12,7 @@ import {
 } from '@perch/core';
 import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
+import { stream } from 'hono/streaming';
 import { z } from 'zod';
 
 import type { AppDeps, AppEnv } from '../app';
@@ -21,6 +22,7 @@ import {
   deleteResources,
   getResource,
   InvalidCursorError,
+  listAllResources,
   listResources,
   updateResource,
 } from '../db/resources';
@@ -143,6 +145,14 @@ export function resourcesRoutes(deps: AppDeps) {
         results.push({ name: file.name, ok: true as const, resource });
       }
       return c.json({ results }, 200);
+    })
+    .get('/export', (c) => {
+      c.header('Content-Type', 'application/x-ndjson');
+      return stream(c, async (s) => {
+        for (const r of listAllResources(deps.db, c.get('user').id)) {
+          await s.write(JSON.stringify(r) + '\n');
+        }
+      });
     })
     .get(
       '/:id',
