@@ -255,7 +255,7 @@ describe('post link and unlink', () => {
 });
 
 describe('post attach and detach', () => {
-  test('attaches resources and files, shows media, and detaches', async () => {
+  async function attachFixtures(): Promise<{ resourceId: number; png: string }> {
     const png = path.join(server.dir, 'pic.png');
     fs.writeFileSync(png, Buffer.from(PNG_3X2));
     const upload = makeCtx(server);
@@ -266,6 +266,11 @@ describe('post attach and detach', () => {
 
     const setup = makeCtx(server);
     await runCli(['post', 'create', '--text', 'hi', '--json'], setup.ctx);
+    return { resourceId, png };
+  }
+
+  test('attaches from resources and files with per-item results', async () => {
+    const { resourceId, png } = await attachFixtures();
 
     const attach = makeCtx(server);
     expect(
@@ -292,6 +297,14 @@ describe('post attach and detach', () => {
     const show = makeCtx(server, { isTTY: true });
     await runCli(['post', 'show', '1'], show.ctx);
     expect(show.out()).toContain('1, 2');
+  });
+
+  test('detaches by media position and all', async () => {
+    const { resourceId, png } = await attachFixtures();
+    const attach = makeCtx(server);
+    await runCli(['post', 'attach', '1', '--resource', String(resourceId), '--json'], attach.ctx);
+    const attachFile = makeCtx(server);
+    await runCli(['post', 'attach', '1', '--file', png, '--json'], attachFile.ctx);
 
     const detach = makeCtx(server);
     expect(await runCli(['post', 'detach', '1', '--media', '1', '--json'], detach.ctx)).toBe(0);
@@ -302,6 +315,10 @@ describe('post attach and detach', () => {
     const detachAll = makeCtx(server);
     expect(await runCli(['post', 'detach', '1', '--all', '--json'], detachAll.ctx)).toBe(0);
     expect(JSON.parse(detachAll.out())).toEqual([]);
+  });
+
+  test('rejects bad attach and detach flags', async () => {
+    await attachFixtures();
 
     const neither = makeCtx(server);
     expect(await runCli(['post', 'attach', '1', '--json'], neither.ctx)).toBe(1);
