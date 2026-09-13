@@ -69,7 +69,7 @@ async function upload(name: string, bytes: Uint8Array): Promise<void> {
   expect(response.status).toBe(200);
 }
 
-describe('resource pull', () => {-
+describe('resource pull', () => {
   test('writes one file per note into the mirror and a manifest', async () => {
     const { ctx, out } = makeCtx(server);
     await create('# Hello\n\ntext', 'why');
