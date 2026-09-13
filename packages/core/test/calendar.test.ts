@@ -118,11 +118,11 @@ test('calendarQuerySchema needs both dates in order', () => {
   // Then
   expect(reversed.success).toBe(false);
   if (reversed.success) throw new Error('unreachable');
-  expect(reversed.error.issues[0].path).toEqual(['to']);
-  expect(reversed.error.issues[0].message).toBe('to is before from');
+  expect(reversed.error.issues[0]?.path).toEqual(['to']);
+  expect(reversed.error.issues[0]?.message).toBe('to is before from');
   expect(missing.success).toBe(false);
   if (missing.success) throw new Error('unreachable');
-  expect(missing.error.issues[0].path).toEqual(['to']);
+  expect(missing.error.issues[0]?.path).toEqual(['to']);
   expect(tagged.success).toBe(true);
   if (!tagged.success) throw new Error('unreachable');
   expect(tagged.data.tag).toEqual(['a']);

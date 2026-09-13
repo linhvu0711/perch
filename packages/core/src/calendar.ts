@@ -79,7 +79,10 @@ export function monthGrid(date: string): string[] {
   const first = `${date.slice(0, 7)}-01`;
   const start = addDays(first, -mondayOffset(first));
   const cells = Array.from({ length: 42 }, (_, i) => addDays(start, i));
-  return cells[35].slice(0, 7) === date.slice(0, 7) ? cells : cells.slice(0, 35);
+  const sixthRow = cells[35];
+  return sixthRow !== undefined && sixthRow.slice(0, 7) === date.slice(0, 7)
+    ? cells
+    : cells.slice(0, 35);
 }
 
 function mondayOffset(date: string): number {
