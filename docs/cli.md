@@ -59,7 +59,7 @@ perch resource pull [--dir <path>]               copy every Resource into the Mi
 ```
 perch post create   [--title s] [--text s|--file p|-] [--from <rid>]... [--tag t]... [--at time] [--official]
 perch post list     [--status draft|official|published|failed] [--scheduled|--unscheduled] [--missed]
-                    [--tag t]... [--search q] [--from d] [--to d] [--limit n] [--cursor c]
+                    [--needs-attention] [--tag t]... [--search q] [--from d] [--to d] [--limit n] [--cursor c]
 perch post show <id>            text, char count/limit, est. cost, status, schedule time, links, media, X url
 perch post preview <id>         ASCII rendering of how it looks on X, plus char + cost lines
 perch post edit <id>  [--title s] [--text s|--file p|-] [-e]
@@ -86,6 +86,7 @@ perch post delete <id>... [--yes]
 - `publish`: on a draft, runs the promote checks and promotes first; clears the schedule time; on success status becomes published and `x_account_id` is set. `post list --from/--to` filter on schedule time, or published time for published posts.
 - `retry`: only for failed posts; sends now. `publish` and `retry` print the post on success; when X rejects the send they print `{ code: 'publish_failed', message }` on stderr and exit 1.
 - `show` and `list --json` carry `x_post_url` and `missed`; the table shows `missed` in the status column.
+- `list --json` rows also carry `reason` (`null` outside needs attention); the table shows it in a `reason` column.
 - `delete`: local only. Never deletes on X.
 
 ### Tags, calendar, cost

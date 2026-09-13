@@ -30,6 +30,7 @@ import {
   createPost,
   deletePosts,
   demotePosts,
+  dismissPosts,
   getPost,
   InvalidPostCursorError,
   linkResources,
@@ -163,6 +164,12 @@ export function postsRoutes(deps: AppDeps) {
     .post('/unschedule', zValidator('json', postIdsBodySchema, validationHook), (c) => {
       return c.json(
         unschedulePosts(deps.db, c.get('user').id, c.req.valid('json').ids, deps.clock.now()),
+        200,
+      );
+    })
+    .post('/dismiss', zValidator('json', postIdsBodySchema, validationHook), (c) => {
+      return c.json(
+        dismissPosts(deps.db, c.get('user').id, c.req.valid('json').ids, deps.clock.now()),
         200,
       );
     })
