@@ -94,8 +94,7 @@ export function costMonths(
 }
 
 /** The `costMonths` row for `month` (zeros when absent) plus the all-time total. */
-export function costSummary(db: Db, userId: number, month: string, timeZone: string,
-): CostSummary {
+export function costSummary(db: Db, userId: number, month: string, timeZone: string): CostSummary {
   const all = db
     .select({ costUsd: apiCalls.costUsd, endpoint: apiCalls.endpoint })
     .from(apiCalls)
@@ -106,8 +105,7 @@ export function costSummary(db: Db, userId: number, month: string, timeZone: str
     try {
       costKindOf(call.endpoint);
       allTimeRaw += call.costUsd;
-    } catch {
-    }
+    } catch {}
   }
   const rows = costMonths(db, userId, timeZone);
   const row = rows.find((item) => item.month === month) ?? emptyMonthRow(month as CostMonth);
