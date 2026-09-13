@@ -14,6 +14,6 @@ apps/cli       Commander; talks to the server over HTTP
 packages/core  shared types, Zod schemas, cost + char-count rules
 ```
 
-X client: the official `@xdevplatform/xdk` for typed v2 endpoints and OAuth, raw `fetch` where it falls short, and `twitter-text` for weighted character counting.
+X client: the official `@xdevplatform/xdk` for typed v2 endpoints and OAuth, raw `fetch` where it falls short, and `twitter-text` for weighted character counting. Superseded for the X client by ADR-0010: the client is hand-written `fetch`; `twitter-text` is still the plan for counting.
 
 Rejected: Elysia (more churn), Next.js (see ADR-0001), citty (less proven), raw `bun:sqlite` without an ORM (hand-written migrations and mapping).
