@@ -44,9 +44,11 @@ import {
   desc,
   eq,
   getTableColumns,
+  gte,
   inArray,
   isNotNull,
   isNull,
+  lte,
   not,
   or,
   type SQL,
@@ -564,7 +566,15 @@ export function missedSql(userId: number | typeof posts.userId, now: Date): SQL 
 
 /** Posts that need the User's hand: Missed, Failed, or a Draft due within the next 3 days. */
 export function attentionSql(userId: number | typeof posts.userId, now: Date): SQL {
-  return sql`(${missedSql(userId, now)}) OR ${posts.status} = 'failed' OR (${posts.status} = 'draft' AND ${posts.scheduledAt} >= ${now.getTime()} AND ${posts.scheduledAt} <= ${now.getTime() + ATTENTION_WINDOW_MS})`;
+  return or(
+    missedSql(userId, now),
+    eq(posts.status, 'failed'),
+    and(
+      eq(posts.status, 'draft'),
+      gte(posts.scheduledAt, now),
+      lte(posts.scheduledAt, new Date(now.getTime() + ATTENTION_WINDOW_MS)),
+    ),
+  )!;
 }
 
 /** Official posts due to be sent at `now`, oldest schedule time first. */

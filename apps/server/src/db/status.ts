@@ -1,5 +1,5 @@
 import { ATTENTION_WINDOW_MS, STATUS_NEXT_DUE, STATUS_WEEK_MS, type Status } from '@perch/core';
-import { and, count, eq, inArray, type SQL, sql } from 'drizzle-orm';
+import { and, count, eq, gte, inArray, lt, lte, type SQL } from 'drizzle-orm';
 
 import { monthCostUsd } from './apiCalls';
 import type { Db } from './index';
@@ -17,8 +17,8 @@ export function statusSnapshot(db: Db, userId: number, timeZone: string, now: Da
   const week = and(
     eq(posts.userId, userId),
     inArray(posts.status, ['draft', 'official']),
-    sql`${posts.scheduledAt} >= ${now.getTime()}`,
-    sql`${posts.scheduledAt} < ${now.getTime() + STATUS_WEEK_MS}`,
+    gte(posts.scheduledAt, now),
+    lt(posts.scheduledAt, new Date(now.getTime() + STATUS_WEEK_MS)),
   )!;
   return {
     timezone: timeZone,
@@ -32,8 +32,8 @@ export function statusSnapshot(db: Db, userId: number, timeZone: string, now: Da
       and(
         eq(posts.userId, userId),
         eq(posts.status, 'draft'),
-        sql`${posts.scheduledAt} >= ${now.getTime()}`,
-        sql`${posts.scheduledAt} <= ${now.getTime() + ATTENTION_WINDOW_MS}`,
+        gte(posts.scheduledAt, now),
+        lte(posts.scheduledAt, new Date(now.getTime() + ATTENTION_WINDOW_MS)),
       )!,
     ),
     week_official_count: countWhere(db, and(week, eq(posts.status, 'official'))!),
