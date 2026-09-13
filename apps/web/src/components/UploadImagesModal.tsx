@@ -51,6 +51,7 @@ export function UploadImagesModal(props: {
   if (!props.open) return null;
 
   const addFiles = (incoming: Iterable<File>) => {
+    if (upload.isPending) return;
     setFiles((current) => {
       let readyCount = current.filter((entry) => entry.bad === null).length;
       const added = [...incoming].map((file) => {
@@ -135,9 +136,11 @@ export function UploadImagesModal(props: {
             className="drop"
             role="button"
             tabIndex={0}
-            onClick={() => inputRef.current?.click()}
+            onClick={() => !upload.isPending && inputRef.current?.click()}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') inputRef.current?.click();
+              if (!upload.isPending && (event.key === 'Enter' || event.key === ' ')) {
+                inputRef.current?.click();
+              }
             }}
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => {
