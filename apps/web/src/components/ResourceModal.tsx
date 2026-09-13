@@ -482,7 +482,7 @@ export function ResourceModal(): JSX.Element | null {
                             <PenLine size={14} strokeWidth={1.75} />
                           </span>
                           <span className="ltitle">
-                            #{post.id} · {post.title}
+                            #{post.id} · {post.title || 'Empty post'}
                           </span>
                           <StatusPill status={post.status} />
                         </Link>
