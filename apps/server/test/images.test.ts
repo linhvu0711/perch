@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type { ImageCreateResponse, Resource } from '@perch/core';
+import type { ImageCreateResponse } from '@perch/core';
 import {
   createTestServer,
   GIF_4X3,

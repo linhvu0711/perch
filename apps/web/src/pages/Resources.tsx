@@ -130,6 +130,7 @@ export function Resources() {
         />
       </div>
       <div className="filters">
+        {/* biome-ignore lint/a11y/useSemanticElements: styled segmented control, not a form group */}
         <div className="seg icons" role="group" aria-label="Type">
           <Tooltip>
             <TooltipTrigger asChild>

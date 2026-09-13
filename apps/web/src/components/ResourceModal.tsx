@@ -23,6 +23,8 @@ import {
   useDeleteResources,
   usePosts,
   useResource,
+  useTagResources,
+  useUntagResources,
   useUpdateResource,
 } from '@/lib/queries';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -31,6 +33,7 @@ import { IconLink } from './IconLink';
 import { Markdown } from './Markdown';
 import { NoteEditor } from './NoteEditor';
 import { StatusPill } from './StatusPill';
+import { TagField } from './TagField';
 import { toast } from './Toast';
 
 type ConfirmState = 'discard-edit' | 'discard-close' | 'discard-navigation' | 'delete' | null;
@@ -56,6 +59,8 @@ export function ResourceModal(): JSX.Element | null {
   const usedByTotal = parsedId === null ? 0 : (usedBy.data?.pages[0]?.total ?? usedByPosts.length);
   const updateResource = useUpdateResource();
   const deleteResources = useDeleteResources();
+  const tagResources = useTagResources();
+  const untagResources = useUntagResources();
   const modalRef = useRef<HTMLDivElement>(null);
   const allowNavigationRef = useRef(false);
   const [isEditing, setIsEditing] = useState(isNew);
@@ -439,6 +444,24 @@ export function ResourceModal(): JSX.Element | null {
                     )}
                   </div>
                 </div>
+                {resource !== undefined && (
+                  <TagField
+                    tags={resource.tags}
+                    readOnly={false}
+                    onAdd={(name) =>
+                      void tagResources
+                        .mutateAsync({ ids: [resource.id], tags: [name] })
+                        .then(() => toast(`Tagged ${name}`))
+                        .catch((error: unknown) => toast(errorMessage(error), 'warn'))
+                    }
+                    onRemove={(name) =>
+                      void untagResources
+                        .mutateAsync({ ids: [resource.id], tags: [name] })
+                        .then(() => toast('Untagged'))
+                        .catch((error: unknown) => toast(errorMessage(error), 'warn'))
+                    }
+                  />
+                )}
                 <div className="field">
                   <label>Private notes</label>
                   <textarea
@@ -662,6 +685,24 @@ export function ResourceModal(): JSX.Element | null {
                     )}
                   </div>
                 </div>
+              )}
+              {resource !== undefined && (
+                <TagField
+                  tags={resource.tags}
+                  readOnly={false}
+                  onAdd={(name) =>
+                    void tagResources
+                      .mutateAsync({ ids: [resource.id], tags: [name] })
+                      .then(() => toast(`Tagged ${name}`))
+                      .catch((error: unknown) => toast(errorMessage(error), 'warn'))
+                  }
+                  onRemove={(name) =>
+                    void untagResources
+                      .mutateAsync({ ids: [resource.id], tags: [name] })
+                      .then(() => toast('Untagged'))
+                      .catch((error: unknown) => toast(errorMessage(error), 'warn'))
+                  }
+                />
               )}
               <div className="field">
                 <label>Private notes</label>

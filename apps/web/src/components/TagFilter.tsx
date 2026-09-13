@@ -75,6 +75,7 @@ export function TagFilter(props: {
             <input
               aria-label="Find a tag"
               placeholder="Find a tag"
+              // biome-ignore lint/a11y/noAutofocus: filter menus autofocus their search like AuthorFilter
               autoFocus
               value={query}
               onChange={(event) => setQuery(event.target.value)}

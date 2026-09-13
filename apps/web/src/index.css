@@ -917,7 +917,6 @@ main {
   background: var(--surface);
   resize: vertical;
   min-height: 70px;
-  font-size: 13px;
   font: inherit;
   color: inherit;
 }

@@ -56,6 +56,7 @@ export function Posts() {
   const items = posts.data?.pages.flatMap((page) => page.items) ?? [];
   const total = Math.max(posts.data?.pages[0]?.total ?? 0, items.length);
 
+  // biome-ignore lint/suspicious/noImplicitAnyLet: assigned in every branch below
   let content;
   if (posts.isPending) {
     content = <div className="countline">Loading…</div>;
@@ -107,6 +108,7 @@ export function Posts() {
         />
       </div>
       <div className="filters">
+        {/* biome-ignore lint/a11y/useSemanticElements: styled segmented control, not a form group */}
         <div className="seg icons" role="group" aria-label="Status">
           {STATUS_TABS.map((tab) => (
             <Tooltip key={tab.dataStatus}>

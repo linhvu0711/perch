@@ -17,7 +17,9 @@ import {
   useCreatePost,
   useDeletePosts,
   usePost,
+  useTagPosts,
   useUnlinkResources,
+  useUntagPosts,
   useUpdatePost,
 } from '@/lib/queries';
 
@@ -26,6 +28,7 @@ import { IconButton } from './IconButton';
 import { PostPreview } from './PostPreview';
 import { ResourcesDrawer } from './ResourcesDrawer';
 import { StatusPill } from './StatusPill';
+import { TagField } from './TagField';
 import { toast } from './Toast';
 
 const EMPTY_POST: Post = {
@@ -65,6 +68,8 @@ export function PostModal(): JSX.Element | null {
   const updatePost = useUpdatePost();
   const deletePosts = useDeletePosts();
   const unlinkResources = useUnlinkResources();
+  const tagPosts = useTagPosts();
+  const untagPosts = useUntagPosts();
   const modalRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const timerRef = useRef<number>(undefined);
@@ -410,6 +415,24 @@ export function PostModal(): JSX.Element | null {
                   ))}
                 </div>
               </div>
+              {currentId !== undefined && (
+                <TagField
+                  tags={viewPost.tags}
+                  readOnly={readOnly}
+                  onAdd={(name) =>
+                    void tagPosts
+                      .mutateAsync({ ids: [currentId], tags: [name] })
+                      .then(() => toast(`Tagged ${name}`))
+                      .catch((error: unknown) => toast(errorMessage(error), 'warn'))
+                  }
+                  onRemove={(name) =>
+                    void untagPosts
+                      .mutateAsync({ ids: [currentId], tags: [name] })
+                      .then(() => toast('Untagged'))
+                      .catch((error: unknown) => toast(errorMessage(error), 'warn'))
+                  }
+                />
+              )}
             </div>
             <div className="previewpane">
               <h2>Preview</h2>
