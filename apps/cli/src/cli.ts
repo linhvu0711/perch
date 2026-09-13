@@ -8,6 +8,7 @@ import { addOpenCommands } from './commands/open';
 import { addPostCommands } from './commands/post';
 import { addResourceCommands } from './commands/resource';
 import { addStatusCommands } from './commands/status';
+import { addTagCommands } from './commands/tag';
 import type { CliContext } from './context';
 import { CliError, printError, resolveMode } from './output';
 
@@ -37,6 +38,7 @@ export async function runCli(argv: string[], ctx: CliContext): Promise<number> {
   addResourceCommands(program, ctx);
   addOpenCommands(program, ctx);
   addStatusCommands(program, ctx);
+  addTagCommands(program, ctx);
 
   try {
     await program.parseAsync(argv, { from: 'user' });

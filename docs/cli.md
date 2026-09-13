@@ -91,6 +91,7 @@ perch post delete <id>... [--yes]
 
 ```
 perch tag list                        name, resource count, post count
+perch tag create <name>...
 perch tag rename <old> <new>
 perch tag delete <name>...            removes from everything
 
