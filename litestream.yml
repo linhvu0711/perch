@@ -1,0 +1,10 @@
+dbs:
+  - path: ${PERCH_DB_PATH}
+    replica:
+      type: s3
+      bucket: ${PERCH_R2_BUCKET}
+      path: litestream
+      endpoint: https://${PERCH_R2_ACCOUNT_ID}.r2.cloudflarestorage.com
+      region: auto
+      access-key-id: ${PERCH_R2_ACCESS_KEY_ID}
+      secret-access-key: ${PERCH_R2_SECRET_ACCESS_KEY}
