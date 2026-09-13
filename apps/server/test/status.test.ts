@@ -22,7 +22,10 @@ async function request(path: string, init: RequestInit = {}): Promise<Response> 
 describe('status', () => {
   test('reflects the configured time zone', async () => {
     const initial = await request('/api/status');
-    expect(await initial.json()).toEqual({ timezone: 'UTC' });
+    expect(await initial.json()).toEqual({
+      timezone: 'UTC',
+      month_cost_usd: 0,
+    });
 
     await request('/api/settings', {
       method: 'PATCH',
@@ -30,7 +33,10 @@ describe('status', () => {
     });
 
     const updated = await request('/api/status');
-    expect(await updated.json()).toEqual({ timezone: 'Europe/Berlin' });
+    expect(await updated.json()).toEqual({
+      timezone: 'Europe/Berlin',
+      month_cost_usd: 0,
+    });
   });
 
   test('exposes a resolving scheduler tick', async () => {

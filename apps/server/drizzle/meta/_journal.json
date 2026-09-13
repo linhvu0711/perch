@@ -15,6 +15,13 @@
       "when": 1788513685232,
       "tag": "0001_resources",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789268752551,
+      "tag": "0002_x_accounts",
+      "breakpoints": true
     }
   ]
 }

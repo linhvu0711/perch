@@ -7,13 +7,16 @@ import { createApp, type AppEnv } from './app';
 import type { Clock } from './clock';
 import { migrateDb, openDb, seedDb } from './db';
 import { createTick } from './scheduler';
+import { createXAccountService } from './x/accounts';
 import type { XClient } from './x/client';
+import type { XOAuthConfig } from './x/oauth';
 
 export interface BuildServerOptions {
   dbPath: string;
   uploadDir: string;
   clock: Clock;
   xClient: XClient;
+  xOAuth?: XOAuthConfig | null;
   token: string;
   secureCookies: boolean;
   webDist: string;
@@ -33,17 +36,25 @@ export async function buildServer(
   migrateDb(db);
   seedDb(db, options.clock.now());
   const webDist = path.resolve(options.webDist);
+  const accounts = createXAccountService({
+    db,
+    clock: options.clock,
+    xClient: options.xClient,
+    xOAuth: options.xOAuth ?? null,
+  });
   const app = createApp({
     db,
     token: options.token,
     secureCookies: options.secureCookies,
     webDist,
     clock: options.clock,
+    accounts,
   });
   const tick = createTick({
     db,
     clock: options.clock,
     xClient: options.xClient,
+    accounts,
   });
 
   return {
