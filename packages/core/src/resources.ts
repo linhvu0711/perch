@@ -20,9 +20,34 @@ export const noteResourceSchema = z.object({
   created_at: z.string(),
   body: z.string(),
 });
-export const resourceSchema = z.discriminatedUnion('type', [noteResourceSchema]);
-export type Resource = z.infer<typeof resourceSchema>;
+export const IMAGE_MIME_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+] as const;
+export const IMAGE_BYTES_MAX = 5 * 1024 * 1024;
+export const imageResourceSchema = z.object({
+  id: z.number().int().positive(),
+  type: z.literal('image'),
+  title: z.string(),
+  notes: z.string(),
+  created_at: z.string(),
+  path: z.string(),
+  mime: z.enum(IMAGE_MIME_TYPES),
+  bytes: z.number().int().nonnegative(),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+});
+export const resourceSchema = z.discriminatedUnion('type', [
+  noteResourceSchema,
+  imageResourceSchema,
+]);
+export type Resource =
+  | z.infer<typeof noteResourceSchema>
+  | (z.infer<typeof imageResourceSchema> & { body?: undefined });
 export type NoteResource = z.infer<typeof noteResourceSchema>;
+export type ImageResource = z.infer<typeof imageResourceSchema>;
 
 export const noteCreateSchema = z
   .object({
@@ -91,6 +116,24 @@ export const resourceDeleteResponseSchema = z.object({
 });
 export type ResourceDeleteResult = z.infer<typeof resourceDeleteResultSchema>;
 export type ResourceDeleteResponse = z.infer<typeof resourceDeleteResponseSchema>;
+
+export const imageCreateResponseSchema = z.object({
+  results: z.array(
+    z.discriminatedUnion('ok', [
+      z.object({
+        name: z.string(),
+        ok: z.literal(true),
+        resource: imageResourceSchema,
+      }),
+      z.object({
+        name: z.string(),
+        ok: z.literal(false),
+        error: batchErrorSchema,
+      }),
+    ]),
+  ),
+});
+export type ImageCreateResponse = z.infer<typeof imageCreateResponseSchema>;
 
 /** First ATX heading (`#` to `######`) outside fenced code blocks, trimmed, closing #s removed; null when none. */
 export function firstMarkdownHeading(body: string): string | null {

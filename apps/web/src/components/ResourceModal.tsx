@@ -51,7 +51,7 @@ export function ResourceModal(): JSX.Element | null {
   const saving = createNote.isPending || updateResource.isPending;
   const original = isNew
     ? { body: '', title: '' }
-    : { body: resource?.body ?? '', title: resource?.title ?? '' };
+    : { body: resource?.type === 'md' ? resource.body : '', title: resource?.title ?? '' };
   const notesDirty = !isNew && resource !== undefined && notesDraft !== resource.notes;
   const dirty =
     isEditing &&
@@ -78,7 +78,7 @@ export function ResourceModal(): JSX.Element | null {
 
   useEffect(() => {
     if (!resource || isEditing) return;
-    setBodyDraft(resource.body);
+    setBodyDraft(resource.type === 'md' ? resource.body : '');
     setTitleDraft(resource.title);
     setTitleTouched(false);
     setNotesDraft(resource.notes);
@@ -90,7 +90,7 @@ export function ResourceModal(): JSX.Element | null {
 
   const resetDrafts = useCallback(() => {
     if (!resource) return;
-    setBodyDraft(resource.body);
+    setBodyDraft(resource.type === 'md' ? resource.body : '');
     setTitleDraft(resource.title);
     setTitleTouched(false);
     setNotesDraft(resource.notes);
@@ -292,7 +292,7 @@ export function ResourceModal(): JSX.Element | null {
 
   if (!isNew && !resource) return null;
 
-  const displayedBody = isEditing ? bodyDraft : resource?.body ?? '';
+  const displayedBody = isEditing ? bodyDraft : resource?.type === 'md' ? resource.body : '';
   const displayedTitle = isEditing ? titleDraft : resource?.title ?? '';
 
   return (

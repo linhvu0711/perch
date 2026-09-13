@@ -1,5 +1,8 @@
 import {
+  NOTE_TITLE_FALLBACK,
   noteCreateSchema,
+  RESOURCE_BATCH_MAX,
+  RESOURCE_TITLE_MAX,
   resourceDeleteBodySchema,
   resourceListQuerySchema,
   resourcePatchSchema,
@@ -10,6 +13,7 @@ import { z } from 'zod';
 
 import type { AppDeps, AppEnv } from '../app';
 import {
+  createImage,
   createNote,
   deleteResources,
   getResource,
@@ -18,6 +22,7 @@ import {
   updateResource,
 } from '../db/resources';
 import { ApiError, validationHook } from '../errors';
+import { inspectImage, storeImage } from '../images';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -60,6 +65,76 @@ export function resourcesRoutes(deps: AppDeps) {
           201,
         ),
     )
+    .post('/images', async (c) => {
+      const form = await c.req.formData();
+      const files = form
+        .getAll('files')
+        .filter((v): v is File => v instanceof File);
+      if (files.length === 0) {
+        throw new ApiError(400, 'validation', 'Invalid request', [
+          { path: 'files', message: 'At least one file is required' },
+        ]);
+      }
+      if (files.length > RESOURCE_BATCH_MAX) {
+        throw new ApiError(400, 'validation', 'Invalid request', [
+          { path: 'files', message: 'At most 100 files' },
+        ]);
+      }
+
+      const titleRaw = form.get('title');
+      let title: string | undefined;
+      if (titleRaw !== null) {
+        if (files.length !== 1) {
+          throw new ApiError(400, 'validation', 'Invalid request', [
+            { path: 'title', message: 'title needs exactly one file' },
+          ]);
+        }
+        const parsed = z
+          .string()
+          .trim()
+          .min(1)
+          .max(RESOURCE_TITLE_MAX)
+          .safeParse(titleRaw);
+        if (!parsed.success) {
+          throw new ApiError(400, 'validation', 'Invalid request', [
+            {
+              path: 'title',
+              message: parsed.error.issues[0]?.message ?? 'Invalid title',
+            },
+          ]);
+        }
+        title = parsed.data;
+      }
+
+      const results = [];
+      for (const file of files) {
+        const bytes = await file.bytes();
+        const inspected = await inspectImage(bytes);
+        if (!inspected.ok) {
+          results.push({ name: file.name, ok: false as const, error: inspected.error });
+          continue;
+        }
+        const rel = await storeImage(deps.uploadDir, c.get('user').id, bytes, inspected.ext);
+        const resource = createImage(
+          deps.db,
+          c.get('user').id,
+          {
+            title:
+              (title ?? file.name).trim().slice(0, RESOURCE_TITLE_MAX) ||
+              NOTE_TITLE_FALLBACK,
+            notes: '',
+            path: rel,
+            mime: inspected.mime,
+            bytes: bytes.length,
+            width: inspected.width,
+            height: inspected.height,
+          },
+          deps.clock.now(),
+        );
+        results.push({ name: file.name, ok: true as const, resource });
+      }
+      return c.json({ results }, 200);
+    })
     .get(
       '/:id',
       zValidator('param', idParamSchema, validationHook),

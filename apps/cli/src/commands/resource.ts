@@ -61,7 +61,7 @@ function printResource(
       title: resource.title,
       notes: resource.notes,
       created: resource.created_at,
-    })}\n\n${resource.body}\n`,
+    })}\n\n${resource.type === 'md' ? resource.body : ''}\n`,
   );
 }
 
@@ -310,6 +310,9 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
           current = await api.call(
             api.client.api.resources[':id'].$get({ param: { id: String(id) } }),
           );
+          if (current.type !== 'md') {
+            throw new CliError('bad_args', 'Only notes have a body');
+          }
           patch.body = await ctx.editText(current.body);
           if (
             patch.body === current.body &&

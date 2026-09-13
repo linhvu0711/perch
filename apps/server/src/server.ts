@@ -47,6 +47,7 @@ export async function buildServer(
     token: options.token,
     secureCookies: options.secureCookies,
     webDist,
+    uploadDir: options.uploadDir,
     clock: options.clock,
     accounts,
   });

@@ -6,7 +6,7 @@ import { Link } from 'react-router';
 import { formatDayMonth, noteExcerpt } from '@/lib/format';
 
 export function ResourceCard({ resource }: { resource: Resource }): JSX.Element {
-  const excerpt = noteExcerpt(resource.body);
+  const excerpt = noteExcerpt(resource.type === 'md' ? resource.body : '');
   return (
     <Link to={`/resources/${resource.id}`} className="card res">
       <div className="top">
