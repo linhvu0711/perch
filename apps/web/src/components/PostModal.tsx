@@ -82,6 +82,7 @@ const EMPTY_POST: Post = {
   media: [],
   ready: { ok: false, checks: [] },
   missed: false,
+  reason: null,
 };
 
 export function PostModal(): JSX.Element | null {

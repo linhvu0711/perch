@@ -1,4 +1,5 @@
 export * from './api';
+export * from './attention';
 export * from './calendar';
 export * from './charCount';
 export * from './charLimit';
@@ -9,6 +10,7 @@ export * from './postRules';
 export * from './posts';
 export * from './resources';
 export * from './schedule';
+export * from './status';
 export * from './tags';
 export * from './timezone';
 export * from './tweets';

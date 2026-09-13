@@ -29,11 +29,6 @@ export const meSchema = z.object({
   user: z.object({ id: z.number().int() }),
 });
 
-export const statusSchema = z.object({
-  timezone: z.string(),
-  month_cost_usd: z.number(),
-});
-
 export const xAccountSchema = z.object({
   id: z.number().int(),
   x_user_id: z.string(),
@@ -74,7 +69,6 @@ export type Settings = z.infer<typeof settingsSchema>;
 export type SettingsPatch = z.infer<typeof settingsPatchSchema>;
 export type LoginBody = z.infer<typeof loginBodySchema>;
 export type Me = z.infer<typeof meSchema>;
-export type Status = z.infer<typeof statusSchema>;
 export type XAccount = z.infer<typeof xAccountSchema>;
 export type AccountStatus = z.infer<typeof accountStatusSchema>;
 export type ConnectStart = z.infer<typeof connectStartSchema>;
