@@ -614,7 +614,7 @@ export function ResourceModal(): JSX.Element | null {
             </div>
             <div className="rside">
               <div className="field">
-                <label>Details</label>
+                <div className="flabel">Details</div>
                 <div className="kv">
                   {isImage ? (
                     <>
@@ -639,9 +639,9 @@ export function ResourceModal(): JSX.Element | null {
               </div>
               {!isNew && (
                 <div className="field">
-                  <label>
+                  <div className="flabel">
                     Used by {usedByTotal} post{usedByTotal === 1 ? '' : 's'}
-                  </label>
+                  </div>
                   <div className="linked">
                     {usedByPosts.length === 0 ? (
                       <span className="note">Not linked to any post yet.</span>
@@ -665,8 +665,9 @@ export function ResourceModal(): JSX.Element | null {
                 </div>
               )}
               <div className="field">
-                <label>Private notes</label>
+                <label htmlFor="resource-notes">Private notes</label>
                 <textarea
+                  id="resource-notes"
                   aria-label="Private notes"
                   placeholder="Why you saved this"
                   value={notesDraft}

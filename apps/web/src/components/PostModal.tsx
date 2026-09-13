@@ -596,7 +596,7 @@ export function PostModal(): JSX.Element | null {
                       />
                     </span>
                   )}
-                </label>
+                </div>
                 <div className="linked">
                   {viewPost.links.length === 0 && (
                     <span className="note">

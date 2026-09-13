@@ -905,7 +905,8 @@ main {
   overflow: auto;
   background: var(--bg);
 }
-.rside .field label {
+.rside .field label,
+.rside .field .flabel {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-size: 11px;
@@ -1331,7 +1332,8 @@ textarea:focus-visible {
 .field {
   margin-bottom: 16px;
 }
-.field label {
+.field label,
+.field .flabel {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1340,7 +1342,8 @@ textarea:focus-visible {
   color: var(--text-2);
   margin-bottom: 6px;
 }
-.field label .right {
+.field label .right,
+.field .flabel .right {
   margin-left: auto;
 }
 .previewpane {
