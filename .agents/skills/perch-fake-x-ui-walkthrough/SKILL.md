@@ -14,6 +14,7 @@ None for fake X. Set a disposable `PERCH_TOKEN` and use it on the login screen. 
 - Start `PERCH_TOKEN=<disposable-token> bun apps/server/scripts/devFake.ts`.
 - Open `http://127.0.0.1:3000`, enter the configured token, and press Enter. Keep this origin consistent through the test; the fake OAuth callback always returns to 127.0.0.1, so testing on another origin loses authentication.
 - Every server process creates a fresh temporary SQLite DB. Restarting is a clean-state reset, and may require reauthentication.
+- A browser login can survive a fake-server restart with the same `PERCH_TOKEN`, despite the fresh DB. If a numbered video must show login, use Settings → Sign out before recording; do not assume restart signs the browser out.
 - Verify the listening process actually stopped before restarting: a terminated shell wrapper can leave its child alive. Send SIGTERM to the verified server PID if needed.
 - Stop the process after testing; confirm port 3000 is no longer listening.
 
