@@ -410,7 +410,7 @@ export function PostModal(): JSX.Element | null {
                     if (media === undefined) {
                       return (
                         <button
-                          key={index}
+                          key={`empty-${index}`}
                           type="button"
                           className="slot"
                           title="Add image"
