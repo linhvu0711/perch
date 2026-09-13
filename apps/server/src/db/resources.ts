@@ -22,6 +22,7 @@ import {
   getTableColumns,
   gt,
   gte,
+  inArray,
   lt,
   or,
   type SQL,
@@ -32,7 +33,7 @@ import { decodeCursor, encodeCursor } from './cursor';
 import type { Db } from './index';
 import { postLinks, resources, resourceTags, tags } from './schema';
 import { getSettings } from './settings';
-import { addResourceTags, tagsForResources } from './tags';
+import { addResourceTags, tagIdsByName, tagsForResources } from './tags';
 
 export class InvalidCursorError extends Error {}
 
@@ -371,10 +372,24 @@ export function listResources(db: Db, userId: number, query: ResourceListQuery):
       filterConditions.push(gte(resources.createdAt, zonedDayStart(query.from, timezone)));
     if (query.to) filterConditions.push(lt(resources.createdAt, zonedDayEnd(query.to, timezone)));
   }
-  for (const name of query.tag ?? []) {
-    filterConditions.push(
-      sql`exists (select 1 from ${resourceTags} join ${tags} on ${tags.id} = ${resourceTags.tagId} where ${resourceTags.resourceId} = ${resources.id} and ${tags.userId} = ${userId} and lower(${tags.name}) = lower(${name}))`,
-    );
+  const tagNames = query.tag ?? [];
+  if (tagNames.length > 0) {
+    const byName = tagIdsByName(db, userId);
+    const tagIds = tagNames.map((name) => byName.get(name.toLowerCase()));
+    if (tagIds.some((id) => id === undefined)) {
+      return { items: [], total: 0, next_cursor: null };
+    }
+    for (const tagId of tagIds as number[]) {
+      filterConditions.push(
+        inArray(
+          resources.id,
+          db
+            .select({ resourceId: resourceTags.resourceId })
+            .from(resourceTags)
+            .where(and(eq(resourceTags.userId, userId), eq(resourceTags.tagId, tagId))),
+        ),
+      );
+    }
   }
 
   const totalRow = db

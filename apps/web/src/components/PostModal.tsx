@@ -644,6 +644,7 @@ export function PostModal(): JSX.Element | null {
                 <TagField
                   tags={viewPost.tags}
                   readOnly={readOnly}
+                  disabled={tagPosts.isPending || untagPosts.isPending}
                   onAdd={(name) =>
                     void tagPosts
                       .mutateAsync({ ids: [currentId], tags: [name] })

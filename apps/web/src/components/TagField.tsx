@@ -6,6 +6,7 @@ import { useTags } from '@/lib/queries';
 export function TagField(props: {
   tags: string[];
   readOnly: boolean;
+  disabled?: boolean;
   onAdd(name: string): void;
   onRemove(name: string): void;
 }): JSX.Element {
@@ -22,6 +23,7 @@ export function TagField(props: {
                 className="rm"
                 aria-label={`Remove ${name}`}
                 title="Remove"
+                disabled={props.disabled}
                 onClick={() => props.onRemove(name)}
               >
                 <X size={11} strokeWidth={1.75} />
@@ -29,13 +31,19 @@ export function TagField(props: {
             )}
           </span>
         ))}
-        {!props.readOnly && <TagPicker current={props.tags} onPick={props.onAdd} />}
+        {!props.readOnly && (
+          <TagPicker current={props.tags} disabled={props.disabled} onPick={props.onAdd} />
+        )}
       </div>
     </div>
   );
 }
 
-function TagPicker(props: { current: string[]; onPick(name: string): void }): JSX.Element {
+function TagPicker(props: {
+  current: string[];
+  disabled?: boolean;
+  onPick(name: string): void;
+}): JSX.Element {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -80,6 +88,7 @@ function TagPicker(props: { current: string[]; onPick(name: string): void }): JS
         type="button"
         className="add"
         aria-haspopup="menu"
+        disabled={props.disabled}
         onClick={() => {
           setQuery('');
           setOpen((current) => !current);

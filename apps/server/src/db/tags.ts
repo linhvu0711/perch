@@ -84,6 +84,17 @@ export function tagsForResources(
   return result;
 }
 
+export function tagIdsByName(db: Db | Tx, userId: number): Map<string, number> {
+  return new Map(
+    db
+      .select({ id: tags.id, name: tags.name })
+      .from(tags)
+      .where(eq(tags.userId, userId))
+      .all()
+      .map((row) => [row.name.toLowerCase(), row.id] as const),
+  );
+}
+
 /** Finds each tag by lower(name), inserting the missing ones; keyed by name.toLowerCase(). */
 export function ensureTags(tx: Db | Tx, userId: number, names: string[]): Map<string, number> {
   const wanted = new Map<string, string>();

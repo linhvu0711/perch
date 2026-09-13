@@ -44,9 +44,9 @@ import {
 import { decodePostCursor, encodePostCursor } from './cursor';
 import type { Db } from './index';
 import { type MediaFiles, mediaForPosts } from './postMedia';
-import { postLinks, postMedia, posts, resources } from './schema';
+import { postLinks, postMedia, posts, postTags, resources, tags } from './schema';
 import { getSettings } from './settings';
-import { addPostTags, tagsForPosts, tagsForResources } from './tags';
+import { addPostTags, tagIdsByName, tagsForPosts, tagsForResources } from './tags';
 import { getConnectedAccount } from './xAccounts';
 
 export class InvalidPostCursorError extends Error {}
@@ -308,10 +308,24 @@ export function listPosts(
       sql`EXISTS (select 1 from post_links where post_links.post_id = ${posts.id} and post_links.resource_id = ${query.resource_id})`,
     );
   }
-  for (const name of query.tag ?? []) {
-    filterConditions.push(
-      sql`EXISTS (select 1 from post_tags pt join tags on tags.id = pt.tag_id where pt.post_id = ${posts.id} and tags.user_id = ${userId} and lower(tags.name) = lower(${name}))`,
-    );
+  const tagNames = query.tag ?? [];
+  if (tagNames.length > 0) {
+    const byName = tagIdsByName(db, userId);
+    const tagIds = tagNames.map((name) => byName.get(name.toLowerCase()));
+    if (tagIds.some((id) => id === undefined)) {
+      return { items: [], total: 0, next_cursor: null };
+    }
+    for (const tagId of tagIds as number[]) {
+      filterConditions.push(
+        inArray(
+          posts.id,
+          db
+            .select({ postId: postTags.postId })
+            .from(postTags)
+            .where(and(eq(postTags.userId, userId), eq(postTags.tagId, tagId))),
+        ),
+      );
+    }
   }
 
   const totalRow = db

@@ -452,6 +452,7 @@ export function ResourceModal(): JSX.Element | null {
                   <TagField
                     tags={resource.tags}
                     readOnly={false}
+                    disabled={tagResources.isPending || untagResources.isPending}
                     onAdd={(name) =>
                       void tagResources
                         .mutateAsync({ ids: [resource.id], tags: [name] })
@@ -697,6 +698,7 @@ export function ResourceModal(): JSX.Element | null {
                 <TagField
                   tags={resource.tags}
                   readOnly={false}
+                  disabled={tagResources.isPending || untagResources.isPending}
                   onAdd={(name) =>
                     void tagResources
                       .mutateAsync({ ids: [resource.id], tags: [name] })

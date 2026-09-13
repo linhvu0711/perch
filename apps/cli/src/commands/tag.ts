@@ -70,6 +70,7 @@ export function addTagCommands(program: Command, ctx: CliContext): void {
           results.push({ name, ok: true, tag: created });
         } catch (error) {
           if (!(error instanceof CliError)) throw error;
+          if (error.code === 'unreachable' || error.code === 'unauthorized') throw error;
           results.push({
             name,
             ok: false,

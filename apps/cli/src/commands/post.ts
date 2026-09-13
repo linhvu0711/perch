@@ -409,34 +409,40 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
       }
 
       const api = apiFor(program, ctx);
-      let results: ItemTagsResponse['results'] = [];
+      const results = new Map<number, ItemTagsResponse['results'][number]>();
       if (commandOptions.add !== undefined) {
-        results = (
+        for (const result of (
           await api.call(
             api.client.api.posts.tags.$post({
               json: { ids, tags: commandOptions.add },
             }),
           )
-        ).results;
+        ).results) {
+          results.set(result.id, result);
+        }
       }
       if (commandOptions.remove !== undefined) {
-        results = (
+        for (const result of (
           await api.call(
             api.client.api.posts.tags.$delete({
               json: { ids, tags: commandOptions.remove },
             }),
           )
-        ).results;
+        ).results) {
+          const added = results.get(result.id);
+          if (added === undefined || added.ok) results.set(result.id, result);
+        }
       }
+      const merged = [...results.values()];
 
       const mode = resolveMode(program.opts<GlobalOptions>(), ctx.isTTY);
       if (mode === 'json') {
-        printResult(ctx, mode, results);
+        printResult(ctx, mode, merged);
       } else {
         printResult(
           ctx,
           mode,
-          results.map((result) => ({
+          merged.map((result) => ({
             id: result.id,
             ok: result.ok,
             tags: result.ok ? result.tags.join(', ') : '',
@@ -444,8 +450,8 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
           })),
         );
       }
-      const failed = results.filter((result) => !result.ok).length;
-      if (failed > 0) throw new BatchFailure(failed, results.length);
+      const failed = merged.filter((result) => !result.ok).length;
+      if (failed > 0) throw new BatchFailure(failed, merged.length);
     });
 
   post
