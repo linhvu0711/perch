@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
+import { POST_LIST_LIMIT_DEFAULT } from '@perch/core';
 import type { TestServer } from '@perch/server/testing';
 import { createTestServer } from '@perch/server/testing';
 
@@ -192,6 +193,23 @@ describe('post list and show', () => {
     const badId = makeCtx(server);
     expect(await runCli(['post', 'show', 'abc', '--json'], badId.ctx)).toBe(1);
     expect(JSON.parse(badId.err()).code).toBe('bad_args');
+  });
+
+  test('lists at most POST_LIST_LIMIT_DEFAULT posts by default', async () => {
+    // Given: POST_LIST_LIMIT_DEFAULT + 1 posts
+    for (let i = 0; i < POST_LIST_LIMIT_DEFAULT + 1; i++) {
+      const ctx = makeCtx(server);
+      await runCli(['post', 'create', '--text', `post ${i}`, '--json'], ctx.ctx);
+    }
+
+    // When: post list without --limit
+    const list = makeCtx(server);
+    await runCli(['post', 'list', '--json'], list.ctx);
+
+    // Then: the page holds the core default, not a CLI copy
+    const result = JSON.parse(list.out());
+    expect(result.items).toHaveLength(POST_LIST_LIMIT_DEFAULT);
+    expect(result.total).toBe(POST_LIST_LIMIT_DEFAULT + 1);
   });
 });
 
