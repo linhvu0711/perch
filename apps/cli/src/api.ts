@@ -68,5 +68,13 @@ export function createApi(ctx: CliContext, serverUrl: string, token: string | un
       await throwApiError(response);
       throw new CliError('http_error', `HTTP ${response.status}`);
     },
+    async callBytes(
+      responsePromise: Promise<JsonResponse<unknown> & { arrayBuffer(): Promise<ArrayBuffer> }>,
+    ): Promise<Uint8Array> {
+      const response = await resolve(responsePromise);
+      if (response.ok) return new Uint8Array(await response.arrayBuffer());
+      await throwApiError(response);
+      throw new CliError('http_error', `HTTP ${response.status}`);
+    },
   };
 }

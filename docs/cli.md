@@ -52,7 +52,7 @@ perch resource pull [--dir <path>]               copy every Resource into the Mi
 - `edit --content` and `-e` apply to md only; `--title` / `--notes` apply to every type.
 - `list --author` applies to tweets only. `--from` / `--to` filter on the date saved.
 - `delete` removes links from all posts (published too) and prints which posts were unlinked.
-- `pull` writes `notes/<yyyy-mm-dd>-<id>-<slug>.md` with YAML front matter and a `manifest.json`; only changed files are rewritten; only Manifest paths are deleted; nothing is written when the download fails.
+- `pull` writes one `<yyyy-mm-dd>-<id>-<slug>.md` per Resource with YAML front matter, under `notes/`, `tweets/`, or `images/` by type; each image `.md` gets the image file next to it, named in its `file` field; a `manifest.json` lists every path; only changed files are rewritten, and an image file is fetched only when its size differs from the server's; only Manifest paths are deleted; nothing is written when a download fails.
 
 ### Posts
 
