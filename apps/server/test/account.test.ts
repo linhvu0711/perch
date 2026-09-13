@@ -339,6 +339,73 @@ describe('account', () => {
     expect(body.account.connected_at).toBe('2026-09-04T10:40:00.000Z');
   });
 
+  test('disconnects a reconnect-required account using stored tokens', async () => {
+    await connect();
+    server.xClient.refreshError = new XError(
+      'invalid_grant',
+      400,
+      'expired',
+    );
+    await server.tick(new Date('2026-09-04T11:51:00Z'));
+
+    const res = await request('/api/account/disconnect', {
+      method: 'POST',
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ account: null, char_limit: 280 });
+
+    const calls = server.xClient.calls;
+    const afterGetMe = calls.slice(
+      calls.map((c) => c.name).lastIndexOf('getMe') + 1,
+    );
+    expect(afterGetMe.map((c) => c.name)).toEqual([
+      'refreshToken',
+      'revokeToken',
+      'revokeToken',
+    ]);
+    expect(afterGetMe.map((c) => c.args[0])).toEqual([
+      'refresh-1',
+      'refresh-1',
+      'access-1',
+    ]);
+  });
+
+  test('demand-path refresh failure surfaces reconnect_required', async () => {
+    await connect();
+    server.xClient.refreshError = new XError(
+      'invalid_grant',
+      400,
+      'expired',
+    );
+    server.clock.set(new Date('2026-09-04T11:55:00Z'));
+
+    const res = await request('/api/account/disconnect', {
+      method: 'POST',
+    });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      code: 'reconnect_required',
+      message: 'X account needs to be reconnected',
+    });
+    expect(
+      server.xClient.calls.filter((c) => c.name === 'revokeToken'),
+    ).toHaveLength(0);
+  });
+
+  test('coalesces concurrent refreshes into one call', async () => {
+    await connect();
+    server.clock.set(new Date('2026-09-04T11:55:00Z'));
+
+    const [a, b] = await Promise.all([
+      request('/api/account/disconnect', { method: 'POST' }),
+      request('/api/account/disconnect', { method: 'POST' }),
+    ]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+    expect(
+      server.xClient.calls.filter((c) => c.name === 'refreshToken'),
+    ).toHaveLength(1);
+  });
+
   test('override beats the plan limit', async () => {
     await connect();
 

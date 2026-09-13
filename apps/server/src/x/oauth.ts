@@ -60,6 +60,12 @@ export function createStateStore(clock: Clock) {
       return state;
     },
     take(state: string): { userId: number; codeVerifier: string } | null {
+      const now = clock.now().getTime();
+      for (const [key, candidate] of states) {
+        if (now - candidate.createdAt > OAUTH_STATE_TTL_MS) {
+          states.delete(key);
+        }
+      }
       const entry = states.get(state);
       states.delete(state);
       if (!entry) return null;

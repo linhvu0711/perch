@@ -55,6 +55,7 @@ export function createXAccountService(deps: {
   xOAuth: XOAuthConfig | null;
 }): XAccountService {
   const states = createStateStore(deps.clock);
+  const inFlightRefreshes = new Map<number, Promise<void>>();
 
   return {
     status(userId) {
@@ -170,7 +171,15 @@ export function createXAccountService(deps: {
         deps.clock.now().getTime() + REFRESH_MARGIN_MS
       ) {
         await refreshRow(row);
-        row = getConnectedAccount(deps.db, userId) ?? row;
+        const fresh = getConnectedAccount(deps.db, userId);
+        if (!fresh || fresh.reconnectRequired) {
+          throw new ApiError(
+            409,
+            'reconnect_required',
+            'X account needs to be reconnected',
+          );
+        }
+        row = fresh;
       }
       return { account: row, accessToken: row.accessToken };
     },
@@ -180,9 +189,15 @@ export function createXAccountService(deps: {
       if (!row) {
         throw new ApiError(404, 'not_found', 'No X account connected');
       }
-      const { accessToken, account } = await this.accessTokenFor(userId);
+      let refreshToken = row.refreshToken;
+      let accessToken = row.accessToken;
+      if (!row.reconnectRequired) {
+        const fresh = await this.accessTokenFor(userId);
+        refreshToken = fresh.account.refreshToken;
+        accessToken = fresh.accessToken;
+      }
       try {
-        await deps.xClient.revokeToken(account.refreshToken);
+        await deps.xClient.revokeToken(refreshToken);
       } catch (error) {
         console.error(error);
       }
@@ -196,16 +211,22 @@ export function createXAccountService(deps: {
     },
   };
 
-  async function refreshRow(row: XAccountRow): Promise<void> {
-    try {
-      const tokens = await deps.xClient.refreshToken(row.refreshToken);
-      storeRefreshedTokens(deps.db, row.id, tokens, deps.clock.now());
-    } catch (error) {
-      if (error instanceof XError && error.kind === 'invalid_grant') {
-        markReconnectRequired(deps.db, row.id);
-        return;
+  function refreshRow(row: XAccountRow): Promise<void> {
+    const inFlight = inFlightRefreshes.get(row.id);
+    if (inFlight) return inFlight;
+    const pending = (async () => {
+      try {
+        const tokens = await deps.xClient.refreshToken(row.refreshToken);
+        storeRefreshedTokens(deps.db, row.id, tokens, deps.clock.now());
+      } catch (error) {
+        if (error instanceof XError && error.kind === 'invalid_grant') {
+          markReconnectRequired(deps.db, row.id);
+          return;
+        }
+        console.error(error);
       }
-      console.error(error);
-    }
+    })().finally(() => inFlightRefreshes.delete(row.id));
+    inFlightRefreshes.set(row.id, pending);
+    return pending;
   }
 }
