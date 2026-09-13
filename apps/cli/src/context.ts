@@ -23,8 +23,10 @@ export interface CliContext {
   editText(initial: string): Promise<string>;
 }
 
-export function realContext(argv: string[]): CliContext {
-  const env = process.env;
+export function realContext(
+  argv: string[],
+  env: Record<string, string | undefined> = process.env,
+): CliContext {
   return {
     argv,
     env,
