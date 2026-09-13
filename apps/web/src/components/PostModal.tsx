@@ -96,7 +96,8 @@ export function PostModal(): JSX.Element | null {
   }, [navigate, postQuery.error]);
 
   useEffect(() => {
-    modalRef.current?.focus();
+    const modal = modalRef.current;
+    if (modal && !modal.contains(document.activeElement)) modal.focus();
   }, [currentId]);
 
   const createRef = useRef<Promise<Post> | null>(null);
