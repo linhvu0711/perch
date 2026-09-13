@@ -492,7 +492,7 @@ describe('missed', () => {
     expect((await getPost(2)).missed).toBe(false);
   });
 
-  test("a disconnect at the time reads as missed and is never sent", async () => {
+  test('a disconnect at the time reads as missed and is never sent', async () => {
     // Given: the account connected at 10:00Z and disconnected at 10:20Z
     connectTestAccount(server);
     disconnectTestAccount(server, new Date('2026-09-04T10:20:00Z'));
