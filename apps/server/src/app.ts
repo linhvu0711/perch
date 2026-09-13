@@ -11,6 +11,7 @@ import { postsRoutes } from './routes/posts';
 import { resourcesRoutes } from './routes/resources';
 import { settingsRoutes } from './routes/settings';
 import { statusRoutes } from './routes/status';
+import { tagsRoutes } from './routes/tags';
 import { xCallbackHandler } from './routes/xCallback';
 import { staticHandler } from './static';
 import type { XAccountService } from './x/accounts';
@@ -39,6 +40,7 @@ function createRoutes(deps: AppDeps) {
     .route('/account', accountRoutes(deps))
     .route('/resources', resourcesRoutes(deps))
     .route('/posts', postsRoutes(deps))
+    .route('/tags', tagsRoutes(deps))
     .route('/counts', countsRoutes(deps))
     .all('*', notFoundHandler);
 }

@@ -37,6 +37,12 @@ export class MissingResourceError extends Error {
   }
 }
 
+export class TagExistsError extends Error {
+  constructor(public tagName: string) {
+    super(`Tag "${tagName}" already exists`);
+  }
+}
+
 type PostRow = typeof posts.$inferSelect;
 
 function toPost(row: PostRow, links: PostLink[], limit: number): Post {
