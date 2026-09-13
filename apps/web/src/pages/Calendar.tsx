@@ -10,7 +10,7 @@ import {
 } from '@perch/core';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, Outlet } from 'react-router';
 
 import { Empty } from '@/components/Empty';
 import { IconButton } from '@/components/IconButton';
@@ -163,6 +163,7 @@ export function Calendar() {
         <TagFilter value={tag} kind="post" onChange={setTag} />
       </div>
       {body}
+      <Outlet />
     </>
   );
 }
