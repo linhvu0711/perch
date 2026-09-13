@@ -99,7 +99,11 @@ export function Dashboard() {
       ? attention.error
       : calendar.isError
         ? calendar.error
-        : null;
+        : costSummary.isError
+          ? costSummary.error
+          : costMonths.isError
+            ? costMonths.error
+            : null;
 
   return (
     <>
@@ -276,8 +280,11 @@ export function Dashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {costItems.map((row, index) => (
-                        <tr key={row.month} className={costPage === 0 && index === 0 ? 'cur' : ''}>
+                      {costItems.map((row) => (
+                        <tr
+                          key={row.month}
+                          className={row.month === costSummaryData?.month ? 'cur' : ''}
+                        >
                           <td>{formatMonthTitle(`${row.month}-01`)}</td>
                           <td className="num">{formatUsd(row.publish_usd)}</td>
                           <td className="num">{formatUsd(row.save_tweet_usd)}</td>
@@ -296,17 +303,17 @@ export function Dashboard() {
                       label="Newer months"
                       icon={ChevronLeft}
                       size="sm"
-                      disabled={costPage === 0}
-                      onClick={() => setCursors(cursors.slice(0, -1))}
+                      disabled={costPage === 0 || costMonths.isFetching}
+                      onClick={() => setCursors((current) => current.slice(0, -1))}
                     />
                     <IconButton
                       label="Older months"
                       icon={ChevronRight}
                       size="sm"
-                      disabled={costMonths.data?.next_cursor == null}
+                      disabled={costMonths.data?.next_cursor == null || costMonths.isFetching}
                       onClick={() => {
                         const next = costMonths.data?.next_cursor;
-                        if (next != null) setCursors([...cursors, next]);
+                        if (next != null) setCursors((current) => [...current, next]);
                       }}
                     />
                   </div>
@@ -315,8 +322,8 @@ export function Dashboard() {
             </div>
             <div className="note">
               Publish {formatUsd(X_COSTS_USD.publish)} · publish with a link{' '}
-              {formatUsd(X_COSTS_USD.publishWithUrl)} · save a tweet{' '}
-              {formatUsd(X_COSTS_USD.saveTweet)} · connect {formatUsd(X_COSTS_USD.getMe)} · image
+              {formatUsd(X_COSTS_USD.publishWithUrl)} · save a Tweet Resource{' '}
+              {formatUsd(X_COSTS_USD.saveTweet)} · connect {formatUsd(X_COSTS_USD.getMe)} · Media
               upload free.
             </div>
           </div>
