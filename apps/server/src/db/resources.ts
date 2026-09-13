@@ -32,11 +32,13 @@ import { decodeCursor, encodeCursor } from './cursor';
 import type { Db } from './index';
 import { postLinks, resources } from './schema';
 import { getSettings } from './settings';
-import { tagsForResources } from './tags';
+import { addResourceTags, tagsForResources } from './tags';
 
 export class InvalidCursorError extends Error {}
 
 type ResourceRow = typeof resources.$inferSelect;
+
+type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 const usedByCount = sql<number>`(select count(*) from post_links where post_links.resource_id = ${resources.id})`;
 
@@ -114,7 +116,7 @@ function toResource(row: ResourceRow, usedBy = 0, tags: string[] = []): Resource
 }
 
 export function createTweet(
-  db: Db,
+  db: Db | Tx,
   userId: number,
   input: {
     url: string;
@@ -124,28 +126,33 @@ export function createTweet(
     text: string;
     title: string;
     postedAt: Date;
+    tags?: string[];
   },
   now: Date,
 ): TweetResource {
-  const row = db
-    .insert(resources)
-    .values({
-      userId,
-      type: 'tweet',
-      title: input.title,
-      notes: '',
-      createdAt: now,
-      tweetUrl: input.url,
-      tweetXId: input.xId,
-      tweetAuthorId: input.authorId,
-      tweetAuthorUsername: input.authorUsername,
-      tweetText: input.text,
-      tweetPostedAt: input.postedAt,
-    })
-    .returning()
-    .get();
-  if (!row) throw new Error('tweet insert failed');
-  return toResource(row) as TweetResource;
+  const row = db.transaction((tx) => {
+    const inserted = tx
+      .insert(resources)
+      .values({
+        userId,
+        type: 'tweet',
+        title: input.title,
+        notes: '',
+        createdAt: now,
+        tweetUrl: input.url,
+        tweetXId: input.xId,
+        tweetAuthorId: input.authorId,
+        tweetAuthorUsername: input.authorUsername,
+        tweetText: input.text,
+        tweetPostedAt: input.postedAt,
+      })
+      .returning()
+      .get();
+    if (!inserted) throw new Error('tweet insert failed');
+    if (input.tags !== undefined) addResourceTags(tx, userId, inserted.id, input.tags);
+    return inserted;
+  });
+  return toResource(row, 0, tagsForResources(db, [row.id]).get(row.id) ?? []) as TweetResource;
 }
 
 export function findTweetByXId(db: Db, userId: number, xId: string): TweetResource | null {
@@ -217,26 +224,30 @@ export function listTweetAuthors(db: Db, userId: number): ResourceAuthors {
   return { authors };
 }
 
-export function createNote(db: Db, userId: number, input: NoteCreate, now: Date): Resource {
-  const row = db
-    .insert(resources)
-    .values({
-      userId,
-      type: 'md',
-      title: noteTitle(input.body, input.title),
-      notes: input.notes ?? '',
-      createdAt: now,
-      mdBody: input.body,
-    })
-    .returning()
-    .get();
+export function createNote(db: Db | Tx, userId: number, input: NoteCreate, now: Date): Resource {
+  const row = db.transaction((tx) => {
+    const inserted = tx
+      .insert(resources)
+      .values({
+        userId,
+        type: 'md',
+        title: noteTitle(input.body, input.title),
+        notes: input.notes ?? '',
+        createdAt: now,
+        mdBody: input.body,
+      })
+      .returning()
+      .get();
+    if (!inserted) throw new Error('resource insert failed');
+    if (input.tags !== undefined) addResourceTags(tx, userId, inserted.id, input.tags);
+    return inserted;
+  });
 
-  if (!row) throw new Error('resource insert failed');
-  return toResource(row, 0);
+  return toResource(row, 0, tagsForResources(db, [row.id]).get(row.id) ?? []);
 }
 
 export function createImage(
-  db: Db,
+  db: Db | Tx,
   userId: number,
   input: {
     title: string;
@@ -246,31 +257,36 @@ export function createImage(
     bytes: number;
     width: number;
     height: number;
+    tags?: string[];
   },
   now: Date,
 ): Resource {
-  const row = db
-    .insert(resources)
-    .values({
-      userId,
-      type: 'image',
-      title: input.title,
-      notes: input.notes ?? '',
-      createdAt: now,
-      imagePath: input.path,
-      imageMime: input.mime,
-      imageBytes: input.bytes,
-      imageWidth: input.width,
-      imageHeight: input.height,
-    })
-    .returning()
-    .get();
+  const row = db.transaction((tx) => {
+    const inserted = tx
+      .insert(resources)
+      .values({
+        userId,
+        type: 'image',
+        title: input.title,
+        notes: input.notes ?? '',
+        createdAt: now,
+        imagePath: input.path,
+        imageMime: input.mime,
+        imageBytes: input.bytes,
+        imageWidth: input.width,
+        imageHeight: input.height,
+      })
+      .returning()
+      .get();
+    if (!inserted) throw new Error('resource insert failed');
+    if (input.tags !== undefined) addResourceTags(tx, userId, inserted.id, input.tags);
+    return inserted;
+  });
 
-  if (!row) throw new Error('resource insert failed');
-  return toResource(row);
+  return toResource(row, 0, tagsForResources(db, [row.id]).get(row.id) ?? []);
 }
 
-export function getResource(db: Db, userId: number, id: number): Resource | null {
+export function getResource(db: Db | Tx, userId: number, id: number): Resource | null {
   const row = db
     .select(resourceColumns())
     .from(resources)

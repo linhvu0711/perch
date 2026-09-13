@@ -10,6 +10,7 @@ import {
   resourceDeleteBodySchema,
   resourceListQuerySchema,
   resourcePatchSchema,
+  tagNameSchema,
   tweetCreateSchema,
 } from '@perch/core';
 import { Hono } from 'hono';
@@ -93,6 +94,20 @@ export function resourcesRoutes(deps: AppDeps) {
         title = parsed.data;
       }
 
+      const tags: string[] = [];
+      for (const value of form.getAll('tags')) {
+        const parsed = tagNameSchema.safeParse(value);
+        if (!parsed.success) {
+          throw new ApiError(400, 'validation', 'Invalid request', [
+            {
+              path: 'tags',
+              message: parsed.error.issues[0]?.message ?? 'Invalid tag',
+            },
+          ]);
+        }
+        tags.push(parsed.data);
+      }
+
       const results = [];
       for (const file of files) {
         const bytes = await file.bytes();
@@ -116,6 +131,7 @@ export function resourcesRoutes(deps: AppDeps) {
               bytes: bytes.length,
               width: inspected.width,
               height: inspected.height,
+              tags,
             },
             deps.clock.now(),
           );

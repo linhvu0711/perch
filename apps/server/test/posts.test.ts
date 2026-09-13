@@ -433,4 +433,36 @@ describe('posts', () => {
     const missing = await request('/api/posts/999/preview');
     expect(missing.status).toBe(404);
   });
+
+  test('creates a post with tags', async () => {
+    const created = await request('/api/posts', {
+      method: 'POST',
+      body: JSON.stringify({ text: 'hi', tags: ['news'] }),
+    });
+    expect(created.status).toBe(201);
+    expect((await created.json()).tags).toEqual(['news']);
+  });
+
+  test("copies the union of the linked resources' tags", async () => {
+    await createNote('# One');
+    await createNote('# Two');
+    await request('/api/resources/tags', {
+      method: 'POST',
+      body: JSON.stringify({ ids: [1], tags: ['a', 'b'] }),
+    });
+    await request('/api/resources/tags', {
+      method: 'POST',
+      body: JSON.stringify({ ids: [2], tags: ['B', 'c'] }),
+    });
+
+    const created = await request('/api/posts', {
+      method: 'POST',
+      body: JSON.stringify({ text: 'x', from: [1, 2], tags: ['d'] }),
+    });
+    expect(created.status).toBe(201);
+    expect((await created.json()).tags).toEqual(['a', 'b', 'c', 'd']);
+
+    const list = await (await request('/api/tags')).json();
+    expect(list.total).toBe(4);
+  });
 });

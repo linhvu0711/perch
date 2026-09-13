@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { TAG_BATCH_MAX, tagNameSchema } from './tags';
 import { isValidDate } from './timezone';
 
 export const RESOURCE_TYPES = ['tweet', 'image', 'md'] as const;
@@ -73,6 +74,7 @@ export const noteCreateSchema = z
     title: z.string().trim().max(RESOURCE_TITLE_MAX).optional(),
     notes: z.string().max(RESOURCE_NOTES_MAX).optional(),
     body: z.string().max(NOTE_BODY_MAX),
+    tags: z.array(tagNameSchema).max(TAG_BATCH_MAX).optional(),
   })
   .superRefine((value, context) => {
     if (noteTitle(value.body, value.title).length > RESOURCE_TITLE_MAX) {
@@ -171,6 +173,7 @@ export type ImageCreateResponse = z.infer<typeof imageCreateResponseSchema>;
 export const tweetCreateSchema = z.object({
   urls: z.array(z.string().trim().min(1)).min(1).max(RESOURCE_BATCH_MAX),
   refresh: z.boolean().default(false),
+  tags: z.array(tagNameSchema).max(TAG_BATCH_MAX).optional(),
 });
 export type TweetCreate = z.infer<typeof tweetCreateSchema>;
 

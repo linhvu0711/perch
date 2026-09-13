@@ -12,7 +12,8 @@ import {
 import type { Clock } from '../clock';
 import type { Db } from '../db';
 import { logApiCall } from '../db/apiCalls';
-import { createTweet, findTweetByXId, updateTweet } from '../db/resources';
+import { createTweet, findTweetByXId, getResource, updateTweet } from '../db/resources';
+import { addResourceTags } from '../db/tags';
 import type { XAccountService } from './accounts';
 import type { XTweet } from './client';
 import { type XClient, XError } from './client';
@@ -45,7 +46,15 @@ export function createTweetService(deps: {
 
         const existing = findTweetByXId(deps.db, userId, parsed.id);
         if (existing && !input.refresh) {
-          results.push({ url, ok: true, status: 'existing', resource: existing });
+          let resource = existing;
+          if (input.tags !== undefined && input.tags.length > 0) {
+            const tagNames = input.tags;
+            deps.db.transaction((tx) => {
+              addResourceTags(tx, userId, existing.id, tagNames);
+            });
+            resource = findTweetByXId(deps.db, userId, parsed.id) ?? existing;
+          }
+          results.push({ url, ok: true, status: 'existing', resource });
           continue;
         }
 
@@ -108,6 +117,9 @@ export function createTweetService(deps: {
                   now,
                 );
             if (!saved) throw new Error('tweet resource update failed');
+            if (input.tags !== undefined && input.tags.length > 0) {
+              addResourceTags(tx, userId, saved.id, input.tags);
+            }
             logApiCall(tx, userId, {
               endpoint: X_ENDPOINTS.getTweet,
               costUsd: X_COSTS_USD.saveTweet,
@@ -115,7 +127,7 @@ export function createTweetService(deps: {
               xAccountId: account.id,
               now,
             });
-            return saved;
+            return (getResource(tx, userId, saved.id) ?? saved) as TweetResource;
           });
         } catch (error) {
           const raced = !existing && findTweetByXId(deps.db, userId, parsed.id);

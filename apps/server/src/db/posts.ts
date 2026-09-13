@@ -21,7 +21,7 @@ import { decodePostCursor, encodePostCursor } from './cursor';
 import type { Db } from './index';
 import { postLinks, posts, resources } from './schema';
 import { getSettings } from './settings';
-import { tagsForPosts } from './tags';
+import { addPostTags, tagsForPosts, tagsForResources } from './tags';
 import { getConnectedAccount } from './xAccounts';
 
 export class InvalidPostCursorError extends Error {}
@@ -129,6 +129,10 @@ export function createPost(db: Db, userId: number, input: PostCreate, now: Date)
     for (const resourceId of input.from ?? []) {
       tx.insert(postLinks).values({ postId: inserted.id, resourceId }).onConflictDoNothing().run();
     }
+    addPostTags(tx, userId, inserted.id, [
+      ...(input.tags ?? []),
+      ...[...tagsForResources(tx, input.from ?? []).values()].flat(),
+    ]);
     return inserted;
   });
 

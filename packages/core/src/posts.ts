@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { batchErrorSchema, resourceTypeSchema } from './resources';
+import { TAG_BATCH_MAX, tagNameSchema } from './tags';
 
 export const POST_STATUSES = ['draft', 'official', 'published', 'failed'] as const;
 export const postStatusSchema = z.enum(POST_STATUSES);
@@ -45,6 +46,7 @@ export const postCreateSchema = z.object({
   title: z.string().trim().max(POST_TITLE_MAX).optional(),
   text: z.string().max(POST_TEXT_MAX).optional(),
   from: z.array(z.number().int().positive()).max(POST_BATCH_MAX).optional(),
+  tags: z.array(tagNameSchema).max(TAG_BATCH_MAX).optional(),
 });
 export type PostCreate = z.infer<typeof postCreateSchema>;
 

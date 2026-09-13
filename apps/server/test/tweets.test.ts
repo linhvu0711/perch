@@ -419,4 +419,41 @@ describe('tweet resources', () => {
       local.cleanup();
     }
   });
+
+  test('saves a tweet with tags', async () => {
+    // Given: the connected fake account and canned tweet
+    await connect();
+    const callsBefore = server.xClient.calls.length;
+
+    // When
+    const first = await request('/api/resources/tweets', {
+      method: 'POST',
+      body: JSON.stringify({
+        urls: ['https://x.com/perchtester/status/1'],
+        tags: ['x-api'],
+      }),
+    });
+    expect(first.status).toBe(200);
+    const firstBody = (await first.json()) as {
+      results: Array<{ resource: { tags: string[] } }>;
+    };
+    expect(firstBody.results[0]?.resource.tags).toEqual(['x-api']);
+
+    const second = await request('/api/resources/tweets', {
+      method: 'POST',
+      body: JSON.stringify({
+        urls: ['https://x.com/perchtester/status/1'],
+        tags: ['again'],
+      }),
+    });
+    expect(second.status).toBe(200);
+    const secondBody = (await second.json()) as {
+      results: Array<{ status: string; resource: { tags: string[] } }>;
+    };
+    expect(secondBody.results[0]?.status).toBe('existing');
+    expect(secondBody.results[0]?.resource.tags).toEqual(['again', 'x-api']);
+
+    // Then: the duplicate save made no new X call
+    expect(server.xClient.calls.length).toBe(callsBefore + 1);
+  });
 });

@@ -102,6 +102,18 @@ describe('resources', () => {
     expect((await response.json()).tags).toEqual([]);
   });
 
+  test('creates a note with tags', async () => {
+    const response = await request('/api/resources/notes', {
+      method: 'POST',
+      body: JSON.stringify({ body: '# Hello', tags: ['a', 'B', 'a'] }),
+    });
+    expect(response.status).toBe(201);
+    expect((await response.json()).tags).toEqual(['a', 'B']);
+
+    const list = await (await request('/api/tags')).json();
+    expect(list.total).toBe(2);
+  });
+
   test('patches title, notes, and body', async () => {
     const resource = await create({ body: '# Original' });
     const patch = async (body: Record<string, unknown>) => {
