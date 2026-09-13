@@ -9,6 +9,7 @@ import {
   resourceDeleteBodySchema,
   resourceListQuerySchema,
   resourcePatchSchema,
+  tweetCreateSchema,
 } from '@perch/core';
 import { Hono } from 'hono';
 import { stream } from 'hono/streaming';
@@ -23,6 +24,7 @@ import {
   InvalidCursorError,
   listAllResources,
   listResources,
+  listTweetAuthors,
   updateResource,
 } from '../db/resources';
 import { ApiError, validationHook } from '../errors';
@@ -51,6 +53,10 @@ export function resourcesRoutes(deps: AppDeps) {
     .post('/notes', zValidator('json', noteCreateSchema, validationHook), (c) =>
       c.json(createNote(deps.db, c.get('user').id, c.req.valid('json'), deps.clock.now()), 201),
     )
+    .post('/tweets', zValidator('json', tweetCreateSchema, validationHook), async (c) =>
+      c.json(await deps.tweets.saveTweets(c.get('user').id, c.req.valid('json')), 200),
+    )
+    .get('/authors', (c) => c.json(listTweetAuthors(deps.db, c.get('user').id), 200))
     .post('/images', async (c) => {
       const form = await c.req.formData();
       const files = form.getAll('files').filter((v): v is File => v instanceof File);
@@ -124,7 +130,7 @@ export function resourcesRoutes(deps: AppDeps) {
       return stream(c, async (s) => {
         for (const r of listAllResources(deps.db, c.get('user').id)) {
           const { used_by: _usedBy, ...line } = r;
-          await s.write(JSON.stringify(line) + '\n');
+          await s.write(`${JSON.stringify(line)}\n`);
         }
       });
     })

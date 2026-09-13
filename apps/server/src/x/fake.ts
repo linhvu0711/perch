@@ -6,6 +6,8 @@ export interface FakeXClient extends XClient {
   tokens: XTokens;
   refreshed: XTokens;
   tweet: XTweet;
+  tweets: Record<string, XTweet>;
+  tweetError: Error | null;
   mediaId: string;
   createdPost: { id: string };
   exchangeError: Error | null;
@@ -39,12 +41,16 @@ export function fakeXClient(): FakeXClient {
     tweet: {
       id: '1',
       text: 'hello',
+      authorId: '1000',
       authorUsername: 'perchtester',
+      createdAt: '2026-09-01T12:00:00.000Z',
       hasMedia: false,
       isArticle: false,
       noteText: null,
       referencedTweets: [],
     },
+    tweets: {},
+    tweetError: null,
     mediaId: 'media-1',
     createdPost: { id: '2' },
     exchangeError: null,
@@ -73,7 +79,8 @@ export function fakeXClient(): FakeXClient {
     },
     async getTweet(accessToken, id) {
       fake.calls.push({ name: 'getTweet', args: [accessToken, id] });
-      return fake.tweet;
+      if (fake.tweetError) throw fake.tweetError;
+      return fake.tweets[id] ?? { ...fake.tweet, id };
     },
     async uploadMedia(accessToken, input) {
       fake.calls.push({ name: 'uploadMedia', args: [accessToken, input] });

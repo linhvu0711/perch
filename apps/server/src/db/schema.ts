@@ -38,8 +38,17 @@ export const resources = sqliteTable(
     imageBytes: integer('image_bytes'),
     imageWidth: integer('image_w'),
     imageHeight: integer('image_h'),
+    tweetUrl: text('tweet_url'),
+    tweetXId: text('tweet_x_id'),
+    tweetAuthorId: text('tweet_author_id'),
+    tweetAuthorUsername: text('tweet_author_username'),
+    tweetText: text('tweet_text'),
+    tweetPostedAt: integer('tweet_posted_at', { mode: 'timestamp_ms' }),
   },
-  (t) => [index('resources_user_created_idx').on(t.userId, t.createdAt, t.id)],
+  (t) => [
+    index('resources_user_created_idx').on(t.userId, t.createdAt, t.id),
+    uniqueIndex('resources_user_tweet_x_id_idx').on(t.userId, t.tweetXId),
+  ],
 );
 
 export const posts = sqliteTable(

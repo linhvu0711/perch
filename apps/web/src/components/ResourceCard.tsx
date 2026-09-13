@@ -1,5 +1,5 @@
 import type { Resource } from '@perch/core';
-import { FileText, Image } from 'lucide-react';
+import { Bird, FileText, Image } from 'lucide-react';
 import type { JSX } from 'react';
 import { Link } from 'react-router';
 
@@ -7,6 +7,7 @@ import { formatBytes, formatDayMonth, noteExcerpt } from '@/lib/format';
 
 export function ResourceCard({ resource }: { resource: Resource }): JSX.Element {
   const isImage = resource.type === 'image';
+  const isTweet = resource.type === 'tweet';
   const excerpt = resource.type === 'md' ? noteExcerpt(resource.body) : '';
   return (
     <Link to={`/resources/${resource.id}`} className="card res">
@@ -17,6 +18,11 @@ export function ResourceCard({ resource }: { resource: Resource }): JSX.Element 
               <Image />
               Image
             </>
+          ) : isTweet ? (
+            <>
+              <Bird />
+              Tweet
+            </>
           ) : (
             <>
               <FileText />
@@ -24,14 +30,17 @@ export function ResourceCard({ resource }: { resource: Resource }): JSX.Element 
             </>
           )}
         </span>
+        {isTweet && <span>@{resource.author_username}</span>}
         <span className="date">{formatDayMonth(resource.created_at)}</span>
       </div>
       {isImage && (
         <img className="thumb" src={`/api/resources/${resource.id}/file`} alt={resource.title} />
       )}
-      <div className="title">{resource.title}</div>
+      {!isTweet && <div className="title">{resource.title}</div>}
       {isImage ? (
         <div className="body">{formatBytes(resource.bytes)}</div>
+      ) : isTweet ? (
+        <div className="body">{resource.text}</div>
       ) : (
         excerpt && <div className="body">{excerpt}</div>
       )}

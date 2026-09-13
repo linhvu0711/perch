@@ -1,6 +1,38 @@
 import { describe, expect, test } from 'bun:test';
 
-import { dayBoundsUtc, isValidTimeZone } from '../src/timezone';
+import {
+  dayBoundsUtc,
+  isValidDate,
+  isValidTimeZone,
+  zonedDayEnd,
+  zonedDayStart,
+} from '../src/timezone';
+
+test('zonedDayStart and zonedDayEnd', () => {
+  // Given: calendar days in several zones
+  // When/Then
+  expect(zonedDayStart('2026-09-10', 'UTC').toISOString()).toBe('2026-09-10T00:00:00.000Z');
+  expect(zonedDayStart('2026-09-10', 'Asia/Saigon').toISOString()).toBe('2026-09-09T17:00:00.000Z');
+  expect(zonedDayStart('2026-03-08', 'America/New_York').toISOString()).toBe(
+    '2026-03-08T05:00:00.000Z',
+  );
+  expect(zonedDayStart('2026-11-01', 'America/New_York').toISOString()).toBe(
+    '2026-11-01T04:00:00.000Z',
+  );
+  expect(zonedDayStart('2026-07-01', 'Europe/London').toISOString()).toBe(
+    '2026-06-30T23:00:00.000Z',
+  );
+  expect(zonedDayEnd('2026-09-10', 'Asia/Saigon').toISOString()).toBe('2026-09-10T17:00:00.000Z');
+});
+
+test('isValidDate', () => {
+  // Given: dates well and badly formed
+  // When/Then
+  expect(isValidDate('2024-02-29')).toBe(true);
+  expect(isValidDate('2026-02-30')).toBe(false);
+  expect(isValidDate('2026-1-5')).toBe(false);
+  expect(isValidDate('2026-09-10T00:00')).toBe(false);
+});
 
 describe('isValidTimeZone', () => {
   test.each(['UTC', 'Asia/Ho_Chi_Minh', 'Europe/Berlin'])('accepts %s', (tz) => {

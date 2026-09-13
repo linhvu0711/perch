@@ -1,4 +1,4 @@
-import { type XClient, XError, type XMe, type XTokens, type XTweet } from './client';
+import { type XClient, XError, type XTokens, type XTweet } from './client';
 
 const X_API_BASE = 'https://api.x.com';
 
@@ -8,7 +8,7 @@ export function createRealXClient(options: {
   fetch?: typeof fetch;
 }): XClient {
   const fetchImpl = options.fetch ?? fetch;
-  const basic = 'Basic ' + btoa(`${options.clientId}:${options.clientSecret}`);
+  const basic = `Basic ${btoa(`${options.clientId}:${options.clientSecret}`)}`;
 
   async function request(url: string, init: RequestInit): Promise<Response> {
     let res: Response;
@@ -120,30 +120,41 @@ export function createRealXClient(options: {
 
     async getTweet(accessToken, id) {
       const res = await request(
-        `${X_API_BASE}/2/tweets/${id}?tweet.fields=attachments,article,author_id,note_tweet,referenced_tweets,text&expansions=author_id,attachments.media_keys&user.fields=username`,
+        `${X_API_BASE}/2/tweets/${id}?tweet.fields=attachments,article,author_id,created_at,note_tweet,referenced_tweets,text&expansions=author_id,attachments.media_keys&user.fields=username`,
         { headers: bearerHeaders(accessToken) },
       );
       const data = (await res.json()) as {
-        data: {
+        data?: {
           id: string;
           text: string;
           author_id?: string;
+          created_at?: string;
           attachments?: { media_keys?: string[] };
           article?: unknown;
           note_tweet?: { text: string };
           referenced_tweets?: Array<{ type: string; id: string }>;
         };
         includes?: { users?: Array<{ id: string; username: string }> };
+        errors?: Array<{ detail?: string; title?: string }>;
       };
-      const author = data.includes?.users?.find((u) => u.id === data.data.author_id);
+      if (!data.data) {
+        throw new XError('http', 404, data.errors?.[0]?.detail ?? 'Tweet not found');
+      }
+      const tweetData = data.data;
+      if (!tweetData.author_id || !tweetData.created_at) {
+        throw new XError('http', res.status, 'tweet response missing fields');
+      }
+      const author = data.includes?.users?.find((u) => u.id === tweetData.author_id);
       const tweet: XTweet = {
-        id: data.data.id,
-        text: data.data.text,
+        id: tweetData.id,
+        text: tweetData.text,
+        authorId: tweetData.author_id,
         authorUsername: author?.username ?? '',
-        hasMedia: (data.data.attachments?.media_keys?.length ?? 0) > 0,
-        isArticle: data.data.article != null,
-        noteText: data.data.note_tweet?.text ?? null,
-        referencedTweets: data.data.referenced_tweets ?? [],
+        createdAt: tweetData.created_at,
+        hasMedia: (tweetData.attachments?.media_keys?.length ?? 0) > 0,
+        isArticle: tweetData.article != null,
+        noteText: tweetData.note_tweet?.text ?? null,
+        referencedTweets: tweetData.referenced_tweets ?? [],
       };
       return tweet;
     },

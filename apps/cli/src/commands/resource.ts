@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import {
   firstMarkdownHeading,
+  isValidDate,
   RESOURCE_LIST_LIMIT_DEFAULT,
   RESOURCE_LIST_LIMIT_MAX,
   RESOURCE_TYPES,
@@ -66,6 +67,21 @@ function printResource(ctx: CliContext, options: GlobalOptions, resource: Resour
     );
     return;
   }
+  if (resource.type === 'tweet') {
+    ctx.stdout.write(
+      `${formatTable({
+        id: resource.id,
+        type: resource.type,
+        title: resource.title,
+        author: `@${resource.author_username}`,
+        posted: resource.posted_at,
+        url: resource.url,
+        notes: resource.notes,
+        created: resource.created_at,
+      })}\n\n${resource.text}\n`,
+    );
+    return;
+  }
 
   ctx.stdout.write(
     `${formatTable({
@@ -82,6 +98,38 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
   const resource = program.command('resource').description('Manage resources');
 
   const add = resource.command('add').description('Add a resource');
+
+  add
+    .command('tweet <urls...>')
+    .description('Save tweets from X URLs')
+    .option('--refresh', 're-fetch a saved tweet')
+    .action(async (urls: string[], commandOptions: { refresh?: boolean }) => {
+      const options = program.opts<GlobalOptions>();
+      const api = apiFor(program, ctx);
+      const response = await api.call(
+        api.client.api.resources.tweets.$post({
+          json: { urls, refresh: commandOptions.refresh ?? false },
+        }),
+      );
+      const mode = resolveMode(options, ctx.isTTY);
+      if (mode === 'json') {
+        printResult(ctx, mode, response.results);
+      } else {
+        printResult(
+          ctx,
+          mode,
+          response.results.map((result) => ({
+            url: result.url,
+            id: result.ok ? result.resource.id : '',
+            status: result.ok ? result.status : '',
+            author: result.ok ? `@${result.resource.author_username}` : '',
+            error: result.ok ? '' : result.error.message,
+          })),
+        );
+      }
+      const failed = response.results.filter((result) => !result.ok).length;
+      if (failed > 0) throw new BatchFailure(failed, response.results.length);
+    });
 
   add
     .command('md <path...>')
@@ -270,6 +318,9 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
     .description('List resources')
     .option('--type <type>')
     .option('--search <q>')
+    .option('--author <username>')
+    .option('--from <date>')
+    .option('--to <date>')
     .option('--sort <sort>', 'sort field', 'created')
     .option('--desc', 'newest first')
     .option('--limit <n>', 'page size', String(RESOURCE_LIST_LIMIT_DEFAULT))
@@ -278,6 +329,9 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
       async (commandOptions: {
         type?: string;
         search?: string;
+        author?: string;
+        from?: string;
+        to?: string;
         sort: string;
         desc?: boolean;
         limit: string;
@@ -298,6 +352,14 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
             `Unknown sort: ${commandOptions.sort}. Use created or used`,
           );
         }
+        for (const [name, value] of [
+          ['--from', commandOptions.from],
+          ['--to', commandOptions.to],
+        ] as const) {
+          if (value !== undefined && !isValidDate(value)) {
+            throw new CliError('bad_value', `${name} must be YYYY-MM-DD`);
+          }
+        }
         const parsedLimit = resourceListQuerySchema.shape.limit.safeParse(commandOptions.limit);
         if (!parsedLimit.success) {
           throw new CliError(
@@ -316,6 +378,9 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
                 ? { type: commandOptions.type as ResourceType }
                 : {}),
               ...(commandOptions.search !== undefined ? { search: commandOptions.search } : {}),
+              ...(commandOptions.author !== undefined ? { author: commandOptions.author } : {}),
+              ...(commandOptions.from !== undefined ? { from: commandOptions.from } : {}),
+              ...(commandOptions.to !== undefined ? { to: commandOptions.to } : {}),
               sort: commandOptions.sort as 'created' | 'used',
               order: commandOptions.desc ? 'desc' : 'asc',
               limit: String(parsedLimit.data),
@@ -334,6 +399,7 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
           type: item.type,
           title: item.title,
           created: item.created_at,
+          author: item.type === 'tweet' ? `@${item.author_username}` : '',
         }));
         const summary = `${result.items.length} shown · ${result.total} total`;
         if (rows.length === 0) {

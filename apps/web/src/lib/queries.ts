@@ -8,6 +8,7 @@ import type {
   ResourcePatch,
   ResourceType,
   SettingsPatch,
+  TweetCreate,
 } from '@perch/core';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -96,6 +97,7 @@ export function useDisconnectX() {
 export interface ResourceFilters {
   type?: ResourceType;
   search?: string;
+  author?: string;
   sort?: 'created' | 'used';
   order: 'asc' | 'desc';
 }
@@ -111,6 +113,7 @@ export function useResources(filters: ResourceFilters, pageSize = RESOURCES_PAGE
           query: {
             ...(filters.type !== undefined ? { type: filters.type } : {}),
             ...(filters.search !== undefined ? { search: filters.search } : {}),
+            ...(filters.author !== undefined ? { author: filters.author } : {}),
             sort: filters.sort ?? 'created',
             order: filters.order,
             limit: String(pageSize),
@@ -120,6 +123,30 @@ export function useResources(filters: ResourceFilters, pageSize = RESOURCES_PAGE
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor ?? undefined,
+  });
+}
+
+export function useResourceAuthors() {
+  return useQuery({
+    queryKey: ['resources', 'authors'],
+    queryFn: () => unwrap(api.api.resources.authors.$get()),
+  });
+}
+
+export function useSaveTweets() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TweetCreate) => unwrap(api.api.resources.tweets.$post({ json: input })),
+    onSuccess: (data) => {
+      for (const result of data.results) {
+        if (result.ok) {
+          queryClient.setQueryData(['resources', 'detail', result.resource.id], result.resource);
+        }
+      }
+      void queryClient.invalidateQueries({ queryKey: ['resources', 'list'] });
+      void queryClient.invalidateQueries({ queryKey: ['resources', 'authors'] });
+      void queryClient.invalidateQueries({ queryKey: ['counts'] });
+    },
   });
 }
 
@@ -202,6 +229,7 @@ export function useDeleteResources() {
         }
       }
       void queryClient.invalidateQueries({ queryKey: ['resources', 'list'] });
+      void queryClient.invalidateQueries({ queryKey: ['resources', 'authors'] });
       void queryClient.invalidateQueries({ queryKey: ['counts'] });
     },
   });
@@ -215,7 +243,7 @@ export interface PostFilters {
 
 export const POSTS_PAGE_SIZE = 50;
 
-export function usePosts(filters: PostFilters) {
+export function usePosts(filters: PostFilters, enabled = true) {
   return useInfiniteQuery({
     queryKey: ['posts', 'list', filters],
     queryFn: ({ pageParam }) =>
@@ -234,6 +262,7 @@ export function usePosts(filters: PostFilters) {
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor ?? undefined,
+    enabled,
   });
 }
 

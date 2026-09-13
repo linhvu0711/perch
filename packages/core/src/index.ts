@@ -7,3 +7,4 @@ export * from './mirror';
 export * from './posts';
 export * from './resources';
 export * from './timezone';
+export * from './tweets';

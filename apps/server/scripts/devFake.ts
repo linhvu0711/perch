@@ -20,6 +20,13 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'perch-fake-'));
 const webDist = path.resolve(import.meta.dir, '../../web/dist');
 
 const xClient = fakeXClient();
+xClient.tweet.text = 'Ship the smallest thing that works, then make it right.';
+xClient.tweets['2'] = { ...xClient.tweet, id: '2', hasMedia: true };
+xClient.tweets['3'] = {
+  ...xClient.tweet,
+  id: '3',
+  noteText: 'A long-form post. '.repeat(20),
+};
 if (process.argv.includes('--invalid-grant')) {
   xClient.tokens.expiresIn = 0;
   xClient.refreshError = new XError('invalid_grant', 400, 'expired');

@@ -10,6 +10,7 @@ import { createTick } from './scheduler';
 import { createXAccountService } from './x/accounts';
 import type { XClient } from './x/client';
 import type { XOAuthConfig } from './x/oauth';
+import { createTweetService } from './x/tweets';
 
 export interface BuildServerOptions {
   dbPath: string;
@@ -40,6 +41,12 @@ export async function buildServer(options: BuildServerOptions): Promise<PerchSer
     xClient: options.xClient,
     xOAuth: options.xOAuth ?? null,
   });
+  const tweets = createTweetService({
+    db,
+    clock: options.clock,
+    accounts,
+    xClient: options.xClient,
+  });
   const app = createApp({
     db,
     token: options.token,
@@ -48,6 +55,7 @@ export async function buildServer(options: BuildServerOptions): Promise<PerchSer
     uploadDir: options.uploadDir,
     clock: options.clock,
     accounts,
+    tweets,
   });
   const tick = createTick({
     db,

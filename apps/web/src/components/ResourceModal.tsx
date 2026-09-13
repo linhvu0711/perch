@@ -1,5 +1,17 @@
 import { firstMarkdownHeading, NOTE_TITLE_FALLBACK, noteTitle } from '@perch/core';
-import { Check, CopyPlus, FileText, Image, Pencil, PenLine, Trash2, Undo2, X } from 'lucide-react';
+import {
+  Bird,
+  Check,
+  CopyPlus,
+  ExternalLink,
+  FileText,
+  Image,
+  Pencil,
+  PenLine,
+  Trash2,
+  Undo2,
+  X,
+} from 'lucide-react';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useBlocker, useNavigate, useParams } from 'react-router';
 
@@ -15,6 +27,7 @@ import {
 } from '@/lib/queries';
 import { ConfirmDialog } from './ConfirmDialog';
 import { IconButton } from './IconButton';
+import { IconLink } from './IconLink';
 import { Markdown } from './Markdown';
 import { NoteEditor } from './NoteEditor';
 import { StatusPill } from './StatusPill';
@@ -34,7 +47,10 @@ export function ResourceModal(): JSX.Element | null {
   const resourceQuery = useResource(isNew || invalidId ? null : parsedId);
   const createNote = useCreateNote();
   const createPost = useCreatePost();
-  const usedBy = usePosts(parsedId === null ? { resource_id: -1 } : { resource_id: parsedId });
+  const usedBy = usePosts(
+    parsedId === null ? { resource_id: -1 } : { resource_id: parsedId },
+    parsedId !== null,
+  );
   const usedByPosts =
     parsedId === null ? [] : (usedBy.data?.pages.flatMap((page) => page.items) ?? []);
   const usedByTotal = parsedId === null ? 0 : (usedBy.data?.pages[0]?.total ?? usedByPosts.length);
@@ -49,11 +65,14 @@ export function ResourceModal(): JSX.Element | null {
   const [notesDraft, setNotesDraft] = useState('');
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const resource = resourceQuery.data;
-  const resourceId = resource?.id;
+  const _resourceId = resource?.id;
   const saving = createNote.isPending || updateResource.isPending;
   const original = isNew
     ? { body: '', title: '' }
-    : { body: resource?.type === 'md' ? resource.body : '', title: resource?.title ?? '' };
+    : {
+        body: resource?.type === 'md' ? resource.body : '',
+        title: resource === undefined || resource.type === 'tweet' ? '' : resource.title,
+      };
   const notesDirty = !isNew && resource !== undefined && notesDraft !== resource.notes;
   const dirty =
     isEditing &&
@@ -74,19 +93,19 @@ export function ResourceModal(): JSX.Element | null {
   useEffect(() => {
     if (!resource || isEditing) return;
     setBodyDraft(resource.type === 'md' ? resource.body : '');
-    setTitleDraft(resource.title);
+    setTitleDraft(resource.type === 'tweet' ? '' : resource.title);
     setTitleTouched(false);
     setNotesDraft(resource.notes);
   }, [isEditing, resource]);
 
   useEffect(() => {
     if (!isEditing) modalRef.current?.focus();
-  }, [isEditing, resourceId]);
+  }, [isEditing]);
 
   const resetDrafts = useCallback(() => {
     if (!resource) return;
     setBodyDraft(resource.type === 'md' ? resource.body : '');
-    setTitleDraft(resource.title);
+    setTitleDraft(resource.type === 'tweet' ? '' : resource.title);
     setTitleTouched(false);
     setNotesDraft(resource.notes);
   }, [resource]);
@@ -138,7 +157,7 @@ export function ResourceModal(): JSX.Element | null {
       if (saved) proceed();
       else reset();
     });
-  }, [blocker.state, dirty, saveNotes]);
+  }, [blocker.state, dirty, saveNotes, blocker]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -330,10 +349,140 @@ export function ResourceModal(): JSX.Element | null {
 
   if (!isNew && !resource) return null;
 
+  if (resource?.type === 'tweet') {
+    return (
+      <>
+        <div
+          className="scrim"
+          onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
+        >
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Tweet"
+            tabIndex={-1}
+            ref={modalRef}
+          >
+            <div className="mhead">
+              <span className="id">#{resource.id}</span>
+              <span className="kind">
+                <Bird />
+                Tweet
+              </span>
+              <b>{resource.title}</b>
+              <div className="right">
+                <IconLink label="Open on X" icon={ExternalLink} href={resource.url} size="sm" />
+                <IconButton
+                  label="Delete resource"
+                  icon={Trash2}
+                  variant="ghost"
+                  size="sm"
+                  className="danger"
+                  onClick={() => setConfirm('delete')}
+                />
+                <IconButton label="Close (Esc)" icon={X} variant="ghost" onClick={requestClose} />
+              </div>
+            </div>
+            <div className="rbody">
+              <div className="rmain">
+                <div className="xcard">
+                  <div className="av other" />
+                  <div>
+                    <div className="name">
+                      <b>@{resource.author_username}</b>
+                    </div>
+                    <div className="text">{resource.text}</div>
+                    <div className="meta">
+                      {formatDateTime(resource.posted_at)} ·{' '}
+                      <a href={resource.url} target="_blank" rel="noopener noreferrer">
+                        Open on X
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="rside">
+                <div className="field">
+                  <label>Details</label>
+                  <div className="kv">
+                    <b>author</b>
+                    <span>@{resource.author_username}</span>
+                    <b>posted</b>
+                    <span>{formatDateTime(resource.posted_at)}</span>
+                    <b>Saved</b>
+                    <span>{formatDateTime(resource.created_at)}</span>
+                  </div>
+                </div>
+                <div className="field">
+                  <label>
+                    Used in {usedByTotal} post{usedByTotal === 1 ? '' : 's'}
+                  </label>
+                  <div className="linked">
+                    {usedByPosts.length === 0 ? (
+                      <span className="note">Not linked to any post yet.</span>
+                    ) : (
+                      usedByPosts.map((post) => (
+                        <Link key={post.id} to={`/posts/${post.id}`} className="link">
+                          <span className="k">
+                            <PenLine size={14} strokeWidth={1.75} />
+                          </span>
+                          <span className="ltitle">
+                            #{post.id} · {post.title || 'Empty post'}
+                          </span>
+                          <StatusPill status={post.status} />
+                        </Link>
+                      ))
+                    )}
+                    {usedByTotal > usedByPosts.length && (
+                      <span className="note">…and {usedByTotal - usedByPosts.length} more</span>
+                    )}
+                  </div>
+                </div>
+                <div className="field">
+                  <label>Private notes</label>
+                  <textarea
+                    aria-label="Private notes"
+                    placeholder="Why you saved this"
+                    value={notesDraft}
+                    onChange={(event) => setNotesDraft(event.target.value)}
+                    onBlur={() => void saveNotes()}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {confirm === 'delete' && (
+          <ConfirmDialog
+            title={`Delete ${resource.title}?`}
+            body={
+              usedByTotal > 0 ? (
+                <p>
+                  It is unlinked from {usedByTotal} post
+                  {usedByTotal === 1 ? '' : 's'} (
+                  {usedByPosts.map((post) => `#${post.id}`).join(', ')}
+                  {usedByTotal > usedByPosts.length ? ', …' : ''}).
+                </p>
+              ) : (
+                <p>It is not used by any post.</p>
+              )
+            }
+            ok="Delete"
+            danger
+            busy={deleteResources.isPending}
+            onOk={() => void confirmDelete()}
+            onCancel={cancelConfirm}
+          />
+        )}
+      </>
+    );
+  }
+
   const isImage = resource?.type === 'image';
   const displayedBody = isEditing ? bodyDraft : resource?.type === 'md' ? resource.body : '';
   const displayedTitle = isEditing ? titleDraft : (resource?.title ?? '');
-  const editingNote = isEditing && resource?.type === 'md';
+  const editingNote = isEditing && (isNew || resource?.type === 'md');
 
   return (
     <>
@@ -484,7 +633,7 @@ export function ResourceModal(): JSX.Element | null {
                   )}
                   {!isImage && <span>{wordCount(displayedBody)}</span>}
                   <b>Saved</b>
-                  <span>{isNew ? '—' : formatDateTime(resource!.created_at)}</span>
+                  <span>{isNew ? '—' : formatDateTime(resource?.created_at ?? '')}</span>
                 </div>
               </div>
               {!isNew && (

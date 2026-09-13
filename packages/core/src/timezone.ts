@@ -11,6 +11,32 @@ export function isValidTimeZone(tz: string): boolean {
   }
 }
 
+export function isValidDate(ymd: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return false;
+  const year = Number(ymd.slice(0, 4));
+  const month = Number(ymd.slice(5, 7));
+  const day = Number(ymd.slice(8, 10));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+  );
+}
+
+export function zonedDayStart(ymd: string, timeZone: string): Date {
+  return dayBoundsUtc(ymd, timeZone).start;
+}
+
+export function zonedDayEnd(ymd: string, timeZone: string): Date {
+  const year = Number(ymd.slice(0, 4));
+  const month = Number(ymd.slice(5, 7));
+  const day = Number(ymd.slice(8, 10));
+  const next = new Date(Date.UTC(year, month - 1, day + 1));
+  return dayBoundsUtc(
+    `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}-${String(next.getUTCDate()).padStart(2, '0')}`,
+    timeZone,
+  ).start;
+}
+
 function zoneOffsetMs(instant: Date, timeZone: string): number {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
@@ -22,7 +48,7 @@ function zoneOffsetMs(instant: Date, timeZone: string): number {
     minute: '2-digit',
     second: '2-digit',
   }).formatToParts(instant);
-  const get = (type: string) => Number(parts.find((part) => part.type === type)!.value);
+  const get = (type: string) => Number(parts.find((part) => part.type === type)?.value);
   const asUtc = Date.UTC(
     get('year'),
     get('month') - 1,
@@ -41,7 +67,7 @@ function localDay(instant: Date, timeZone: string): string {
     month: '2-digit',
     day: '2-digit',
   }).formatToParts(instant);
-  const get = (type: string) => parts.find((part) => part.type === type)!.value;
+  const get = (type: string) => parts.find((part) => part.type === type)?.value;
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 

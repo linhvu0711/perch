@@ -43,6 +43,16 @@ async function get(id: number): Promise<Response> {
   });
 }
 
+async function connect(): Promise<void> {
+  const start = await server.app.request('/api/account/connect', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${server.token}` },
+  });
+  const { authorize_url } = (await start.json()) as { authorize_url: string };
+  const state = new URL(authorize_url).searchParams.get('state');
+  await server.app.request(`/auth/x/callback?code=abc&state=${state}`);
+}
+
 describe('resource add', () => {
   test('adds a Markdown file and persists it', async () => {
     const file = write('hello.md', '# Hello\n\nbody');
@@ -442,5 +452,128 @@ describe('resource add image', () => {
       height: 2,
     });
     expect(shown).not.toHaveProperty('body');
+  });
+
+  test('adds tweets from URLs and reports per-item results', async () => {
+    // Given: a connected account and one tweet that carries media
+    await connect();
+    server.xClient.tweets['2'] = { ...server.xClient.tweet, id: '2', hasMedia: true };
+
+    // When
+    const capture = makeCtx(server);
+    const code = await runCli(
+      [
+        'resource',
+        'add',
+        'tweet',
+        'https://x.com/perchtester/status/1',
+        'https://x.com/perchtester/status/2',
+        '--json',
+      ],
+      capture.ctx,
+    );
+
+    // Then
+    expect(code).toBe(1);
+    expect(capture.err()).toBe('');
+    expect(JSON.parse(capture.out())).toMatchObject([
+      {
+        url: 'https://x.com/perchtester/status/1',
+        ok: true,
+        status: 'created',
+        resource: { id: 1, author_username: 'perchtester', text: 'hello' },
+      },
+      {
+        url: 'https://x.com/perchtester/status/2',
+        ok: false,
+        error: { code: 'has_media', message: 'Post has media' },
+      },
+    ]);
+
+    const shown = makeCtx(server, { isTTY: true });
+    expect(await runCli(['resource', 'show', '1'], shown.ctx)).toBe(0);
+    expect(shown.out()).toContain('@perchtester');
+    expect(shown.out()).toContain('hello');
+  });
+
+  test('refreshes a saved tweet and refuses without an X account', async () => {
+    // Given: no account for the first call, then one saved tweet with edited text
+    const denied = makeCtx(server);
+    expect(
+      await runCli(
+        ['resource', 'add', 'tweet', 'https://x.com/perchtester/status/1', '--json'],
+        denied.ctx,
+      ),
+    ).toBe(1);
+    expect(JSON.parse(denied.err()).code).toBe('not_found');
+
+    await connect();
+    await server.app.request('/api/resources/tweets', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${server.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ urls: ['https://x.com/perchtester/status/1'] }),
+    });
+    server.xClient.tweet.text = 'hello edited';
+
+    // When/Then
+    const existing = makeCtx(server);
+    expect(
+      await runCli(
+        ['resource', 'add', 'tweet', 'https://x.com/perchtester/status/1', '--json'],
+        existing.ctx,
+      ),
+    ).toBe(0);
+    expect(JSON.parse(existing.out())[0]).toMatchObject({ status: 'existing' });
+
+    const refreshed = makeCtx(server);
+    expect(
+      await runCli(
+        ['resource', 'add', 'tweet', 'https://x.com/perchtester/status/1', '--refresh', '--json'],
+        refreshed.ctx,
+      ),
+    ).toBe(0);
+    expect(JSON.parse(refreshed.out())[0]).toMatchObject({
+      status: 'refreshed',
+      resource: { text: 'hello edited' },
+    });
+  });
+
+  test('filters the list by author and date saved', async () => {
+    // Given: one tweet and one note, both saved today
+    await connect();
+    await server.app.request('/api/resources/tweets', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${server.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ urls: ['https://x.com/perchtester/status/1'] }),
+    });
+    await create('# Note');
+
+    // When/Then
+    const byAuthor = makeCtx(server);
+    expect(
+      await runCli(['resource', 'list', '--author', '@perchtester', '--json'], byAuthor.ctx),
+    ).toBe(0);
+    expect(JSON.parse(byAuthor.out()).items.map((item: Resource) => item.id)).toEqual([1]);
+
+    const byDate = makeCtx(server);
+    expect(
+      await runCli(
+        ['resource', 'list', '--from', '2026-09-04', '--to', '2026-09-04', '--json'],
+        byDate.ctx,
+      ),
+    ).toBe(0);
+    expect(JSON.parse(byDate.out()).total).toBe(2);
+
+    const badDate = makeCtx(server);
+    expect(await runCli(['resource', 'list', '--from', 'yesterday', '--json'], badDate.ctx)).toBe(
+      1,
+    );
+    expect(JSON.parse(badDate.err()).code).toBe('bad_value');
   });
 });

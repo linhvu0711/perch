@@ -14,6 +14,7 @@ import { statusRoutes } from './routes/status';
 import { xCallbackHandler } from './routes/xCallback';
 import { staticHandler } from './static';
 import type { XAccountService } from './x/accounts';
+import type { TweetService } from './x/tweets';
 
 export type AppEnv = { Variables: { user: User } };
 
@@ -25,6 +26,7 @@ export interface AppDeps {
   uploadDir: string;
   clock: Clock;
   accounts: XAccountService;
+  tweets: TweetService;
 }
 
 function createRoutes(deps: AppDeps) {

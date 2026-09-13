@@ -36,6 +36,20 @@
       "when": 1789275987040,
       "tag": "0004_posts",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1789279390251,
+      "tag": "0005_noisy_catseye",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1789281027908,
+      "tag": "0006_curly_quasimodo",
+      "breakpoints": true
     }
   ]
 }

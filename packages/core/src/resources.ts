@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { isValidDate } from './timezone';
+
 export const RESOURCE_TYPES = ['tweet', 'image', 'md'] as const;
 export const resourceTypeSchema = z.enum(RESOURCE_TYPES);
 export type ResourceType = z.infer<typeof resourceTypeSchema>;
@@ -36,15 +38,32 @@ export const imageResourceSchema = z.object({
   height: z.number().int().positive(),
   used_by: z.number().int().nonnegative().optional(),
 });
+export const tweetResourceSchema = z.object({
+  id: z.number().int().positive(),
+  type: z.literal('tweet'),
+  title: z.string(),
+  notes: z.string(),
+  created_at: z.string(),
+  url: z.string().url(),
+  x_id: z.string(),
+  author_id: z.string(),
+  author_username: z.string(),
+  text: z.string(),
+  posted_at: z.string(),
+  used_by: z.number().int().nonnegative().optional(),
+});
 export const resourceSchema = z.discriminatedUnion('type', [
   noteResourceSchema,
   imageResourceSchema,
+  tweetResourceSchema,
 ]);
 export type Resource =
   | z.infer<typeof noteResourceSchema>
-  | (z.infer<typeof imageResourceSchema> & { body?: undefined });
+  | (z.infer<typeof imageResourceSchema> & { body?: undefined })
+  | (z.infer<typeof tweetResourceSchema> & { body?: undefined });
 export type NoteResource = z.infer<typeof noteResourceSchema>;
 export type ImageResource = z.infer<typeof imageResourceSchema>;
+export type TweetResource = z.infer<typeof tweetResourceSchema>;
 
 export const noteCreateSchema = z
   .object({
@@ -75,6 +94,15 @@ export type ResourcePatch = z.infer<typeof resourcePatchSchema>;
 export const resourceListQuerySchema = z.object({
   type: resourceTypeSchema.optional(),
   search: z.string().trim().max(200).optional(),
+  author: z
+    .string()
+    .trim()
+    .min(1)
+    .max(50)
+    .transform((value) => value.replace(/^@/, ''))
+    .optional(),
+  from: z.string().refine(isValidDate, 'Use YYYY-MM-DD').optional(),
+  to: z.string().refine(isValidDate, 'Use YYYY-MM-DD').optional(),
   sort: z.enum(['created', 'used']).default('created'),
   order: z.enum(['asc', 'desc']).default('desc'),
   limit: z.coerce
@@ -93,6 +121,11 @@ export const resourceListSchema = z.object({
   next_cursor: z.string().nullable(),
 });
 export type ResourceList = z.infer<typeof resourceListSchema>;
+
+export const resourceAuthorsSchema = z.object({
+  authors: z.array(z.object({ username: z.string(), count: z.number().int() })),
+});
+export type ResourceAuthors = z.infer<typeof resourceAuthorsSchema>;
 
 export const resourceDeleteBodySchema = z.object({
   ids: z.array(z.number().int().positive()).min(1).max(RESOURCE_BATCH_MAX),
@@ -132,6 +165,31 @@ export const imageCreateResponseSchema = z.object({
 });
 export type ImageCreateResponse = z.infer<typeof imageCreateResponseSchema>;
 
+export const tweetCreateSchema = z.object({
+  urls: z.array(z.string().trim().min(1)).min(1).max(RESOURCE_BATCH_MAX),
+  refresh: z.boolean().default(false),
+});
+export type TweetCreate = z.infer<typeof tweetCreateSchema>;
+
+export const tweetCreateResultSchema = z.discriminatedUnion('ok', [
+  z.object({
+    url: z.string(),
+    ok: z.literal(true),
+    status: z.enum(['created', 'existing', 'refreshed']),
+    resource: tweetResourceSchema,
+  }),
+  z.object({
+    url: z.string(),
+    ok: z.literal(false),
+    error: batchErrorSchema,
+  }),
+]);
+export type TweetCreateResult = z.infer<typeof tweetCreateResultSchema>;
+export const tweetCreateResponseSchema = z.object({
+  results: z.array(tweetCreateResultSchema),
+});
+export type TweetCreateResponse = z.infer<typeof tweetCreateResponseSchema>;
+
 /** First ATX heading (`#` to `######`) outside fenced code blocks, trimmed, closing #s removed; null when none. */
 export function firstMarkdownHeading(body: string): string | null {
   let insideFence = false;
@@ -146,8 +204,8 @@ export function firstMarkdownHeading(body: string): string | null {
 
     const match = line.match(/^ {0,3}(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$/);
     if (!match) continue;
-    const heading = match[2]!.trim();
-    if (heading !== '' && !/^#+$/.test(heading)) return heading;
+    const heading = match[2]?.trim();
+    if (heading && !/^#+$/.test(heading)) return heading;
   }
 
   return null;
