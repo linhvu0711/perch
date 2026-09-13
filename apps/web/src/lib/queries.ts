@@ -129,6 +129,13 @@ export function useResources(filters: ResourceFilters, pageSize = RESOURCES_PAGE
   });
 }
 
+export function useTweetAuthors() {
+  return useQuery({
+    queryKey: ['resources', 'authors'],
+    queryFn: () => unwrap(api.api.resources.authors.$get()),
+  });
+}
+
 export function useSaveTweets() {
   const queryClient = useQueryClient();
   return useMutation({

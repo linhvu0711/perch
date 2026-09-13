@@ -9,7 +9,7 @@ import {
   Search,
   Upload,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type JSX, useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router';
 
 import { Empty } from '@/components/Empty';
@@ -18,15 +18,17 @@ import { ResourceCard } from '@/components/ResourceCard';
 import { UploadImagesModal } from '@/components/UploadImagesModal';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { errorMessage } from '@/lib/api';
-import { RESOURCES_PAGE_SIZE, useResources } from '@/lib/queries';
+import { RESOURCES_PAGE_SIZE, useResources, useTweetAuthors } from '@/lib/queries';
 
 export function Resources() {
   const navigate = useNavigate();
   const [type, setType] = useState<ResourceType | undefined>();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [author, setAuthor] = useState('');
   const [sort, setSort] = useState<'newest' | 'oldest' | 'most' | 'least'>('newest');
   const [uploadOpen, setUploadOpen] = useState(false);
+  const authors = useTweetAuthors();
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,10 +40,11 @@ export function Resources() {
     () => ({
       ...(type !== undefined ? { type } : {}),
       ...(debouncedSearch !== '' ? { search: debouncedSearch } : {}),
+      ...(author !== '' ? { author } : {}),
       sort: sort === 'most' || sort === 'least' ? ('used' as const) : ('created' as const),
       order: sort === 'oldest' || sort === 'least' ? ('asc' as const) : ('desc' as const),
     }),
-    [type, debouncedSearch, sort],
+    [author, type, debouncedSearch, sort],
   );
   const resources = useResources(filters);
   const items = resources.data?.pages.flatMap((page) => page.items) ?? [];
@@ -59,7 +62,7 @@ export function Resources() {
     return () => observer.disconnect();
   }, [resources.fetchNextPage, resources.hasNextPage, resources.isFetching]);
 
-  let content;
+  let content: JSX.Element;
   if (resources.isPending) {
     content = <div className="countline">Loading…</div>;
   } else if (resources.isError) {
@@ -171,6 +174,20 @@ export function Resources() {
             <TooltipContent>Notes</TooltipContent>
           </Tooltip>
         </div>
+        <select
+          className="sel"
+          aria-label="Author"
+          value={author}
+          disabled={type === 'md'}
+          onChange={(event) => setAuthor(event.target.value)}
+        >
+          <option value="">Any author</option>
+          {(authors.data?.authors ?? []).map((item) => (
+            <option key={item.username} value={item.username}>
+              @{item.username} ({item.count})
+            </option>
+          ))}
+        </select>
         <div className="search">
           <Search size={16} strokeWidth={1.75} />
           <input

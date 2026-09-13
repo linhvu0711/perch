@@ -63,7 +63,7 @@ export function SaveTweetsModal(): JSX.Element {
                 {mutation.data.results.map((result) => (
                   <div key={result.url}>
                     {result.ok
-                      ? `${result.status === 'created' ? 'Saved' : result.status === 'existing' ? 'Already saved' : 'Refreshed'} · #${result.resource.id}`
+                      ? `${result.status === 'created' ? 'Saved · $0.015' : result.status === 'existing' ? 'Already saved · $0.000' : 'Refreshed · $0.015'} · #${result.resource.id}`
                       : result.error.message}
                   </div>
                 ))}
