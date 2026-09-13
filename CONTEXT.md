@@ -80,6 +80,14 @@ _Avoid_: Queued, planned, timed
 A Post whose schedule time has passed while it was still a Draft (or its X Account was disconnected), so it was skipped. It is not Failed; nothing was attempted.
 _Avoid_: Overdue, late, expired, blocked
 
+**Needs attention**:
+The set of Posts that need the User's hand: Missed Posts, Failed Posts, and Drafts whose Schedule Time is within the next 3 days. Derived, never stored.
+_Avoid_: Inbox, alerts, todo
+
+**Dismiss**:
+Taking a Post out of Needs attention without deleting it: clear the time of a Missed or soon Draft, or Demote a Failed Post to Draft and clear its time. There is no dismissed flag.
+_Avoid_: Snooze, archive, acknowledge
+
 **Publish**:
 The act of sending an Official Post to X, either by the Scheduler at its schedule time or by the User right now.
 _Avoid_: Post (verb), send, tweet (verb), push

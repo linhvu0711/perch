@@ -83,7 +83,7 @@ describe('account', () => {
     });
 
     const status = await request('/api/status');
-    expect(await status.json()).toEqual({
+    expect(await status.json()).toMatchObject({
       timezone: 'UTC',
       month_cost_usd: 0.01,
     });

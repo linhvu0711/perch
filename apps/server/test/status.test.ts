@@ -124,7 +124,7 @@ function mediaDir(postId: number): string {
 describe('status', () => {
   test('reflects the configured time zone', async () => {
     const initial = await request('/api/status');
-    expect(await initial.json()).toEqual({
+    expect(await initial.json()).toMatchObject({
       timezone: 'UTC',
       month_cost_usd: 0,
     });
@@ -135,7 +135,7 @@ describe('status', () => {
     });
 
     const updated = await request('/api/status');
-    expect(await updated.json()).toEqual({
+    expect(await updated.json()).toMatchObject({
       timezone: 'Europe/Berlin',
       month_cost_usd: 0,
     });

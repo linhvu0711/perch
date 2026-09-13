@@ -755,6 +755,23 @@ main {
 .loadmore button:hover {
   background: var(--indigo-soft);
 }
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--border);
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+.pager .btn:first-of-type {
+  margin-left: auto;
+}
+
+table.t tr.cur td:first-child {
+  font-weight: 500;
+}
+
 .loadmore button:disabled {
   opacity: 0.5;
   cursor: default;
@@ -763,6 +780,64 @@ main {
   margin-top: 8px;
   color: var(--text-3);
   font-size: 12.5px;
+}
+
+/* dashboard */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 32px;
+}
+.stat {
+  padding: 18px 20px;
+}
+.stat .lbl {
+  font-size: 12px;
+  color: var(--text-2);
+  margin-bottom: 8px;
+}
+.stat .val {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.stat .sub {
+  font-size: 12.5px;
+  color: var(--text-3);
+  margin-top: 4px;
+}
+.stat .val.warn {
+  color: var(--missed);
+}
+.stat .val.ok {
+  color: var(--published);
+}
+.section {
+  margin-bottom: 32px;
+}
+.row .why {
+  font-size: 12.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.row .rowlink {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+.dayhead {
+  padding: 10px 16px 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* Modals */
@@ -1415,6 +1490,9 @@ textarea:focus-visible {
 }
 .seg button[data-status="failed"][aria-pressed="true"] svg {
   color: var(--failed);
+}
+.seg button[data-status="attention"][aria-pressed="true"] svg {
+  color: var(--missed);
 }
 .seg button[data-status="all"][aria-pressed="true"] svg {
   color: var(--indigo-text);

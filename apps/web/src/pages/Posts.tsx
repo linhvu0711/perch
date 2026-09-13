@@ -10,9 +10,10 @@ import {
   Plus,
   Search,
   ShieldCheck,
+  TriangleAlert,
 } from 'lucide-react';
 import { type JSX, useEffect, useMemo, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router';
+import { Outlet, useNavigate, useSearchParams } from 'react-router';
 
 import { Empty } from '@/components/Empty';
 import { IconButton } from '@/components/IconButton';
@@ -23,7 +24,7 @@ import { errorMessage } from '@/lib/api';
 import { POSTS_PAGE_SIZE, usePosts } from '@/lib/queries';
 
 const STATUS_TABS: Array<{
-  value: PostStatus | undefined;
+  value: PostStatus | 'attention' | undefined;
   dataStatus: string;
   label: string;
   icon: typeof LayoutGrid;
@@ -33,11 +34,18 @@ const STATUS_TABS: Array<{
   { value: 'official', dataStatus: 'official', label: 'Official', icon: ShieldCheck },
   { value: 'published', dataStatus: 'published', label: 'Published', icon: CircleCheck },
   { value: 'failed', dataStatus: 'failed', label: 'Failed', icon: CircleAlert },
+  { value: 'attention', dataStatus: 'attention', label: 'Needs attention', icon: TriangleAlert },
 ];
 
 export function Posts() {
   const navigate = useNavigate();
-  const [status, setStatus] = useState<PostStatus | undefined>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const statusParam = searchParams.get('status');
+  const status: PostStatus | 'attention' | undefined = STATUS_TABS.some(
+    (tab) => tab.value === statusParam,
+  )
+    ? (statusParam as PostStatus | 'attention')
+    : undefined;
   const [tag, setTag] = useState<string | undefined>();
   const [scheduled, setScheduled] = useState<boolean | undefined>();
   const [search, setSearch] = useState('');
@@ -50,7 +58,11 @@ export function Posts() {
 
   const filters = useMemo(
     () => ({
-      ...(status !== undefined ? { status } : {}),
+      ...(status === 'attention'
+        ? { needs_attention: true }
+        : status !== undefined
+          ? { status }
+          : {}),
       ...(scheduled !== undefined ? { scheduled } : {}),
       ...(debouncedSearch !== '' ? { search: debouncedSearch } : {}),
       ...(tag !== undefined ? { tag: [tag] } : {}),
@@ -121,7 +133,9 @@ export function Posts() {
                   aria-label={tab.label}
                   aria-pressed={status === tab.value}
                   data-status={tab.dataStatus}
-                  onClick={() => setStatus(tab.value)}
+                  onClick={() =>
+                    setSearchParams(tab.value === undefined ? {} : { status: tab.value })
+                  }
                 >
                   <tab.icon size={16} strokeWidth={1.75} />
                 </button>

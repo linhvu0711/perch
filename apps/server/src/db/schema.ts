@@ -176,15 +176,19 @@ export const xAccounts = sqliteTable(
   (t) => [uniqueIndex('x_accounts_user_x_user_idx').on(t.userId, t.xUserId)],
 );
 
-export const apiCalls = sqliteTable('api_calls', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  userId: integer('user_id')
-    .notNull()
-    .references(() => users.id),
-  endpoint: text('endpoint').notNull(),
-  costUsd: real('cost_usd').notNull(),
-  postId: integer('post_id'),
-  resourceId: integer('resource_id'),
-  xAccountId: integer('x_account_id').references(() => xAccounts.id),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-});
+export const apiCalls = sqliteTable(
+  'api_calls',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    endpoint: text('endpoint').notNull(),
+    costUsd: real('cost_usd').notNull(),
+    postId: integer('post_id'),
+    resourceId: integer('resource_id'),
+    xAccountId: integer('x_account_id').references(() => xAccounts.id),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('api_calls_user_created_idx').on(t.userId, t.createdAt)],
+);

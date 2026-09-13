@@ -31,6 +31,7 @@ export function PostRow({ post }: { post: Post }) {
         )}
         {post.title === '' && firstLine === '' && <span className="faint">Empty post</span>}
       </div>
+      {post.reason !== null && <span className="why">{post.reason}</span>}
       <TagChips tags={post.tags} />
       <span className="pid">#{post.id}</span>
       <StatusPill status={post.missed ? 'missed' : post.status} />

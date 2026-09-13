@@ -1,12 +1,16 @@
 import {
+  ATTENTION_WINDOW_MS,
+  attentionReason,
   type CalendarPost,
   type CalendarQuery,
   type CalendarRange,
   DEMOTE_FROM,
   dayBoundsUtc,
+  dismissAction,
   effectiveCharLimit,
   estimateCost,
   isMissed,
+  needsAttention,
   POST_MEDIA_MAX,
   type Post,
   type PostCreate,
@@ -40,9 +44,11 @@ import {
   desc,
   eq,
   getTableColumns,
+  gte,
   inArray,
   isNotNull,
   isNull,
+  lte,
   not,
   or,
   type SQL,
@@ -110,13 +116,16 @@ function toPost(
   limit: number,
   tags: string[],
   ready: Ready,
+  now: Date,
 ): Post {
+  const scheduled_at = row.scheduledAt?.toISOString() ?? null;
+  const missed = row.missed === 1;
   return {
     id: row.id,
     status: row.status,
     title: row.title,
     text: row.text,
-    scheduled_at: row.scheduledAt?.toISOString() ?? null,
+    scheduled_at,
     published_at: row.publishedAt?.toISOString() ?? null,
     x_account_id: row.xAccountId,
     x_post_id: row.xPostId,
@@ -135,7 +144,11 @@ function toPost(
     tags,
     media,
     ready,
-    missed: row.missed === 1,
+    missed,
+    reason: attentionReason(
+      { status: row.status, scheduled_at, missed, last_error: row.lastError },
+      now,
+    ),
   };
 }
 
@@ -286,6 +299,7 @@ export function getPost(db: Db, userId: number, id: number, now: Date): Post | n
       mediaCount: media.length,
       accountConnected: getConnectedAccount(db, userId) !== null,
     }),
+    now,
   );
 }
 
@@ -326,6 +340,12 @@ export function listPosts(
   if (query.missed !== undefined) {
     const condition = missedSql(userId, now);
     filterConditions.push(query.missed ? condition : not(sql`(${condition})`));
+  }
+  if (query.needs_attention !== undefined) {
+    const condition = attentionSql(userId, now);
+    filterConditions.push(
+      query.needs_attention ? condition : not(sql`coalesce((${condition}), 0)`),
+    );
   }
   if (query.resource_id !== undefined) {
     filterConditions.push(
@@ -373,7 +393,7 @@ export function listPosts(
   const pageRows = hasNextPage ? rows.slice(0, query.limit) : rows;
   const last = pageRows.at(-1);
 
-  const { items } = postsFromRows(db, userId, pageRows);
+  const { items } = postsFromRows(db, userId, pageRows, now);
 
   const sortTimeOf = (row: PostRow): number | null => {
     const value = row.status === 'published' ? row.publishedAt : row.scheduledAt;
@@ -412,7 +432,8 @@ function tagFilterConditions(db: Db, userId: number, tagNames: string[]): SQL[] 
 function postsFromRows(
   db: Db,
   userId: number,
-  rows: PostJoinRow[],
+  rows: PostRow[],
+  now: Date,
 ): { items: Post[]; accountConnected: boolean } {
   const limit = postLimit(db, userId);
   const accountConnected = getConnectedAccount(db, userId) !== null;
@@ -423,7 +444,7 @@ function postsFromRows(
   const items = rows.map((row) => {
     const mediaItems = media.get(row.id) ?? [];
     const post = toPost(
-      row,
+      { username: null, missed: 0, ...row },
       links.get(row.id) ?? [],
       mediaItems,
       limit,
@@ -434,6 +455,7 @@ function postsFromRows(
         mediaCount: mediaItems.length,
         accountConnected,
       }),
+      now,
     );
     return { ...post, title: postListTitle(post.title, post.text) };
   });
@@ -469,7 +491,7 @@ export function calendarDays(
     .orderBy(asc(sortTime), asc(posts.id))
     .all();
 
-  const { items, accountConnected } = postsFromRows(db, userId, rows);
+  const { items, accountConnected } = postsFromRows(db, userId, rows, now);
 
   const byDay = new Map<string, CalendarPost[]>();
   for (const post of items) {
@@ -477,7 +499,12 @@ export function calendarDays(
     if (at === null) continue;
     const date = zonedParts(new Date(at), timeZone).date;
     const day = byDay.get(date) ?? [];
-    day.push({ ...post, missed: isMissed(post, now, accountConnected) });
+    const missed = isMissed(post, now, accountConnected);
+    day.push({
+      ...post,
+      missed,
+      reason: attentionReason({ ...post, missed }, now),
+    });
     byDay.set(date, day);
   }
 
@@ -537,6 +564,19 @@ export function missedSql(userId: number | typeof posts.userId, now: Date): SQL 
     )`;
 }
 
+/** Posts that need the User's hand: Missed, Failed, or a Draft due within the next 3 days. */
+export function attentionSql(userId: number | typeof posts.userId, now: Date): SQL {
+  return or(
+    missedSql(userId, now),
+    eq(posts.status, 'failed'),
+    and(
+      eq(posts.status, 'draft'),
+      gte(posts.scheduledAt, now),
+      lte(posts.scheduledAt, new Date(now.getTime() + ATTENTION_WINDOW_MS)),
+    ),
+  )!;
+}
+
 /** Official posts due to be sent at `now`, oldest schedule time first. */
 export function duePosts(db: Db, now: Date): PostRow[] {
   return db
@@ -552,6 +592,31 @@ export function duePosts(db: Db, now: Date): PostRow[] {
     )
     .orderBy(asc(posts.scheduledAt), asc(posts.id))
     .all();
+}
+
+/** Draft and Official posts with a schedule time from `now` on, soonest first. */
+export function upcomingPosts(
+  db: Db,
+  userId: number,
+  now: Date,
+  options: { official?: boolean; limit: number },
+): Post[] {
+  const rows = db
+    .select()
+    .from(posts)
+    .where(
+      and(
+        eq(posts.userId, userId),
+        options.official === true
+          ? eq(posts.status, 'official')
+          : inArray(posts.status, ['draft', 'official']),
+        sql`${posts.scheduledAt} >= ${now.getTime()}`,
+      ),
+    )
+    .orderBy(asc(posts.scheduledAt), asc(posts.id))
+    .limit(options.limit)
+    .all();
+  return postsFromRows(db, userId, rows, now).items;
 }
 
 function resourceExists(db: Db, userId: number, resourceId: number): boolean {
@@ -781,6 +846,53 @@ export function unschedulePosts(
         })
         .where(and(eq(posts.id, id), eq(posts.userId, userId)))
         .run();
+      return { id, ok: true as const };
+    }),
+  };
+}
+
+export function dismissPosts(db: Db, userId: number, ids: number[], now: Date): PostStatusResponse {
+  return {
+    results: ids.map((id) => {
+      const post = getPost(db, userId, id, now);
+      if (post === null) {
+        return statusResultError(id, 'not_found', `Post ${id} not found`);
+      }
+      if (!needsAttention(post, now)) {
+        return statusResultError(id, 'invalid_status', `Post ${id} needs no attention`);
+      }
+      const action = dismissAction(post.status);
+      const guard = and(eq(posts.id, id), eq(posts.userId, userId), eq(posts.status, post.status));
+      const updated =
+        action === 'demote'
+          ? db
+              .update(posts)
+              .set({
+                status: 'draft',
+                scheduledAt: null,
+                nextAttemptAt: null,
+                lastError: null,
+                retryCount: 0,
+                updatedAt: now,
+              })
+              .where(guard)
+              .returning({ id: posts.id })
+              .all().length
+          : db
+              .update(posts)
+              .set({
+                scheduledAt: null,
+                nextAttemptAt: null,
+                lastError: null,
+                retryCount: 0,
+                updatedAt: now,
+              })
+              .where(guard)
+              .returning({ id: posts.id })
+              .all().length;
+      if (updated === 0) {
+        return statusResultError(id, 'invalid_status', `Post ${id} changed; try again`);
+      }
       return { id, ok: true as const };
     }),
   };

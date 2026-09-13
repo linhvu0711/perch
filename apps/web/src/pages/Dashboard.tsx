@@ -1,10 +1,32 @@
-import { DEFAULT_TIMEZONE } from '@perch/core';
-import { TriangleAlert } from 'lucide-react';
+import {
+  ATTENTION_LIST_LIMIT,
+  ATTENTION_WINDOW_DAYS,
+  addDays,
+  DEFAULT_TIMEZONE,
+  postCalendarTime,
+  STATUS_WEEK_DAYS,
+  X_COSTS_USD,
+  zonedParts,
+} from '@perch/core';
+import { ChevronLeft, ChevronRight, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 
+import { AttentionRow } from '@/components/AttentionRow';
 import { Empty } from '@/components/Empty';
-import { useAccount, useSettings } from '@/lib/queries';
+import { IconButton } from '@/components/IconButton';
+import { PostRow } from '@/components/PostRow';
+import { errorMessage } from '@/lib/api';
+import { formatDayTitle, formatMonthTitle, formatSchedule, formatUsd } from '@/lib/format';
+import {
+  useAccount,
+  useCalendar,
+  useCostMonths,
+  useCostSummary,
+  usePosts,
+  useSettings,
+  useStatus,
+} from '@/lib/queries';
 
 function greeting(now: Date, timezone: string): string {
   const hour = Number(
@@ -20,6 +42,11 @@ function greeting(now: Date, timezone: string): string {
 export function Dashboard() {
   const settings = useSettings();
   const account = useAccount();
+  const status = useStatus();
+  const attention = usePosts({ needs_attention: true });
+  const costSummary = useCostSummary();
+  const [cursors, setCursors] = useState<string[]>([]);
+  const costMonths = useCostMonths(cursors[cursors.length - 1]);
   const timezone = settings.data?.timezone ?? DEFAULT_TIMEZONE;
   const [now, setNow] = useState(() => new Date());
 
@@ -27,6 +54,9 @@ export function Dashboard() {
     const timer = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(timer);
   }, []);
+
+  const today = zonedParts(now, timezone).date;
+  const calendar = useCalendar({ from: today, to: addDays(today, ATTENTION_WINDOW_DAYS) });
 
   const dayLong = new Intl.DateTimeFormat('en-GB', {
     weekday: 'long',
@@ -40,6 +70,40 @@ export function Dashboard() {
     hour12: false,
     timeZone: timezone,
   }).format(now);
+
+  const snapshot = status.data;
+  const attentionTotal =
+    (snapshot?.missed_count ?? 0) + (snapshot?.failed_count ?? 0) + (snapshot?.due_soon_count ?? 0);
+  const attentionItems = attention.data?.pages.flatMap((page) => page.items) ?? [];
+  const attentionListTotal = attention.data?.pages[0]?.total ?? 0;
+  const costPage = cursors.length;
+  const costItems = costMonths.data?.items ?? [];
+  const costTotal = costMonths.data?.total ?? 0;
+  const costFirst = costPage * 6 + 1;
+  const costLast = costFirst + costItems.length - 1;
+  const costSummaryData = costSummary.data;
+
+  const upcomingDays = (calendar.data?.days ?? [])
+    .map((day) => ({
+      date: day.date,
+      posts: day.posts.filter((post) => {
+        const at = postCalendarTime(post);
+        return at !== null && new Date(at) >= now && post.status !== 'published';
+      }),
+    }))
+    .filter((day) => day.posts.length > 0);
+
+  const loadError = status.isError
+    ? status.error
+    : attention.isError
+      ? attention.error
+      : calendar.isError
+        ? calendar.error
+        : costSummary.isError
+          ? costSummary.error
+          : costMonths.isError
+            ? costMonths.error
+            : null;
 
   return (
     <>
@@ -67,10 +131,204 @@ export function Dashboard() {
             </Link>
           </div>
         ) : null)}
-      <Empty
-        title="Nothing here yet"
-        text="Stat cards and the needs-attention list will show up here."
-      />
+      {loadError !== null ? (
+        <Empty title="Could not load the dashboard" text={errorMessage(loadError)} />
+      ) : (
+        <>
+          <div className="stats">
+            <div className="card stat">
+              <div className="lbl">Next official post</div>
+              <div className="val">
+                {status.isPending
+                  ? '…'
+                  : snapshot?.next_official?.scheduled_at != null
+                    ? formatSchedule(snapshot.next_official.scheduled_at, timezone)
+                    : '—'}
+              </div>
+              <div className="sub">
+                {snapshot?.next_official?.title ?? 'nothing official scheduled'}
+              </div>
+            </div>
+            <div className="card stat">
+              <div className="lbl">Needs attention</div>
+              <div className={`val ${attentionTotal > 0 ? 'warn' : 'ok'}`}>
+                {status.isPending ? '…' : attentionTotal}
+              </div>
+              <div className="sub">
+                {snapshot === undefined
+                  ? ''
+                  : `${snapshot.missed_count} missed · ${snapshot.failed_count} failed · ${snapshot.due_soon_count} draft due soon`}
+              </div>
+            </div>
+            <div className="card stat">
+              <div className="lbl">Scheduled, next {STATUS_WEEK_DAYS} days</div>
+              <div className="val">
+                {status.isPending
+                  ? '…'
+                  : (snapshot?.week_official_count ?? 0) + (snapshot?.week_draft_count ?? 0)}
+              </div>
+              <div className="sub">
+                {snapshot === undefined
+                  ? ''
+                  : `${snapshot.week_official_count} official · ${snapshot.week_draft_count} drafts`}
+              </div>
+            </div>
+            <div className="card stat">
+              <div className="lbl">
+                Cost,{' '}
+                {
+                  formatMonthTitle(`${costSummaryData?.month ?? today.slice(0, 7)}-01`).split(
+                    ' ',
+                  )[0]
+                }
+              </div>
+              <div className="val">
+                {costSummary.isPending ? '…' : formatUsd(costSummaryData?.total_usd ?? 0)}
+              </div>
+              <div className="sub">
+                {costSummaryData === undefined
+                  ? ''
+                  : `${costSummaryData.calls} X API ${costSummaryData.calls === 1 ? 'call' : 'calls'}`}
+              </div>
+            </div>
+          </div>
+          <div className="section">
+            <h2>
+              Needs attention
+              <small>
+                missed, failed, or still a draft with a time in the next {ATTENTION_WINDOW_DAYS}{' '}
+                days
+              </small>
+            </h2>
+            <div className="card list">
+              {attention.isPending ? (
+                <div className="empty">
+                  <b>Loading…</b>
+                </div>
+              ) : attentionItems.length === 0 ? (
+                <div className="empty">
+                  <b>All clear</b>Nothing missed, nothing failed, no drafts due soon.
+                </div>
+              ) : (
+                <>
+                  {attentionItems.slice(0, ATTENTION_LIST_LIMIT).map((post) => (
+                    <AttentionRow key={post.id} post={post} />
+                  ))}
+                  {attentionListTotal > ATTENTION_LIST_LIMIT && (
+                    <div className="loadmore">
+                      <Link to="/posts?status=attention">
+                        See all {attentionListTotal} in Posts
+                      </Link>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            {attentionItems.length > 0 && (
+              <div className="note">
+                Dismiss clears the time (missed or due-soon draft) or moves the post back to drafts
+                (failed). Nothing is deleted.
+              </div>
+            )}
+          </div>
+          <div className="section">
+            <h2>
+              Next {ATTENTION_WINDOW_DAYS} days
+              <small>until {formatDayTitle(addDays(today, ATTENTION_WINDOW_DAYS))}</small>
+            </h2>
+            <div className="card list">
+              {upcomingDays.length === 0 ? (
+                <div className="empty">
+                  <b>Nothing scheduled</b>No posts in the next {ATTENTION_WINDOW_DAYS} days.
+                </div>
+              ) : (
+                upcomingDays.map((day) => (
+                  <div key={day.date}>
+                    <div className="dayhead">{formatDayTitle(day.date)}</div>
+                    {day.posts.map((post) => (
+                      <PostRow key={post.id} post={post} />
+                    ))}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+          <div className="section">
+            <h2>
+              Cost by month<small>X API, pay-per-use</small>
+            </h2>
+            <div className="card">
+              {costMonths.isPending ? (
+                <div className="empty">
+                  <b>Loading…</b>
+                </div>
+              ) : costTotal === 0 ? (
+                <div className="empty">
+                  <b>No X API calls yet</b>Costs appear here after the first publish, tweet save, or
+                  connect.
+                </div>
+              ) : (
+                <>
+                  <table className="t">
+                    <thead>
+                      <tr>
+                        <th>Month</th>
+                        <th className="num">Publish</th>
+                        <th className="num">Save tweet</th>
+                        <th className="num">Connect</th>
+                        <th className="num">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {costItems.map((row) => (
+                        <tr
+                          key={row.month}
+                          className={row.month === costSummaryData?.month ? 'cur' : ''}
+                        >
+                          <td>{formatMonthTitle(`${row.month}-01`)}</td>
+                          <td className="num">{formatUsd(row.publish_usd)}</td>
+                          <td className="num">{formatUsd(row.save_tweet_usd)}</td>
+                          <td className="num">{formatUsd(row.connect_usd)}</td>
+                          <td className="num">{formatUsd(row.total_usd)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="pager">
+                    <span>
+                      {costFirst}–{costLast} of {costTotal} months · all time{' '}
+                      {formatUsd(costSummaryData?.all_time_usd ?? 0)}
+                    </span>
+                    <IconButton
+                      label="Newer months"
+                      icon={ChevronLeft}
+                      size="sm"
+                      disabled={costPage === 0 || costMonths.isFetching}
+                      onClick={() => setCursors((current) => current.slice(0, -1))}
+                    />
+                    <IconButton
+                      label="Older months"
+                      icon={ChevronRight}
+                      size="sm"
+                      disabled={costMonths.data?.next_cursor == null || costMonths.isFetching}
+                      onClick={() => {
+                        const next = costMonths.data?.next_cursor;
+                        if (next != null) setCursors((current) => [...current, next]);
+                      }}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="note">
+              Publish {formatUsd(X_COSTS_USD.publish)} · publish with a link{' '}
+              {formatUsd(X_COSTS_USD.publishWithUrl)} · save a tweet{' '}
+              {formatUsd(X_COSTS_USD.saveTweet)} · connect {formatUsd(X_COSTS_USD.getMe)} · image
+              upload free.
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 }

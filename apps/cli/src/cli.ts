@@ -5,6 +5,7 @@ import { addAccountCommands } from './commands/account';
 import { addAuthCommands } from './commands/auth';
 import { addCalendarCommands } from './commands/calendar';
 import { addConfigCommands } from './commands/config';
+import { addCostCommands } from './commands/cost';
 import { addOpenCommands } from './commands/open';
 import { addPostCommands } from './commands/post';
 import { addResourceCommands } from './commands/resource';
@@ -36,6 +37,7 @@ export async function runCli(argv: string[], ctx: CliContext): Promise<number> {
   addAuthCommands(program, ctx);
   addCalendarCommands(program, ctx);
   addConfigCommands(program, ctx);
+  addCostCommands(program, ctx);
   addPostCommands(program, ctx);
   addResourceCommands(program, ctx);
   addOpenCommands(program, ctx);

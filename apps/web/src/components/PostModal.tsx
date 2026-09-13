@@ -1,14 +1,13 @@
 import type { Post, PostMedia } from '@perch/core';
 import {
   CHAR_LIMIT_DEFAULT,
-  COST_POST_USD,
-  COST_POST_WITH_URL_USD,
   DEFAULT_TIMEZONE,
   estimateCost,
   formatCost,
   POST_MEDIA_MAX,
   readyChecks,
   weightedLength,
+  X_COSTS_USD,
 } from '@perch/core';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -77,11 +76,12 @@ const EMPTY_POST: Post = {
   character_count: 0,
   limit: CHAR_LIMIT_DEFAULT,
   tags: [],
-  estimated_cost: COST_POST_USD,
+  estimated_cost: X_COSTS_USD.publish,
   links: [],
   media: [],
   ready: { ok: false, checks: [] },
   missed: false,
+  reason: null,
 };
 
 export function PostModal(): JSX.Element | null {
@@ -383,7 +383,7 @@ export function PostModal(): JSX.Element | null {
   };
   const over = viewPost.character_count > viewPost.limit;
   const metricClass = over ? 'bad' : viewPost.character_count === 0 ? 'warn' : 'ok';
-  const hasUrl = viewPost.estimated_cost > COST_POST_USD;
+  const hasUrl = viewPost.estimated_cost > X_COSTS_USD.publish;
 
   return (
     <>
@@ -516,6 +516,15 @@ export function PostModal(): JSX.Element | null {
                     : 'Missed. No X account was connected at that time. Pick a new time, or clear the time.'}
                 </div>
               )}
+              {!isNew &&
+                viewPost.status === 'draft' &&
+                !viewPost.missed &&
+                viewPost.reason === 'still a draft' && (
+                  <div className="banner missed" role="status">
+                    <TriangleAlert size={16} strokeWidth={1.75} />
+                    Still a draft. Drafts are never sent. Promote it, or clear the time.
+                  </div>
+                )}
               {!isNew && viewPost.status === 'failed' && (
                 <div className="banner failed" role="alert">
                   <TriangleAlert size={16} strokeWidth={1.75} />
@@ -794,13 +803,14 @@ export function PostModal(): JSX.Element | null {
               <div className="note">
                 {hasUrl ? (
                   <>
-                    <b>This post has a link.</b> X bills it at {formatCost(COST_POST_WITH_URL_USD)}{' '}
-                    instead of {formatCost(COST_POST_USD)}.
+                    <b>This post has a link.</b> X bills it at{' '}
+                    {formatCost(X_COSTS_USD.publishWithUrl)} instead of{' '}
+                    {formatCost(X_COSTS_USD.publish)}.
                   </>
                 ) : (
                   <>
-                    <b>Cost rule.</b> A post is {formatCost(COST_POST_USD)}. Any http(s) link makes
-                    it {formatCost(COST_POST_WITH_URL_USD)}. Images are free.
+                    <b>Cost rule.</b> A post is {formatCost(X_COSTS_USD.publish)}. Any http(s) link
+                    makes it {formatCost(X_COSTS_USD.publishWithUrl)}. Images are free.
                   </>
                 )}
               </div>

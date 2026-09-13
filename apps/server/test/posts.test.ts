@@ -111,6 +111,7 @@ describe('posts', () => {
         ],
       },
       missed: false,
+      reason: null,
     };
     expect(await created.json()).toEqual(expected);
 

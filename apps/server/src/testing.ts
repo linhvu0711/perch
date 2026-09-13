@@ -5,7 +5,7 @@ import { deflateSync } from 'node:zlib';
 
 import { fixedClock } from './clock';
 import { openDb } from './db';
-import { xAccounts } from './db/schema';
+import { apiCalls, xAccounts } from './db/schema';
 import { disconnectAccount, getConnectedAccount } from './db/xAccounts';
 import { type FakeR2Client, fakeR2Client } from './r2/fake';
 import { buildServer, type PerchServer } from './server';
@@ -109,6 +109,23 @@ export function disconnectTestAccount(server: TestServer, disconnectedAt: Date):
   const { db, sqlite } = openDb(path.join(server.dir, 'perch.db'));
   const row = getConnectedAccount(db, 1);
   if (row) disconnectAccount(db, row.id, disconnectedAt);
+  sqlite.close();
+}
+
+/** Inserts an api_calls row straight into the test database. */
+export function insertTestApiCall(
+  server: TestServer,
+  input: { endpoint: string; costUsd?: number; createdAt?: string | Date },
+): void {
+  const { db, sqlite } = openDb(path.join(server.dir, 'perch.db'));
+  db.insert(apiCalls)
+    .values({
+      userId: 1,
+      endpoint: input.endpoint,
+      costUsd: input.costUsd ?? 0.01,
+      createdAt: input.createdAt === undefined ? server.clock.now() : new Date(input.createdAt),
+    })
+    .run();
   sqlite.close();
 }
 

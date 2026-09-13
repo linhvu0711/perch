@@ -8,6 +8,7 @@ import type { R2Client } from './r2/client';
 import { accountRoutes } from './routes/account';
 import { authRoutes } from './routes/auth';
 import { calendarRoutes } from './routes/calendar';
+import { costsRoutes } from './routes/costs';
 import { countsRoutes } from './routes/counts';
 import { healthRoutes } from './routes/health';
 import { postsRoutes } from './routes/posts';
@@ -50,6 +51,7 @@ function createRoutes(deps: AppDeps) {
     .route('/tags', tagsRoutes(deps))
     .route('/calendar', calendarRoutes(deps))
     .route('/counts', countsRoutes(deps))
+    .route('/costs', costsRoutes(deps))
     .all('*', notFoundHandler);
 }
 

@@ -255,6 +255,7 @@ export interface PostFilters {
   resource_id?: number;
   tag?: string[];
   scheduled?: boolean;
+  needs_attention?: boolean;
 }
 
 export const POSTS_PAGE_SIZE = 50;
@@ -275,6 +276,7 @@ export function usePosts(filters: PostFilters, enabled = true) {
             ...(filters.scheduled !== undefined
               ? { scheduled: filters.scheduled ? ('true' as const) : ('false' as const) }
               : {}),
+            ...(filters.needs_attention === true ? { needs_attention: 'true' as const } : {}),
             limit: String(POSTS_PAGE_SIZE),
             ...(pageParam !== undefined ? { cursor: pageParam } : {}),
           },
@@ -309,6 +311,37 @@ export function useCalendar(filters: CalendarFilters) {
       ),
     placeholderData: keepPreviousData,
     refetchInterval: 30_000,
+  });
+}
+
+export function useStatus() {
+  const me = useMe();
+  return useQuery({
+    queryKey: ['posts', 'list', 'status'],
+    queryFn: () => unwrap(api.api.status.$get()),
+    refetchInterval: 30_000,
+    enabled: me.data != null,
+  });
+}
+
+export function useCostSummary() {
+  const me = useMe();
+  return useQuery({
+    queryKey: ['costs', 'summary'],
+    queryFn: () => unwrap(api.api.costs.summary.$get({ query: {} })),
+    refetchInterval: 30_000,
+    enabled: me.data != null,
+  });
+}
+
+export function useCostMonths(cursor: string | undefined) {
+  const me = useMe();
+  return useQuery({
+    queryKey: ['costs', 'months', cursor ?? null],
+    queryFn: () => unwrap(api.api.costs.$get({ query: cursor !== undefined ? { cursor } : {} })),
+    placeholderData: keepPreviousData,
+    refetchInterval: cursor === undefined ? 30_000 : false,
+    enabled: me.data != null,
   });
 }
 
@@ -394,6 +427,21 @@ export function useDemotePosts() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (ids: number[]) => unwrap(api.api.posts.demote.$post({ json: { ids } })),
+    onSuccess: (data) => {
+      for (const result of data.results) {
+        if (result.ok) {
+          void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', result.id] });
+        }
+      }
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
+    },
+  });
+}
+
+export function useDismissPosts() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: number[]) => unwrap(api.api.posts.dismiss.$post({ json: { ids } })),
     onSuccess: (data) => {
       for (const result of data.results) {
         if (result.ok) {

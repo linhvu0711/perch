@@ -17,6 +17,16 @@ export function formatMonthTitle(ymd: string): string {
   });
 }
 
+/** `"Sat 6 Sep"` for a `YYYY-MM-DD` calendar date. */
+export function formatDayTitle(ymd: string): string {
+  return new Date(`${ymd}T00:00:00Z`).toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
+}
+
 /** `"7 Sep – 13 Sep 2026"` for the Monday-first week `[from, to]` of grid cells. */
 export function formatWeekTitle(from: string, to: string): string {
   const dm = (ymd: string) =>
