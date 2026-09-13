@@ -23,7 +23,7 @@ Build Perch v1: a single-user tool that keeps my Resources (Tweet Resources, Ima
 5. As a User, I want every request to resolve to a user through one function, so that opening Perch to other people later means rewriting only that function.
 6. As a User, I want to connect my X Account by clicking "Connect X" in Settings and approving on X, so that the server holds the tokens and I never paste tokens anywhere.
 7. As a User, I want the server to refresh the X access token on its own before it expires, so that scheduled Posts never fail because of a stale token.
-8. As a User, I want Perch to read my X subscription type at connect time and on each refresh, so that my character limit (280 or 25,000) is set without me looking it up.
+8. As a User, I want Perch to read my X subscription type at connect time, so that my character limit (280 or 25,000) is set without me looking it up.
 9. As a User, I want to override the character limit by hand in Settings or the CLI, so that I am not stuck if X reports it wrong.
 10. As a User, I want to disconnect my X Account with a confirmation, so that the token is revoked at X and Perch stops acting as it.
 11. As a User, I want connecting a second X Account to automatically disconnect the first, so that exactly one is connected at a time.
