@@ -25,7 +25,7 @@ const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export function Calendar() {
   const timeZone = useSettings().data?.timezone ?? DEFAULT_TIMEZONE;
-  const [anchor, setAnchor] = useState(() => zonedParts(new Date(), timeZone).date);
+  const [anchorOverride, setAnchor] = useState<string | null>(null);
   const [view, setView] = useState<'month' | 'week'>('month');
   const [tag, setTag] = useState<string | undefined>();
   const [now, setNow] = useState(() => new Date());
@@ -36,6 +36,7 @@ export function Calendar() {
   }, []);
 
   const today = zonedParts(now, timeZone).date;
+  const anchor = anchorOverride ?? today;
   const cells = view === 'month' ? monthGrid(anchor) : weekGrid(anchor);
   const range = useCalendar({
     from: cells[0] ?? anchor,

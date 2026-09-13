@@ -306,6 +306,7 @@ export function useCalendar(filters: CalendarFilters) {
         }),
       ),
     placeholderData: keepPreviousData,
+    refetchInterval: 30_000,
   });
 }
 
