@@ -212,6 +212,7 @@ export function ResourceModal(): JSX.Element | null {
         setIsEditing(false);
         allowNavigationRef.current = true;
         navigate(`/resources/${data.id}`, { replace: true });
+        allowNavigationRef.current = false;
       } else if (parsedId !== null) {
         await updateResource.mutateAsync({
           id: parsedId,
