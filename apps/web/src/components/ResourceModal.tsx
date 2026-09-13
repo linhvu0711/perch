@@ -255,11 +255,11 @@ export function ResourceModal(): JSX.Element | null {
   async function confirmDelete(): Promise<void> {
     if (parsedId === null) return;
     try {
-      allowNavigationRef.current = true;
-      navigate('/resources');
       const response = await deleteResources.mutateAsync([parsedId]);
       const result = response.results[0];
       if (result?.ok) {
+        allowNavigationRef.current = true;
+        navigate('/resources');
         toast(
           result.unlinked_post_ids.length > 0
             ? `Deleted. Unlinked from ${result.unlinked_post_ids.map((id) => `#${id}`).join(', ')}`

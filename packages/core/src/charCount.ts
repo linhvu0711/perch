@@ -45,6 +45,7 @@ export function previewSegments(text: string): PreviewSegment[] {
   const segments: PreviewSegment[] = [];
   let cursor = 0;
   for (const entity of marked) {
+    if (entity.start < cursor) continue;
     if (entity.start > cursor) {
       segments.push({ kind: 'text', text: text.slice(cursor, entity.start) });
     }

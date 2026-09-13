@@ -23,7 +23,7 @@ export function PostRow({ post }: { post: Post }) {
       </div>
       <div className="txt">
         {post.title !== '' && <b>{post.title}</b>}
-        {firstLine !== '' && (
+        {firstLine !== '' && firstLine !== post.title && (
           <span className={post.title !== '' ? 'muted' : undefined}>
             {firstLine}
           </span>

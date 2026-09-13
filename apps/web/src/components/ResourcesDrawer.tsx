@@ -41,6 +41,7 @@ export function ResourcesDrawer(props: {
   onClose(): void;
   onInsertText(text: string): void;
   ensurePostId?(): Promise<number | null>;
+  onNavigate?(to: string): void;
 }): JSX.Element {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
@@ -171,7 +172,7 @@ export function ResourcesDrawer(props: {
               variant="ghost"
               onClick={() => {
                 props.onClose();
-                navigate(`/resources/${viewId}`);
+                (props.onNavigate ?? navigate)(`/resources/${viewId}`);
               }}
             />
             <IconButton

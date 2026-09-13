@@ -32,6 +32,17 @@ describe('previewSegments', () => {
     expect(previewSegments('')).toEqual([]);
     expect(previewSegments('plain')).toEqual([{ kind: 'text', text: 'plain' }]);
   });
+
+  test('keeps mentions inside URLs inside the url segment', () => {
+    expect(previewSegments('https://e.com/@m')).toEqual([
+      { kind: 'url', text: 'https://e.com/@m' },
+    ]);
+    expect(previewSegments('see https://x.com/@user now')).toEqual([
+      { kind: 'text', text: 'see ' },
+      { kind: 'url', text: 'https://x.com/@user' },
+      { kind: 'text', text: ' now' },
+    ]);
+  });
 });
 
 describe('foldPreview', () => {

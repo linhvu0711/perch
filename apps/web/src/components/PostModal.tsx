@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import {
   CHAR_LIMIT_DEFAULT,
+  COST_POST_USD,
+  COST_POST_WITH_URL_USD,
   estimateCost,
   formatCost,
   weightedLength,
@@ -121,9 +123,9 @@ export function PostModal(): JSX.Element | null {
     return createRef.current;
   }, [createPost, navigate]);
 
-  const queueRef = useRef<Promise<void>>(Promise.resolve());
+  const queueRef = useRef<Promise<boolean>>(Promise.resolve(true));
 
-  const flush = useCallback((): Promise<void> => {
+  const flush = useCallback((): Promise<boolean> => {
     queueRef.current = queueRef.current.then(async () => {
       const patch = pendingRef.current;
       const hasChanges =
@@ -131,22 +133,24 @@ export function PostModal(): JSX.Element | null {
       pendingRef.current = {};
       let id = currentId;
       if (id === undefined) {
-        if (!hasChanges && createRef.current === null) return;
+        if (!hasChanges && createRef.current === null) return true;
         try {
           id = (await ensureCreated()).id;
         } catch (error) {
           pendingRef.current = { ...patch, ...pendingRef.current };
           toast(errorMessage(error), 'warn');
-          return;
+          return false;
         }
       }
-      if (!hasChanges) return;
+      if (!hasChanges) return true;
       try {
         await updatePost.mutateAsync({ id, patch });
         savedRef.current = true;
+        return true;
       } catch (error) {
         pendingRef.current = { ...patch, ...pendingRef.current };
         toast(errorMessage(error), 'warn');
+        return false;
       }
     });
     return queueRef.current;
@@ -155,10 +159,14 @@ export function PostModal(): JSX.Element | null {
   const requestClose = useCallback(() => {
     closedRef.current = true;
     if (timerRef.current !== undefined) window.clearTimeout(timerRef.current);
-    void flush().then(() => {
+    void flush().then((ok) => {
+      if (!ok) {
+        closedRef.current = false;
+        return;
+      }
       if (savedRef.current) toast('Saved');
+      navigate('/posts');
     });
-    navigate('/posts');
   }, [flush, navigate]);
 
   useEffect(() => {
@@ -198,12 +206,30 @@ export function PostModal(): JSX.Element | null {
     }
   }, [currentId, ensureCreated, flush]);
 
+  const openResource = useCallback(
+    (to: string) => {
+      if (timerRef.current !== undefined) window.clearTimeout(timerRef.current);
+      void flush().then((ok) => {
+        if (ok) navigate(to);
+      });
+    },
+    [flush, navigate],
+  );
+
   async function confirmDelete() {
     if (currentId === undefined) return;
     try {
-      navigate('/posts');
-      await deletePosts.mutateAsync([currentId]);
+      const response = await deletePosts.mutateAsync([currentId]);
+      const result = response.results.find((r) => r.id === currentId);
+      if (result === undefined || !result.ok) {
+        throw new Error(
+          result !== undefined && !result.ok
+            ? result.error.message
+            : 'Delete failed',
+        );
+      }
       setConfirm(null);
+      navigate('/posts');
       toast('Deleted');
     } catch (error) {
       toast(errorMessage(error), 'warn');
@@ -260,7 +286,7 @@ export function PostModal(): JSX.Element | null {
     : viewPost.character_count === 0
       ? 'warn'
       : 'ok';
-  const hasUrl = viewPost.estimated_cost > 0.015;
+  const hasUrl = viewPost.estimated_cost > COST_POST_USD;
 
   return (
     <>
@@ -412,13 +438,15 @@ export function PostModal(): JSX.Element | null {
               <div className="note">
                 {hasUrl ? (
                   <>
-                    <b>This post has a link.</b> X bills it at $0.200 instead
-                    of $0.015.
+                    <b>This post has a link.</b> X bills it at{' '}
+                    {formatCost(COST_POST_WITH_URL_USD)} instead of{' '}
+                    {formatCost(COST_POST_USD)}.
                   </>
                 ) : (
                   <>
-                    <b>Cost rule.</b> A post is $0.015. Any http(s) link makes
-                    it $0.200. Images are free.
+                    <b>Cost rule.</b> A post is {formatCost(COST_POST_USD)}.
+                    Any http(s) link makes it{' '}
+                    {formatCost(COST_POST_WITH_URL_USD)}. Images are free.
                   </>
                 )}
               </div>
@@ -428,6 +456,7 @@ export function PostModal(): JSX.Element | null {
               open={drawerOpen}
               ensurePostId={ensurePostId}
               onClose={() => setDrawerOpen(false)}
+              onNavigate={openResource}
               onInsertText={(inserted) => {
                 const text = viewPost.text;
                 const next = (text !== '' ? `${text}\n\n` : '') + inserted;
