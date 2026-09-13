@@ -1,15 +1,14 @@
 import twitter from 'twitter-text';
 
-const { extractUrlsWithIndices } = twitter;
+import { X_COSTS_USD } from './costs';
 
-export const COST_POST_USD = 0.015;
-export const COST_POST_WITH_URL_USD = 0.2;
+const { extractUrlsWithIndices } = twitter;
 
 /** Estimated X API cost of a post; only http(s) URLs raise the price. */
 export function estimateCost(text: string): number {
   return extractUrlsWithIndices(text).some((entity) => /^https?:\/\//i.test(entity.url))
-    ? COST_POST_WITH_URL_USD
-    : COST_POST_USD;
+    ? X_COSTS_USD.publishWithUrl
+    : X_COSTS_USD.publish;
 }
 
 /** USD cost as `$x.xxx`. */
