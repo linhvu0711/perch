@@ -14,9 +14,12 @@ import {
   ArrowDown,
   ArrowUp,
   Check,
+  ExternalLink,
   FileText,
   FolderOpen,
   Plus,
+  RefreshCw,
+  Send,
   Trash2,
   TriangleAlert,
   X,
@@ -34,6 +37,8 @@ import {
   useDetachMedia,
   usePost,
   usePromotePosts,
+  usePublishPost,
+  useRetryPost,
   useSchedulePost,
   useSettings,
   useTagPosts,
@@ -46,6 +51,7 @@ import {
 import { ConfirmDialog } from './ConfirmDialog';
 import { DateTimePicker } from './DateTimePicker';
 import { IconButton } from './IconButton';
+import { IconLink } from './IconLink';
 import { Lightbox } from './Lightbox';
 import { PostPreview } from './PostPreview';
 import { ResourcesDrawer } from './ResourcesDrawer';
@@ -98,6 +104,8 @@ export function PostModal(): JSX.Element | null {
   const demotePosts = useDemotePosts();
   const schedulePost = useSchedulePost();
   const unschedulePosts = useUnschedulePosts();
+  const publishPost = usePublishPost();
+  const retryPost = useRetryPost();
   const unlinkResources = useUnlinkResources();
   const tagPosts = useTagPosts();
   const untagPosts = useUntagPosts();
@@ -110,7 +118,7 @@ export function PostModal(): JSX.Element | null {
   const pendingRef = useRef<{ title?: string; text?: string }>({});
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerType, setDrawerType] = useState<'all' | 'image'>('all');
-  const [confirm, setConfirm] = useState<'delete' | null>(null);
+  const [confirm, setConfirm] = useState<'delete' | 'publish' | 'retry' | null>(null);
   const [confirmDetach, setConfirmDetach] = useState<PostMedia | null>(null);
   const [lightbox, setLightbox] = useState<PostMedia | null>(null);
   const [drafts, setDrafts] = useState<{ title: string; text: string } | null>(null);
@@ -385,13 +393,19 @@ export function PostModal(): JSX.Element | null {
         >
           <div className="mhead">
             <span className="id">{isNew ? 'new' : `#${viewPost.id}`}</span>
-            <StatusPill status={viewPost.status} />
+            <StatusPill status={viewPost.missed ? 'missed' : viewPost.status} />
             <span className="muted">
               {isNew
                 ? 'New draft'
-                : viewPost.scheduled_at !== null
-                  ? `Scheduled · ${formatSchedule(viewPost.scheduled_at, timeZone)}`
-                  : 'Not scheduled'}
+                : viewPost.status === 'published'
+                  ? `Published${viewPost.published_at !== null ? ` · ${formatSchedule(viewPost.published_at, timeZone)}` : ''}`
+                  : viewPost.status === 'failed'
+                    ? `Failed${viewPost.scheduled_at !== null ? ` · ${formatSchedule(viewPost.scheduled_at, timeZone)}` : ''} · ${viewPost.retry_count} ${viewPost.retry_count === 1 ? 'try' : 'tries'}`
+                    : viewPost.missed
+                      ? `Missed${viewPost.scheduled_at !== null ? ` · ${formatSchedule(viewPost.scheduled_at, timeZone)}` : ''}`
+                      : viewPost.scheduled_at !== null
+                        ? `Scheduled · ${formatSchedule(viewPost.scheduled_at, timeZone)}`
+                        : 'Not scheduled'}
             </span>
             <div className="right">
               {!isNew && viewPost.status === 'draft' && (
@@ -418,6 +432,42 @@ export function PostModal(): JSX.Element | null {
                     })();
                   }}
                 />
+              )}
+              {!isNew && (viewPost.status === 'draft' || viewPost.status === 'official') && (
+                <IconButton
+                  label="Publish now"
+                  icon={Send}
+                  variant="default"
+                  onClick={() => {
+                    if (currentId === undefined) return;
+                    void (async () => {
+                      const ok = await drain();
+                      if (!ok) return;
+                      const bad = readyChecks({
+                        text: viewPost.text,
+                        limit: viewPost.limit,
+                        mediaCount: viewPost.media.length,
+                        accountConnected: account.data?.account != null,
+                      }).checks.find((check) => !check.ok);
+                      if (bad) {
+                        toast(bad.label, 'warn');
+                        return;
+                      }
+                      setConfirm('publish');
+                    })();
+                  }}
+                />
+              )}
+              {!isNew && viewPost.status === 'failed' && (
+                <IconButton
+                  label="Retry now"
+                  icon={RefreshCw}
+                  variant="primary"
+                  onClick={() => setConfirm('retry')}
+                />
+              )}
+              {!isNew && viewPost.status === 'published' && viewPost.x_post_url !== null && (
+                <IconLink label="Open on X" icon={ExternalLink} href={viewPost.x_post_url} />
               )}
               {!isNew && (viewPost.status === 'official' || viewPost.status === 'failed') && (
                 <IconButton
@@ -449,6 +499,31 @@ export function PostModal(): JSX.Element | null {
           </div>
           <div className="mbody">
             <div className="editor">
+              {!isNew && viewPost.missed && (
+                <div className="banner missed" role="status">
+                  <TriangleAlert size={16} strokeWidth={1.75} />
+                  {viewPost.status === 'draft'
+                    ? 'Missed. Drafts are never sent. Pick a new time and promote, or clear the time.'
+                    : 'Missed. No X account was connected at that time. Pick a new time, or clear the time.'}
+                </div>
+              )}
+              {!isNew && viewPost.status === 'failed' && (
+                <div className="banner failed" role="alert">
+                  <TriangleAlert size={16} strokeWidth={1.75} />
+                  <span>
+                    <b>{viewPost.last_error}</b> after {viewPost.retry_count}{' '}
+                    {viewPost.retry_count === 1 ? 'try' : 'tries'}. Retry now, or demote to move it
+                    back to drafts.
+                  </span>
+                </div>
+              )}
+              {!isNew && viewPost.status === 'published' && (
+                <div className="banner info" role="status">
+                  <Check size={16} strokeWidth={1.75} />
+                  Published. Text and images are read-only. Delete only removes it from Perch, not
+                  from X.
+                </div>
+              )}
               <div className="field">
                 <input
                   type="text"
@@ -772,11 +847,57 @@ export function PostModal(): JSX.Element | null {
       {confirm === 'delete' && post && (
         <ConfirmDialog
           title={`Delete post #${post.id}?`}
-          body={<p>Removes it from Perch. Linked resources are kept.</p>}
+          body={
+            <p>
+              Removes it from Perch. Linked resources are kept.
+              {post.status === 'published' && (
+                <>
+                  {' '}
+                  <b>The tweet stays on X.</b> Perch never deletes on X.
+                </>
+              )}
+            </p>
+          }
           ok="Delete"
           danger
           busy={deletePosts.isPending}
           onOk={() => void confirmDelete()}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+      {(confirm === 'publish' || confirm === 'retry') && post && currentId !== undefined && (
+        <ConfirmDialog
+          title={confirm === 'publish' ? 'Publish now?' : 'Retry now?'}
+          body={
+            <p>
+              {post.status === 'draft' ? (
+                <>
+                  This draft becomes <b>official</b> and is sent
+                </>
+              ) : (
+                'Sends'
+              )}{' '}
+              to X as <b>@{account.data?.account?.username}</b> right away. Cost{' '}
+              <b>{formatCost(viewPost.estimated_cost)}</b>
+              {hasUrl ? ' because the text has a link' : ''}.
+              {viewPost.scheduled_at !== null ? ' The schedule time is cleared.' : ''}
+            </p>
+          }
+          ok={confirm === 'publish' ? 'Publish' : 'Retry'}
+          busy={confirm === 'publish' ? publishPost.isPending : retryPost.isPending}
+          onOk={() => {
+            const mutation = confirm === 'publish' ? publishPost : retryPost;
+            void mutation
+              .mutateAsync(currentId)
+              .then(() => {
+                setConfirm(null);
+                toast('Published');
+              })
+              .catch((error: unknown) => {
+                setConfirm(null);
+                toast(errorMessage(error), 'warn');
+              });
+          }}
           onCancel={() => setConfirm(null)}
         />
       )}

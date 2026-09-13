@@ -33,7 +33,7 @@ export function PostRow({ post }: { post: Post }) {
       </div>
       <TagChips tags={post.tags} />
       <span className="pid">#{post.id}</span>
-      <StatusPill status={post.status} />
+      <StatusPill status={post.missed ? 'missed' : post.status} />
     </Link>
   );
 }

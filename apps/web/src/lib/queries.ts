@@ -398,6 +398,36 @@ export function useSchedulePost() {
   });
 }
 
+export function usePublishPost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      unwrap(api.api.posts[':id'].publish.$post({ param: { id: String(id) } })),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['posts', 'detail', data.id], data);
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
+    },
+    onError: (_error, id) => {
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', id] });
+    },
+  });
+}
+
+export function useRetryPost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      unwrap(api.api.posts[':id'].retry.$post({ param: { id: String(id) } })),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['posts', 'detail', data.id], data);
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
+    },
+    onError: (_error, id) => {
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', id] });
+    },
+  });
+}
+
 export function useLinkResources() {
   const queryClient = useQueryClient();
   return useMutation({
