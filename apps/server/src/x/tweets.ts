@@ -1,23 +1,20 @@
 import {
   parseTweetUrl,
+  type TweetCreate,
+  type TweetCreateResponse,
   tweetRejection,
   tweetTitle,
   X_COSTS_USD,
   X_ENDPOINTS,
-  type TweetCreate,
-  type TweetCreateResponse,
 } from '@perch/core';
 
 import type { Clock } from '../clock';
-import {
-  createTweet,
-  getTweetByXId,
-  updateTweet,
-} from '../db/resources';
 import type { Db } from '../db';
 import { logApiCall } from '../db/apiCalls';
-import { XError, type XClient } from './client';
+import { createTweet, getTweetByXId, updateTweet } from '../db/resources';
 import type { XAccountService } from './accounts';
+import type { XTweet } from './client';
+import { type XClient, XError } from './client';
 
 export interface TweetService {
   saveTweets(userId: number, input: TweetCreate): Promise<TweetCreateResponse>;
@@ -51,7 +48,7 @@ export function createTweetService(deps: {
           continue;
         }
 
-        let tweet;
+        let tweet: XTweet;
         try {
           tweet = await deps.xClient.getTweet(access.accessToken, parsed.id);
         } catch (error) {
@@ -97,16 +94,22 @@ export function createTweetService(deps: {
               authorUsername: tweet.authorUsername,
               text,
               postedAt: new Date(tweet.postedAt ?? 0),
-              title: existing.title === tweetTitle(existing.text) ? tweetTitle(text) : existing.title,
+              title:
+                existing.title === tweetTitle(existing.text) ? tweetTitle(text) : existing.title,
             })
-          : createTweet(deps.db, userId, {
-              url: canonicalUrl,
-              xId: tweet.id,
-              authorId: tweet.authorId ?? '',
-              authorUsername: tweet.authorUsername,
-              text,
-              postedAt: new Date(tweet.postedAt ?? 0),
-            }, now);
+          : createTweet(
+              deps.db,
+              userId,
+              {
+                url: canonicalUrl,
+                xId: tweet.id,
+                authorId: tweet.authorId ?? '',
+                authorUsername: tweet.authorUsername,
+                text,
+                postedAt: new Date(tweet.postedAt ?? 0),
+              },
+              now,
+            );
         if (!resource) throw new Error('tweet resource update failed');
         logApiCall(deps.db, userId, {
           endpoint: X_ENDPOINTS.getTweet,

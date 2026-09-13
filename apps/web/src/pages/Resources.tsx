@@ -1,6 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ResourceType } from '@perch/core';
-import { Bird, BookmarkPlus, FilePlus, FileText, Image, LayoutGrid, Search, Upload } from 'lucide-react';
+import {
+  Bird,
+  BookmarkPlus,
+  FilePlus,
+  FileText,
+  Image,
+  LayoutGrid,
+  Search,
+  Upload,
+} from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router';
 
 import { Empty } from '@/components/Empty';
@@ -16,9 +25,7 @@ export function Resources() {
   const [type, setType] = useState<ResourceType | undefined>();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [sort, setSort] = useState<'newest' | 'oldest' | 'most' | 'least'>(
-    'newest',
-  );
+  const [sort, setSort] = useState<'newest' | 'oldest' | 'most' | 'least'>('newest');
   const [uploadOpen, setUploadOpen] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -44,11 +51,7 @@ export function Resources() {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
     const observer = new IntersectionObserver((entries) => {
-      if (
-        entries[0]?.isIntersecting &&
-        resources.hasNextPage &&
-        !resources.isFetching
-      ) {
+      if (entries[0]?.isIntersecting && resources.hasNextPage && !resources.isFetching) {
         void resources.fetchNextPage();
       }
     });
@@ -60,9 +63,7 @@ export function Resources() {
   if (resources.isPending) {
     content = <div className="countline">Loading…</div>;
   } else if (resources.isError) {
-    content = (
-      <Empty title="Could not load resources" text={errorMessage(resources.error)} />
-    );
+    content = <Empty title="Could not load resources" text={errorMessage(resources.error)} />;
   } else if (total === 0 && type === undefined && search === '') {
     content = <Empty title="No resources yet" text="Upload images or create a note." />;
   } else if (total === 0) {
@@ -85,11 +86,15 @@ export function Resources() {
             >
               Load more
             </button>
-            <span>· {Math.min(RESOURCES_PAGE_SIZE, left)} of {left} left</span>
+            <span>
+              · {Math.min(RESOURCES_PAGE_SIZE, left)} of {left} left
+            </span>
           </div>
         )}
         <div ref={sentinelRef} style={{ height: 1 }} />
-        <div className="countline">{items.length} of {total} resources</div>
+        <div className="countline">
+          {items.length} of {total} resources
+        </div>
       </>
     );
   }
@@ -98,11 +103,7 @@ export function Resources() {
     <>
       <div className="head">
         <h1>Resources</h1>
-        <IconButton
-          label="Upload images"
-          icon={Upload}
-          onClick={() => setUploadOpen(true)}
-        />
+        <IconButton label="Upload images" icon={Upload} onClick={() => setUploadOpen(true)} />
         <IconButton
           label="New note"
           icon={FilePlus}
@@ -132,7 +133,12 @@ export function Resources() {
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <button type="button" aria-label="Tweets" aria-pressed={type === 'tweet'} onClick={() => setType('tweet')}>
+              <button
+                type="button"
+                aria-label="Tweets"
+                aria-pressed={type === 'tweet'}
+                onClick={() => setType('tweet')}
+              >
                 <Bird size={16} strokeWidth={1.75} />
               </button>
             </TooltipTrigger>

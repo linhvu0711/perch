@@ -1,14 +1,14 @@
 import {
-  noteTitle,
-  tweetTitle,
   type ImageResource,
   type NoteCreate,
+  noteTitle,
   type Resource,
   type ResourceDeleteResponse,
   type ResourceList,
   type ResourceListQuery,
   type ResourcePatch,
   type TweetResource,
+  tweetTitle,
   zonedDayEnd,
   zonedDayStart,
 } from '@perch/core';
@@ -18,13 +18,13 @@ import {
   count,
   desc,
   eq,
-  gte,
+  getTableColumns,
   gt,
+  gte,
   lt,
   or,
-  sql,
-  getTableColumns,
   type SQL,
+  sql,
 } from 'drizzle-orm';
 
 import { decodeCursor, encodeCursor } from './cursor';
@@ -142,20 +142,12 @@ export function createTweet(
   return toResource(row) as TweetResource;
 }
 
-export function getTweetByXId(
-  db: Db,
-  userId: number,
-  xId: string,
-): TweetResource | null {
+export function getTweetByXId(db: Db, userId: number, xId: string): TweetResource | null {
   const row = db
     .select(resourceColumns())
     .from(resources)
     .where(
-      and(
-        eq(resources.userId, userId),
-        eq(resources.type, 'tweet'),
-        eq(resources.tweetXId, xId),
-      ),
+      and(eq(resources.userId, userId), eq(resources.type, 'tweet'), eq(resources.tweetXId, xId)),
     )
     .get();
   return row ? (toResource(row, row.usedBy) as TweetResource) : null;
@@ -312,11 +304,7 @@ export function listAllResources(db: Db, userId: number): Resource[] {
   return rows.map((row) => toResource(row, row.usedBy));
 }
 
-export function listResources(
-  db: Db,
-  userId: number,
-  query: ResourceListQuery,
-): ResourceList {
+export function listResources(db: Db, userId: number, query: ResourceListQuery): ResourceList {
   const filterConditions: SQL[] = [eq(resources.userId, userId)];
 
   if (query.type !== undefined) filterConditions.push(eq(resources.type, query.type));
@@ -333,12 +321,11 @@ export function listResources(
   }
   if (query.author) {
     const escaped = query.author.replace(/[\\%_]/g, '\\$&');
-    filterConditions.push(
-      sql`${resources.tweetAuthorUsername} LIKE ${escaped} ESCAPE '\\'`,
-    );
+    filterConditions.push(sql`${resources.tweetAuthorUsername} LIKE ${escaped} ESCAPE '\\'`);
   }
   const timezone = getSettings(db, userId).timezone;
-  if (query.from) filterConditions.push(gte(resources.createdAt, zonedDayStart(query.from, timezone)));
+  if (query.from)
+    filterConditions.push(gte(resources.createdAt, zonedDayStart(query.from, timezone)));
   if (query.to) filterConditions.push(lt(resources.createdAt, zonedDayEnd(query.to, timezone)));
 
   const totalRow = db
@@ -361,9 +348,7 @@ export function listResources(
             lt(sortValue, key.createdAt),
             and(
               eq(sortValue, key.createdAt),
-              sortByUsed
-                ? gt(resources.id, key.id)
-                : lt(resources.id, key.id),
+              sortByUsed ? gt(resources.id, key.id) : lt(resources.id, key.id),
             ),
           )!
         : or(

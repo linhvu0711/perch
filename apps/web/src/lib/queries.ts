@@ -9,14 +9,9 @@ import type {
   ResourceType,
   SettingsPatch,
 } from '@perch/core';
-import {
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { api, ApiError, type JsonResponse, unwrap } from './api';
+import { ApiError, api, type JsonResponse, unwrap } from './api';
 
 export function useMe() {
   return useQuery({
@@ -45,8 +40,7 @@ export function useSettings() {
 export function useLogin() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (token: string) =>
-      unwrap(api.api.auth.login.$post({ json: { token } })),
+    mutationFn: (token: string) => unwrap(api.api.auth.login.$post({ json: { token } })),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['me'] }),
   });
 }
@@ -66,8 +60,7 @@ export function useLogout() {
 export function useUpdateSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (patch: SettingsPatch) =>
-      unwrap(api.api.settings.$patch({ json: patch })),
+    mutationFn: (patch: SettingsPatch) => unwrap(api.api.settings.$patch({ json: patch })),
     onSuccess: (data) => {
       queryClient.setQueryData(['settings'], data);
       void queryClient.invalidateQueries({ queryKey: ['account'] });
@@ -112,10 +105,7 @@ export interface ResourceFilters {
 
 export const RESOURCES_PAGE_SIZE = 30;
 
-export function useResources(
-  filters: ResourceFilters,
-  pageSize = RESOURCES_PAGE_SIZE,
-) {
+export function useResources(filters: ResourceFilters, pageSize = RESOURCES_PAGE_SIZE) {
   return useInfiniteQuery({
     queryKey: ['resources', 'list', filters, pageSize],
     queryFn: ({ pageParam }) =>
@@ -154,10 +144,7 @@ export function useSaveTweets() {
 export function useResource(id: number | null) {
   return useQuery({
     queryKey: ['resources', 'detail', id],
-    queryFn: () =>
-      unwrap(
-        api.api.resources[':id'].$get({ param: { id: String(id) } }),
-      ),
+    queryFn: () => unwrap(api.api.resources[':id'].$get({ param: { id: String(id) } })),
     enabled: id !== null,
   });
 }
@@ -165,8 +152,7 @@ export function useResource(id: number | null) {
 export function useCreateNote() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: NoteCreate) =>
-      unwrap(api.api.resources.notes.$post({ json: input })),
+    mutationFn: (input: NoteCreate) => unwrap(api.api.resources.notes.$post({ json: input })),
     onSuccess: (data) => {
       queryClient.setQueryData(['resources', 'detail', data.id], data);
       void queryClient.invalidateQueries({ queryKey: ['resources', 'list'] });
@@ -219,8 +205,7 @@ export function useUpdateResource() {
 export function useDeleteResources() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (ids: number[]) =>
-      unwrap(api.api.resources.$delete({ json: { ids } })),
+    mutationFn: (ids: number[]) => unwrap(api.api.resources.$delete({ json: { ids } })),
     onSuccess: (data) => {
       for (const result of data.results) {
         if (result.ok) {
@@ -273,8 +258,7 @@ export function usePosts(filters: PostFilters) {
 export function usePost(id: number | null) {
   return useQuery({
     queryKey: ['posts', 'detail', id],
-    queryFn: () =>
-      unwrap(api.api.posts[':id'].$get({ param: { id: String(id) } })),
+    queryFn: () => unwrap(api.api.posts[':id'].$get({ param: { id: String(id) } })),
     enabled: id !== null,
   });
 }
@@ -282,8 +266,7 @@ export function usePost(id: number | null) {
 export function useCreatePost() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: PostCreate) =>
-      unwrap(api.api.posts.$post({ json: input })),
+    mutationFn: (input: PostCreate) => unwrap(api.api.posts.$post({ json: input })),
     onSuccess: (data) => {
       queryClient.setQueryData(['posts', 'detail', data.id], data);
       void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
@@ -299,9 +282,7 @@ export function useUpdatePost() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, patch }: { id: number; patch: PostPatch }) =>
-      unwrap(
-        api.api.posts[':id'].$patch({ param: { id: String(id) }, json: patch }),
-      ),
+      unwrap(api.api.posts[':id'].$patch({ param: { id: String(id) }, json: patch })),
     onSuccess: (data) => {
       queryClient.setQueryData(['posts', 'detail', data.id], data);
       void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
@@ -312,8 +293,7 @@ export function useUpdatePost() {
 export function useDeletePosts() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (ids: number[]) =>
-      unwrap(api.api.posts.$delete({ json: { ids } })),
+    mutationFn: (ids: number[]) => unwrap(api.api.posts.$delete({ json: { ids } })),
     onSuccess: (data) => {
       for (const result of data.results) {
         if (result.ok) {

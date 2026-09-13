@@ -1,10 +1,4 @@
-import {
-  XError,
-  type XClient,
-  type XMe,
-  type XTokens,
-  type XTweet,
-} from './client';
+import { type XClient, XError, type XTokens, type XTweet } from './client';
 
 const X_API_BASE = 'https://api.x.com';
 
@@ -14,22 +8,14 @@ export function createRealXClient(options: {
   fetch?: typeof fetch;
 }): XClient {
   const fetchImpl = options.fetch ?? fetch;
-  const basic =
-    'Basic ' + btoa(`${options.clientId}:${options.clientSecret}`);
+  const basic = `Basic ${btoa(`${options.clientId}:${options.clientSecret}`)}`;
 
-  async function request(
-    url: string,
-    init: RequestInit,
-  ): Promise<Response> {
+  async function request(url: string, init: RequestInit): Promise<Response> {
     let res: Response;
     try {
       res = await fetchImpl(url, init);
     } catch (error) {
-      throw new XError(
-        'network',
-        null,
-        error instanceof Error ? error.message : String(error),
-      );
+      throw new XError('network', null, error instanceof Error ? error.message : String(error));
     }
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -71,11 +57,7 @@ export function createRealXClient(options: {
       scope: string;
     };
     if (!data.refresh_token) {
-      throw new XError(
-        'http',
-        res.status,
-        'token response missing refresh_token',
-      );
+      throw new XError('http', res.status, 'token response missing refresh_token');
     }
     return {
       accessToken: data.access_token,
@@ -117,10 +99,9 @@ export function createRealXClient(options: {
     },
 
     async getMe(accessToken) {
-      const res = await request(
-        `${X_API_BASE}/2/users/me?user.fields=subscription_type`,
-        { headers: bearerHeaders(accessToken) },
-      );
+      const res = await request(`${X_API_BASE}/2/users/me?user.fields=subscription_type`, {
+        headers: bearerHeaders(accessToken),
+      });
       const data = (await res.json()) as {
         data: {
           id: string;
@@ -159,9 +140,7 @@ export function createRealXClient(options: {
         throw new XError('http', 404, 'Post not found');
       }
       const tweetData = data.data;
-      const author = data.includes?.users?.find(
-        (u) => u.id === tweetData.author_id,
-      );
+      const author = data.includes?.users?.find((u) => u.id === tweetData.author_id);
       const tweet: XTweet = {
         id: tweetData.id,
         text: tweetData.text,

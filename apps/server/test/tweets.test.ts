@@ -53,11 +53,7 @@ describe('tweet resources', () => {
     const duplicate = await request('/api/resources/tweets', {
       method: 'POST',
       body: JSON.stringify({
-        urls: [
-          'https://twitter.com/i/web/status/1',
-          'not-a-url',
-          'https://x.com/a/status/2',
-        ],
+        urls: ['https://twitter.com/i/web/status/1', 'not-a-url', 'https://x.com/a/status/2'],
       }),
     });
     const results = (await duplicate.json()).results;
@@ -75,7 +71,9 @@ describe('tweet resources', () => {
     });
     const created = (await response.json()).results[0].resource;
     expect(created.text).toBe('A long-form post. '.repeat(20));
-    server.xClient.tweets['3']!.noteText = 'updated';
+    const noteTweet = server.xClient.tweets['3'];
+    if (!noteTweet) throw new Error('missing fake note tweet');
+    noteTweet.noteText = 'updated';
     const refreshed = await request('/api/resources/tweets', {
       method: 'POST',
       body: JSON.stringify({ urls: ['https://x.com/a/status/3'], refresh: true }),

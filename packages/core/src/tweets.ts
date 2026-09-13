@@ -1,4 +1,4 @@
-import { RESOURCE_TITLE_MAX, NOTE_TITLE_FALLBACK } from './resources';
+import { NOTE_TITLE_FALLBACK, RESOURCE_TITLE_MAX } from './resources';
 
 export const TWEET_REJECTIONS = {
   is_retweet: 'Post is a retweet',
@@ -30,9 +30,7 @@ export function parseTweetUrl(input: string): { id: string } | null {
   ) {
     return null;
   }
-  const match = url.pathname.match(
-    /^\/(?:i\/web|[A-Za-z0-9_]{1,15})\/status\/(\d{1,19})(?:\/|$)/,
-  );
+  const match = url.pathname.match(/^\/(?:i\/web|[A-Za-z0-9_]{1,15})\/status\/(\d{1,19})(?:\/|$)/);
   return match?.[1] ? { id: match[1] } : null;
 }
 
@@ -57,6 +55,6 @@ export function tweetRejection(tweet: {
 }
 
 export function tweetTitle(text: string): string {
-  const firstLine = text.split(/\r?\n/, 1)[0]!.replace(/\s+/g, ' ').trim();
+  const firstLine = (text.split(/\r?\n/, 1)[0] ?? '').replace(/\s+/g, ' ').trim();
   return firstLine.slice(0, RESOURCE_TITLE_MAX) || NOTE_TITLE_FALLBACK;
 }

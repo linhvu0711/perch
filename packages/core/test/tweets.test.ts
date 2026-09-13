@@ -10,11 +10,13 @@ describe('tweet rules', () => {
   });
 
   test('applies rejection order', () => {
-    expect(tweetRejection({
-      hasMedia: true,
-      isArticle: true,
-      referencedTweets: [{ type: 'quoted' }, { type: 'retweeted' }],
-    })).toEqual({ code: 'is_retweet', message: 'Post is a retweet' });
+    expect(
+      tweetRejection({
+        hasMedia: true,
+        isArticle: true,
+        referencedTweets: [{ type: 'quoted' }, { type: 'retweeted' }],
+      }),
+    ).toEqual({ code: 'is_retweet', message: 'Post is a retweet' });
   });
 
   test('derives a compact title', () => {

@@ -3,14 +3,14 @@ import path from 'node:path';
 
 import type { Hono } from 'hono';
 
-import { createApp, type AppEnv } from './app';
+import { type AppEnv, createApp } from './app';
 import type { Clock } from './clock';
 import { migrateDb, openDb, seedDb } from './db';
 import { createTick } from './scheduler';
 import { createXAccountService } from './x/accounts';
-import { createTweetService } from './x/tweets';
 import type { XClient } from './x/client';
 import type { XOAuthConfig } from './x/oauth';
+import { createTweetService } from './x/tweets';
 
 export interface BuildServerOptions {
   dbPath: string;
@@ -29,9 +29,7 @@ export interface PerchServer {
   close: () => void;
 }
 
-export async function buildServer(
-  options: BuildServerOptions,
-): Promise<PerchServer> {
+export async function buildServer(options: BuildServerOptions): Promise<PerchServer> {
   fs.mkdirSync(options.uploadDir, { recursive: true });
   const { db, sqlite } = openDb(options.dbPath);
   migrateDb(db);

@@ -1,16 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import {
-  createBrowserRouter,
-  Navigate,
-  Route,
-  RouterProvider,
-  Routes,
-} from 'react-router';
-
-import { Sidebar } from '@/components/Sidebar';
+import { createBrowserRouter, Navigate, Route, RouterProvider, Routes } from 'react-router';
 import { PostModal } from '@/components/PostModal';
 import { ResourceModal } from '@/components/ResourceModal';
 import { SaveTweetsModal } from '@/components/SaveTweetsModal';
+import { Sidebar } from '@/components/Sidebar';
 import { Toaster } from '@/components/Toast';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useMe } from '@/lib/queries';
@@ -53,19 +46,23 @@ function AuthGate() {
   return (
     <div className={cn('app', collapsed && 'collapsed')}>
       <Sidebar />
-      <main><div className="wrap"><Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/posts" element={<Posts />}>
-          <Route path=":id" element={<PostModal />} />
-        </Route>
-        <Route path="/resources" element={<Resources />}>
-          <Route path="save-tweets" element={<SaveTweetsModal />} />
-          <Route path=":id" element={<ResourceModal />} />
-        </Route>
-        <Route path="/calendar" element={<Calendar />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes></div></main>
+      <main>
+        <div className="wrap">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/posts" element={<Posts />}>
+              <Route path=":id" element={<PostModal />} />
+            </Route>
+            <Route path="/resources" element={<Resources />}>
+              <Route path="save-tweets" element={<SaveTweetsModal />} />
+              <Route path=":id" element={<ResourceModal />} />
+            </Route>
+            <Route path="/calendar" element={<Calendar />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </div>
+      </main>
     </div>
   );
 }

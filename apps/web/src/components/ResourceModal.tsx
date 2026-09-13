@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { firstMarkdownHeading, noteTitle } from '@perch/core';
 import { Check, CopyPlus, FileText, Image, Pencil, PenLine, Trash2, Undo2, X } from 'lucide-react';
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useBlocker, useNavigate, useParams } from 'react-router';
 
 import { ApiError, errorMessage } from '@/lib/api';
@@ -13,21 +13,14 @@ import {
   useResource,
   useUpdateResource,
 } from '@/lib/queries';
-
-import { StatusPill } from './StatusPill';
-
 import { ConfirmDialog } from './ConfirmDialog';
 import { IconButton } from './IconButton';
 import { Markdown } from './Markdown';
 import { NoteEditor } from './NoteEditor';
+import { StatusPill } from './StatusPill';
 import { toast } from './Toast';
 
-type ConfirmState =
-  | 'discard-edit'
-  | 'discard-close'
-  | 'discard-navigation'
-  | 'delete'
-  | null;
+type ConfirmState = 'discard-edit' | 'discard-close' | 'discard-navigation' | 'delete' | null;
 
 export function ResourceModal(): JSX.Element | null {
   const { id: idValue } = useParams();
@@ -41,15 +34,10 @@ export function ResourceModal(): JSX.Element | null {
   const resourceQuery = useResource(isNew || invalidId ? null : parsedId);
   const createNote = useCreateNote();
   const createPost = useCreatePost();
-  const usedBy = usePosts(
-    parsedId === null ? { resource_id: -1 } : { resource_id: parsedId },
-  );
+  const usedBy = usePosts(parsedId === null ? { resource_id: -1 } : { resource_id: parsedId });
   const usedByPosts =
-    parsedId === null
-      ? []
-      : (usedBy.data?.pages.flatMap((page) => page.items) ?? []);
-  const usedByTotal =
-    parsedId === null ? 0 : (usedBy.data?.pages[0]?.total ?? usedByPosts.length);
+    parsedId === null ? [] : (usedBy.data?.pages.flatMap((page) => page.items) ?? []);
+  const usedByTotal = parsedId === null ? 0 : (usedBy.data?.pages[0]?.total ?? usedByPosts.length);
   const updateResource = useUpdateResource();
   const deleteResources = useDeleteResources();
   const modalRef = useRef<HTMLDivElement>(null);
@@ -61,7 +49,7 @@ export function ResourceModal(): JSX.Element | null {
   const [notesDraft, setNotesDraft] = useState('');
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const resource = resourceQuery.data;
-  const resourceId = resource?.id;
+  const _resourceId = resource?.id;
   const saving = createNote.isPending || updateResource.isPending;
   const original = isNew
     ? { body: '', title: '' }
@@ -69,22 +57,15 @@ export function ResourceModal(): JSX.Element | null {
   const notesDirty = !isNew && resource !== undefined && notesDraft !== resource.notes;
   const dirty =
     isEditing &&
-    (bodyDraft !== original.body ||
-      titleDraft !== original.title ||
-      (isNew && notesDraft !== ''));
-  const blocker = useBlocker(
-    () => (dirty || notesDirty) && !allowNavigationRef.current,
-  );
+    (bodyDraft !== original.body || titleDraft !== original.title || (isNew && notesDraft !== ''));
+  const blocker = useBlocker(() => (dirty || notesDirty) && !allowNavigationRef.current);
 
   useEffect(() => {
     if (invalidId) navigate('/resources', { replace: true });
   }, [invalidId, navigate]);
 
   useEffect(() => {
-    if (
-      resourceQuery.error instanceof ApiError &&
-      resourceQuery.error.status === 404
-    ) {
+    if (resourceQuery.error instanceof ApiError && resourceQuery.error.status === 404) {
       toast('Resource not found', 'warn');
       navigate('/resources', { replace: true });
     }
@@ -100,7 +81,7 @@ export function ResourceModal(): JSX.Element | null {
 
   useEffect(() => {
     if (!isEditing) modalRef.current?.focus();
-  }, [isEditing, resourceId]);
+  }, [isEditing]);
 
   const resetDrafts = useCallback(() => {
     if (!resource) return;
@@ -157,7 +138,7 @@ export function ResourceModal(): JSX.Element | null {
       if (saved) proceed();
       else reset();
     });
-  }, [blocker.state, dirty, saveNotes]);
+  }, [blocker.state, dirty, saveNotes, blocker]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -192,7 +173,7 @@ export function ResourceModal(): JSX.Element | null {
   function changeBody(body: string): void {
     setBodyDraft(body);
     if (!titleTouched) {
-      setTitleDraft(firstMarkdownHeading(body) ?? (isNew ? '' : resource?.title ?? ''));
+      setTitleDraft(firstMarkdownHeading(body) ?? (isNew ? '' : (resource?.title ?? '')));
     }
   }
 
@@ -277,33 +258,71 @@ export function ResourceModal(): JSX.Element | null {
 
   if (!isNew && resourceQuery.isPending) {
     return (
-      <div className="scrim" onMouseDown={(event) => event.target === event.currentTarget && requestClose()}>
-        <div className="modal" role="dialog" aria-modal="true" aria-label="Note" tabIndex={-1} ref={modalRef}>
+      <div
+        className="scrim"
+        onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
+      >
+        <div
+          className="modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Note"
+          tabIndex={-1}
+          ref={modalRef}
+        >
           <div className="mhead">
             <span className="id">#{parsedId}</span>
-            <span className="kind"><FileText />Note</span>
+            <span className="kind">
+              <FileText />
+              Note
+            </span>
             <div className="right">
               <IconButton label="Close (Esc)" icon={X} variant="ghost" onClick={requestClose} />
             </div>
           </div>
-          <div className="rbody"><div className="rmain"><div className="muted">Loading…</div></div></div>
+          <div className="rbody">
+            <div className="rmain">
+              <div className="muted">Loading…</div>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
-  if (!isNew && resourceQuery.isError && !(resourceQuery.error instanceof ApiError && resourceQuery.error.status === 404)) {
+  if (
+    !isNew &&
+    resourceQuery.isError &&
+    !(resourceQuery.error instanceof ApiError && resourceQuery.error.status === 404)
+  ) {
     return (
-      <div className="scrim" onMouseDown={(event) => event.target === event.currentTarget && requestClose()}>
-        <div className="modal" role="dialog" aria-modal="true" aria-label="Note" tabIndex={-1} ref={modalRef}>
+      <div
+        className="scrim"
+        onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
+      >
+        <div
+          className="modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Note"
+          tabIndex={-1}
+          ref={modalRef}
+        >
           <div className="mhead">
             <span className="id">#{parsedId}</span>
-            <span className="kind"><FileText />Note</span>
+            <span className="kind">
+              <FileText />
+              Note
+            </span>
             <div className="right">
               <IconButton label="Close (Esc)" icon={X} variant="ghost" onClick={requestClose} />
             </div>
           </div>
-          <div className="rbody"><div className="rmain"><div className="muted">{errorMessage(resourceQuery.error)}</div></div></div>
+          <div className="rbody">
+            <div className="rmain">
+              <div className="muted">{errorMessage(resourceQuery.error)}</div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -313,19 +332,38 @@ export function ResourceModal(): JSX.Element | null {
 
   if (resource?.type === 'tweet') {
     return (
-      <div className="scrim" onMouseDown={(event) => event.target === event.currentTarget && requestClose()}>
-        <div className="modal" role="dialog" aria-modal="true" aria-label="Tweet" tabIndex={-1} ref={modalRef}>
+      <div
+        className="scrim"
+        onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
+      >
+        <div
+          className="modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Tweet"
+          tabIndex={-1}
+          ref={modalRef}
+        >
           <div className="mhead">
             <span className="id">#{resource.id}</span>
-            <span className="kind"><FileText />Tweet</span>
-            <div className="right"><IconButton label="Close (Esc)" icon={X} variant="ghost" onClick={requestClose} /></div>
+            <span className="kind">
+              <FileText />
+              Tweet
+            </span>
+            <div className="right">
+              <IconButton label="Close (Esc)" icon={X} variant="ghost" onClick={requestClose} />
+            </div>
           </div>
-          <div className="rbody"><div className="rmain">
-            <b>@{resource.author_username}</b>
-            <p>{resource.text}</p>
-            <p className="muted">{formatDateTime(resource.posted_at)}</p>
-            <a href={resource.tweet_url} target="_blank" rel="noopener noreferrer">Open on X</a>
-          </div></div>
+          <div className="rbody">
+            <div className="rmain">
+              <b>@{resource.author_username}</b>
+              <p>{resource.text}</p>
+              <p className="muted">{formatDateTime(resource.posted_at)}</p>
+              <a href={resource.tweet_url} target="_blank" rel="noopener noreferrer">
+                Open on X
+              </a>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -333,7 +371,7 @@ export function ResourceModal(): JSX.Element | null {
 
   const isImage = resource?.type === 'image';
   const displayedBody = isEditing ? bodyDraft : resource?.type === 'md' ? resource.body : '';
-  const displayedTitle = isEditing ? titleDraft : resource?.title ?? '';
+  const displayedTitle = isEditing ? titleDraft : (resource?.title ?? '');
   const editingNote = isEditing && resource?.type === 'md';
 
   return (
@@ -422,9 +460,7 @@ export function ResourceModal(): JSX.Element | null {
                             toast('Draft created');
                             navigate(`/posts/${created.id}`);
                           })
-                          .catch((error: unknown) =>
-                            toast(errorMessage(error), 'warn'),
-                          );
+                          .catch((error: unknown) => toast(errorMessage(error), 'warn'));
                       }}
                     />
                   )}
@@ -471,16 +507,23 @@ export function ResourceModal(): JSX.Element | null {
                 <div className="kv">
                   {isImage ? (
                     <>
-                      <b>File</b><span>{resource.title}</span>
-                      <b>Size</b><span>{formatBytes(resource.bytes)}</span>
-                      <b>Pixels</b><span>{resource.width} × {resource.height}</span>
-                      <b>Type</b><span>{resource.mime}</span>
+                      <b>File</b>
+                      <span>{resource.title}</span>
+                      <b>Size</b>
+                      <span>{formatBytes(resource.bytes)}</span>
+                      <b>Pixels</b>
+                      <span>
+                        {resource.width} × {resource.height}
+                      </span>
+                      <b>Type</b>
+                      <span>{resource.mime}</span>
                     </>
                   ) : (
                     <b>Words</b>
                   )}
                   {!isImage && <span>{wordCount(displayedBody)}</span>}
-                  <b>Saved</b><span>{isNew ? '—' : formatDateTime(resource!.created_at)}</span>
+                  <b>Saved</b>
+                  <span>{isNew ? '—' : formatDateTime(resource?.created_at ?? '')}</span>
                 </div>
               </div>
               {!isNew && (
@@ -493,11 +536,7 @@ export function ResourceModal(): JSX.Element | null {
                       <span className="note">Not linked to any post yet.</span>
                     ) : (
                       usedByPosts.map((post) => (
-                        <Link
-                          key={post.id}
-                          to={`/posts/${post.id}`}
-                          className="link"
-                        >
+                        <Link key={post.id} to={`/posts/${post.id}`} className="link">
                           <span className="k">
                             <PenLine size={14} strokeWidth={1.75} />
                           </span>
@@ -509,9 +548,7 @@ export function ResourceModal(): JSX.Element | null {
                       ))
                     )}
                     {usedByTotal > usedByPosts.length && (
-                      <span className="note">
-                        …and {usedByTotal - usedByPosts.length} more
-                      </span>
+                      <span className="note">…and {usedByTotal - usedByPosts.length} more</span>
                     )}
                   </div>
                 </div>
