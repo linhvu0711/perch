@@ -1,4 +1,4 @@
-import { firstMarkdownHeading, noteTitle } from '@perch/core';
+import { firstMarkdownHeading, NOTE_TITLE_FALLBACK, noteTitle } from '@perch/core';
 import {
   Bird,
   Check,
@@ -517,7 +517,7 @@ export function ResourceModal(): JSX.Element | null {
               <input
                 className="rtitle"
                 aria-label="Title"
-                placeholder="Untitled"
+                placeholder={NOTE_TITLE_FALLBACK}
                 value={titleDraft}
                 onChange={(event) => {
                   setTitleTouched(true);

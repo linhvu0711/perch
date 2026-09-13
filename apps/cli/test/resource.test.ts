@@ -173,6 +173,36 @@ describe('resource list and show', () => {
     expect(table.out()).toContain('3 shown · 3 total');
   });
 
+  test('rejects --limit over the maximum as a usage error', async () => {
+    // Given: a test server
+    // When: --limit exceeds the core maximum
+    const capture = makeCtx(server);
+    expect(await runCli(['resource', 'list', '--limit', '101', '--json'], capture.ctx)).toBe(2);
+    // Then
+    expect(JSON.parse(capture.err())).toEqual({
+      code: 'usage',
+      message: '--limit must be a whole number from 1 to 100',
+    });
+  });
+
+  test('rejects a --limit that is not a number as a usage error', async () => {
+    // Given: a test server
+    // When: --limit is not a number
+    const capture = makeCtx(server);
+    expect(await runCli(['resource', 'list', '--limit', 'abc', '--json'], capture.ctx)).toBe(2);
+    // Then
+    expect(JSON.parse(capture.err()).code).toBe('usage');
+  });
+
+  test('accepts --limit at the maximum', async () => {
+    // Given: a test server with no resources
+    // When: --limit equals the core maximum
+    const capture = makeCtx(server);
+    expect(await runCli(['resource', 'list', '--limit', '100', '--json'], capture.ctx)).toBe(0);
+    // Then
+    expect(JSON.parse(capture.out())).toMatchObject({ items: [], total: 0 });
+  });
+
   test('shows a resource and validates ids', async () => {
     const resource = await create('# Show me');
     const shown = makeCtx(server);

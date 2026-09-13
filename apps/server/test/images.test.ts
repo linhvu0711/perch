@@ -3,9 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { ImageCreateResponse, Resource } from '@perch/core';
-
-import { createTestServer, type TestServer } from '../src/testing';
-import { GIF_4X3, JPG_3X2, PNG_3X2, WEBP_3X2 } from '../src/testing';
+import {
+  createTestServer,
+  GIF_4X3,
+  JPG_3X2,
+  PNG_3X2,
+  type TestServer,
+  WEBP_3X2,
+} from '../src/testing';
 
 let server: TestServer;
 
@@ -32,10 +37,7 @@ interface UploadFile {
   type?: string;
 }
 
-async function upload(
-  files: UploadFile[],
-  title?: string,
-): Promise<Response> {
+async function upload(files: UploadFile[], title?: string): Promise<Response> {
   const form = new FormData();
   for (const file of files) {
     form.append(
@@ -167,18 +169,14 @@ describe('images', () => {
 
     const list = await request('/api/resources');
     expect(await list.json()).toMatchObject({ total: 2 });
-    expect(
-      fs.readdirSync(path.join(server.dir, 'uploads', '1')),
-    ).toHaveLength(2);
+    expect(fs.readdirSync(path.join(server.dir, 'uploads', '1'))).toHaveLength(2);
   });
 
   test('defaults the title to the file name and lets title win for one file', async () => {
     const first = await results(await upload([{ name: 'holiday.png', bytes: PNG_3X2 }]));
     expect(first[0]).toMatchObject({ resource: { title: 'holiday.png' } });
 
-    const second = await results(
-      await upload([{ name: 'x.png', bytes: PNG_3X2 }], 'Beach'),
-    );
+    const second = await results(await upload([{ name: 'x.png', bytes: PNG_3X2 }], 'Beach'));
     expect(second[0]).toMatchObject({ resource: { title: 'Beach' } });
 
     const third = await upload(

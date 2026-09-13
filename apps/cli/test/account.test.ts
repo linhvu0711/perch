@@ -59,18 +59,14 @@ describe('account commands', () => {
       code: 'confirm_required',
       message: 'Refusing to disconnect without --yes',
     });
-    expect(
-      server.xClient.calls.filter((c) => c.name === 'revokeToken'),
-    ).toHaveLength(0);
+    expect(server.xClient.calls.filter((c) => c.name === 'revokeToken')).toHaveLength(0);
   });
 
   test('disconnects with --yes', async () => {
     await connect();
     const { ctx, out } = makeCtx(server);
 
-    expect(
-      await runCli(['account', 'disconnect', '--yes', '--json'], ctx),
-    ).toBe(0);
+    expect(await runCli(['account', 'disconnect', '--yes', '--json'], ctx)).toBe(0);
     expect(out()).toBe('{\n  "disconnected": true\n}\n');
 
     const before = out().length;

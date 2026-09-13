@@ -8,12 +8,7 @@ export const timezoneSchema = z
   .min(1)
   .refine(isValidTimeZone, { message: 'Unknown time zone' });
 
-export const charLimitOverrideSchema = z
-  .number()
-  .int()
-  .min(1)
-  .max(CHAR_LIMIT_MAX)
-  .nullable();
+export const charLimitOverrideSchema = z.number().int().min(1).max(CHAR_LIMIT_MAX).nullable();
 
 export const settingsSchema = z.object({
   timezone: timezoneSchema,

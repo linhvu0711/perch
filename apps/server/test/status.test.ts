@@ -40,6 +40,6 @@ describe('status', () => {
   });
 
   test('exposes a resolving scheduler tick', async () => {
-    await expect(server.tick(new Date())).resolves.toBeUndefined();
+    await expect(server.tick(server.clock.now())).resolves.toBeUndefined();
   });
 });

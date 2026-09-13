@@ -46,7 +46,8 @@ describe('real X client', () => {
       scope: 's',
     });
     expect(stub.calls).toHaveLength(1);
-    const call = stub.calls[0]!;
+    const call = stub.calls[0];
+    if (!call) throw new Error('expected a recorded call');
     expect(call.url).toBe('https://api.x.com/2/oauth2/token');
     expect(call.init?.method).toBe('POST');
     const headers = call.init?.headers as Record<string, string>;

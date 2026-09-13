@@ -317,13 +317,12 @@ export function listResources(db: Db, userId: number, query: ResourceListQuery):
   if (query.search) {
     const escaped = query.search.replace(/[\\%_]/g, '\\$&');
     const pattern = `%${escaped}%`;
-    filterConditions.push(
-      or(
-        sql`${resources.title} LIKE ${pattern} ESCAPE '\\'`,
-        sql`${resources.mdBody} LIKE ${pattern} ESCAPE '\\'`,
-        sql`${resources.tweetText} LIKE ${pattern} ESCAPE '\\'`,
-      )!,
+    const searchCondition = or(
+      sql`${resources.title} LIKE ${pattern} ESCAPE '\\'`,
+      sql`${resources.mdBody} LIKE ${pattern} ESCAPE '\\'`,
+      sql`${resources.tweetText} LIKE ${pattern} ESCAPE '\\'`,
     );
+    if (searchCondition) filterConditions.push(searchCondition);
   }
   if (query.author) {
     const escaped = query.author.replace(/[\\%_]/g, '\\$&');
@@ -348,7 +347,7 @@ export function listResources(db: Db, userId: number, query: ResourceListQuery):
     const key = decodeCursor(query.cursor);
     if (!key) throw new InvalidCursorError();
 
-    pageConditions.push(
+    const pageCondition =
       query.order === 'desc'
         ? or(
             lt(sortValue, key.createdAt),
@@ -356,12 +355,12 @@ export function listResources(db: Db, userId: number, query: ResourceListQuery):
               eq(sortValue, key.createdAt),
               sortByUsed ? gt(resources.id, key.id) : lt(resources.id, key.id),
             ),
-          )!
+          )
         : or(
             gt(sortValue, key.createdAt),
             and(eq(sortValue, key.createdAt), gt(resources.id, key.id)),
-          )!,
-    );
+          );
+    if (pageCondition) pageConditions.push(pageCondition);
   }
 
   const rows = db

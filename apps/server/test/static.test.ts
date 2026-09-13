@@ -30,10 +30,7 @@ describe('static app', () => {
   test('falls back safely for traversal and directories', async () => {
     fs.writeFileSync(path.join(server.dir, 'secret.txt'), 'SECRET');
 
-    for (const requestPath of [
-      '/..%2Fsecret.txt',
-      '/assets/..%2F..%2Fsecret.txt',
-    ]) {
+    for (const requestPath of ['/..%2Fsecret.txt', '/assets/..%2F..%2Fsecret.txt']) {
       const response = await server.app.request(requestPath);
       const body = await response.text();
       expect(response.status).toBe(200);
@@ -58,9 +55,7 @@ describe('static app', () => {
 
     const response = await server.app.request('/assets/app.js');
     expect(response.status).toBe(200);
-    expect(response.headers.get('cache-control')).toBe(
-      'public, max-age=31536000, immutable',
-    );
+    expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
     expect(await response.text()).toBe('console.log("perch")');
   });
 

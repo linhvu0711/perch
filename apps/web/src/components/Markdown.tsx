@@ -8,9 +8,7 @@ export function Markdown({ body }: { body: string }): JSX.Element {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          a: (props) => (
-            <a {...props} target="_blank" rel="noopener noreferrer" />
-          ),
+          a: (props) => <a {...props} target="_blank" rel="noopener noreferrer" />,
         }}
       >
         {body}

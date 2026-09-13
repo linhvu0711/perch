@@ -5,7 +5,7 @@ import { deflateSync } from 'node:zlib';
 
 import { fixedClock } from './clock';
 import { buildServer, type PerchServer } from './server';
-import { fakeXClient, type FakeXClient } from './x/fake';
+import { type FakeXClient, fakeXClient } from './x/fake';
 
 export interface TestServer extends PerchServer {
   token: string;
@@ -32,9 +32,7 @@ export async function createTestServer(opts?: {
     opts?.indexHtml ?? '<!doctype html><div id="root">perch-test-app</div>',
   );
 
-  const clock = fixedClock(
-    opts?.now ?? new Date('2026-09-04T10:00:00Z'),
-  );
+  const clock = fixedClock(opts?.now ?? new Date('2026-09-04T10:00:00Z'));
   const xClient = fakeXClient();
   const token = 'test-token';
   const server = await buildServer({

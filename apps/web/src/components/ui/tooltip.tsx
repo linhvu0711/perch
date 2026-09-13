@@ -1,5 +1,5 @@
-import * as React from 'react';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
+import * as React from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -17,9 +17,17 @@ const TooltipContent = React.forwardRef<
       sideOffset={sideOffset}
       className={cn('tip-anim', className)}
       style={{
-        background: 'var(--text)', color: 'var(--bg)', fontSize: '12px', lineHeight: 1.3,
-        padding: '5px 8px', borderRadius: '5px', whiteSpace: 'nowrap', maxWidth: '320px',
-        boxShadow: '0 4px 14px rgba(0,0,0,.18)', zIndex: 200, ...style,
+        background: 'var(--text)',
+        color: 'var(--bg)',
+        fontSize: '12px',
+        lineHeight: 1.3,
+        padding: '5px 8px',
+        borderRadius: '5px',
+        whiteSpace: 'nowrap',
+        maxWidth: '320px',
+        boxShadow: '0 4px 14px rgba(0,0,0,.18)',
+        zIndex: 200,
+        ...style,
       }}
       {...props}
     />
@@ -27,4 +35,4 @@ const TooltipContent = React.forwardRef<
 ));
 TooltipContent.displayName = TooltipPrimitive.Content.displayName;
 
-export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider };
+export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger };

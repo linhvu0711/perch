@@ -1,5 +1,5 @@
-import { useEffect, useId, type JSX, type ReactNode } from 'react';
 import { X } from 'lucide-react';
+import { type JSX, type ReactNode, useEffect, useId } from 'react';
 
 import { IconButton } from './IconButton';
 

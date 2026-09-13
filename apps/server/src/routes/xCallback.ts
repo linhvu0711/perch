@@ -10,9 +10,7 @@ export function xCallbackHandler(deps: AppDeps): Handler<AppEnv> {
       error: c.req.query('error'),
     });
     return c.redirect(
-      result.ok
-        ? '/settings?connected=1'
-        : `/settings?connect_error=${result.reason}`,
+      result.ok ? '/settings?connected=1' : `/settings?connect_error=${result.reason}`,
       302,
     );
   };

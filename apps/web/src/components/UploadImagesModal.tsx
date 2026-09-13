@@ -1,12 +1,11 @@
-import { useEffect, useId, useRef, useState, type JSX } from 'react';
 import { IMAGE_BYTES_MAX, IMAGE_MIME_TYPES, RESOURCE_BATCH_MAX } from '@perch/core';
 import { Upload, X } from 'lucide-react';
-
-import { IconButton } from './IconButton';
-import { toast } from './Toast';
+import { type JSX, useEffect, useId, useRef, useState } from 'react';
 import { errorMessage } from '@/lib/api';
 import { formatBytes } from '@/lib/format';
 import { useUploadImages } from '@/lib/queries';
+import { IconButton } from './IconButton';
+import { toast } from './Toast';
 
 interface ChosenFile {
   id: number;
@@ -23,10 +22,7 @@ function precheck(file: File): string | null {
   return null;
 }
 
-export function UploadImagesModal(props: {
-  open: boolean;
-  onClose(): void;
-}): JSX.Element | null {
+export function UploadImagesModal(props: { open: boolean; onClose(): void }): JSX.Element | null {
   const titleId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const nextId = useRef(0);
@@ -71,9 +67,7 @@ export function UploadImagesModal(props: {
     });
   };
 
-  const ready = files.filter(
-    (entry) => entry.bad === null && entry.outcome === 'pending',
-  );
+  const ready = files.filter((entry) => entry.bad === null && entry.outcome === 'pending');
 
   const onUpload = () => {
     const submitting = ready;
@@ -81,9 +75,7 @@ export function UploadImagesModal(props: {
       submitting.map((entry) => entry.file),
       {
         onSuccess: (data) => {
-          const byId = new Map(
-            submitting.map((entry, index) => [entry.id, data.results[index]]),
-          );
+          const byId = new Map(submitting.map((entry, index) => [entry.id, data.results[index]]));
           setFiles((current) =>
             current.map((entry) => {
               const result = byId.get(entry.id);
@@ -101,9 +93,7 @@ export function UploadImagesModal(props: {
           const submitted = new Set(submitting.map((entry) => entry.id));
           if (
             data.results.every((r) => r.ok) &&
-            files.every(
-              (entry) => entry.bad !== null || submitted.has(entry.id),
-            )
+            files.every((entry) => entry.bad !== null || submitted.has(entry.id))
           ) {
             props.onClose();
           }

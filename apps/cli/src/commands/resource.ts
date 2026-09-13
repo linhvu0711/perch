@@ -4,10 +4,13 @@ import path from 'node:path';
 import {
   firstMarkdownHeading,
   isValidDate,
+  RESOURCE_LIST_LIMIT_DEFAULT,
+  RESOURCE_LIST_LIMIT_MAX,
   RESOURCE_TYPES,
   type Resource,
   type ResourcePatch,
   type ResourceType,
+  resourceListQuerySchema,
   resourceSchema,
 } from '@perch/core';
 import type { Command } from 'commander';
@@ -320,7 +323,7 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
     .option('--to <date>')
     .option('--sort <sort>', 'sort field', 'created')
     .option('--desc', 'newest first')
-    .option('--limit <n>', 'page size', '50')
+    .option('--limit <n>', 'page size', String(RESOURCE_LIST_LIMIT_DEFAULT))
     .option('--cursor <cursor>')
     .action(
       async (commandOptions: {
@@ -357,8 +360,13 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
             throw new CliError('bad_value', `${name} must be YYYY-MM-DD`);
           }
         }
-        if (!/^\d+$/.test(commandOptions.limit) || Number(commandOptions.limit) <= 0) {
-          throw new CliError('bad_value', '--limit must be a positive integer');
+        const parsedLimit = resourceListQuerySchema.shape.limit.safeParse(commandOptions.limit);
+        if (!parsedLimit.success) {
+          throw new CliError(
+            'usage',
+            `--limit must be a whole number from 1 to ${RESOURCE_LIST_LIMIT_MAX}`,
+            2,
+          );
         }
 
         const options = program.opts<GlobalOptions>();
@@ -375,7 +383,7 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
               ...(commandOptions.to !== undefined ? { to: commandOptions.to } : {}),
               sort: commandOptions.sort as 'created' | 'used',
               order: commandOptions.desc ? 'desc' : 'asc',
-              limit: String(Number(commandOptions.limit)),
+              limit: String(parsedLimit.data),
               ...(commandOptions.cursor !== undefined ? { cursor: commandOptions.cursor } : {}),
             },
           }),

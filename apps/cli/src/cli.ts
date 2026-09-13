@@ -1,5 +1,5 @@
-import packageJson from '../package.json' with { type: 'json' };
 import { Command, CommanderError } from 'commander';
+import packageJson from '../package.json' with { type: 'json' };
 
 import { addAccountCommands } from './commands/account';
 import { addAuthCommands } from './commands/auth';
@@ -11,10 +11,7 @@ import { addStatusCommands } from './commands/status';
 import type { CliContext } from './context';
 import { CliError, printError, resolveMode } from './output';
 
-export async function runCli(
-  argv: string[],
-  ctx: CliContext,
-): Promise<number> {
+export async function runCli(argv: string[], ctx: CliContext): Promise<number> {
   const program = new Command()
     .name('perch')
     .version(packageJson.version)
@@ -52,10 +49,7 @@ export async function runCli(
       return error.exitCode;
     }
     if (error instanceof CommanderError) {
-      if (
-        error.code === 'commander.helpDisplayed' ||
-        error.code === 'commander.version'
-      ) {
+      if (error.code === 'commander.helpDisplayed' || error.code === 'commander.version') {
         return 0;
       }
       if (mode === 'json') {

@@ -28,6 +28,10 @@ function setCollapsed(value: boolean): void {
 }
 
 export function useSidebarCollapsed(): [boolean, (value: boolean) => void] {
-  const collapsed = useSyncExternalStore(subscribe, () => current, () => false);
+  const collapsed = useSyncExternalStore(
+    subscribe,
+    () => current,
+    () => false,
+  );
   return [collapsed, setCollapsed];
 }

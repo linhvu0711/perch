@@ -1,3 +1,5 @@
+import { formatCost } from '@perch/core';
+
 export function formatDayMonth(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', {
     day: 'numeric',
@@ -26,9 +28,7 @@ export function noteExcerpt(body: string): string {
     .slice(0, 200);
 }
 
-export function formatUsd(n: number): string {
-  return `$${n.toFixed(3)}`;
-}
+export const formatUsd = formatCost;
 
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;

@@ -1,14 +1,10 @@
-import { loginBodySchema } from '@perch/core';
 import { zValidator } from '@hono/zod-validator';
+import { loginBodySchema } from '@perch/core';
 import { Hono } from 'hono';
 import { deleteCookie, setCookie } from 'hono/cookie';
 
 import type { AppDeps, AppEnv } from '../app';
-import {
-  COOKIE_NAME,
-  sessionCookieOptions,
-  userForSecret,
-} from '../auth';
+import { COOKIE_NAME, sessionCookieOptions, userForSecret } from '../auth';
 import { ApiError, validationHook } from '../errors';
 
 export function authRoutes(deps: AppDeps) {
@@ -20,12 +16,7 @@ export function authRoutes(deps: AppDeps) {
         throw new ApiError(401, 'unauthorized', 'Invalid token');
       }
 
-      setCookie(
-        c,
-        COOKIE_NAME,
-        deps.token,
-        sessionCookieOptions(deps.secureCookies),
-      );
+      setCookie(c, COOKIE_NAME, deps.token, sessionCookieOptions(deps.secureCookies));
       return c.json({ user }, 200);
     })
     .post('/logout', (c) => {

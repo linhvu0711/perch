@@ -13,9 +13,7 @@ interface GlobalOptions {
 }
 
 export function addAccountCommands(program: Command, ctx: CliContext): void {
-  const account = program
-    .command('account')
-    .description('Manage the connected X account');
+  const account = program.command('account').description('Manage the connected X account');
 
   account
     .command('show')
@@ -60,10 +58,7 @@ export function addAccountCommands(program: Command, ctx: CliContext): void {
 
       if (!options.yes) {
         if (!ctx.isTTY || !ctx.stdinIsTTY) {
-          throw new CliError(
-            'confirm_required',
-            'Refusing to disconnect without --yes',
-          );
+          throw new CliError('confirm_required', 'Refusing to disconnect without --yes');
         }
         const confirmed = await ctx.confirm(
           `Disconnect @${status.account.username}? This revokes the token at X.`,

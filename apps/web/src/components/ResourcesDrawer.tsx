@@ -1,4 +1,3 @@
-import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import type { Post, Resource } from '@perch/core';
 import {
   ArrowLeft,
@@ -11,15 +10,11 @@ import {
   Type,
   X,
 } from 'lucide-react';
+import { type JSX, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 
 import { errorMessage } from '@/lib/api';
-import {
-  useLinkResources,
-  useResource,
-  useResources,
-  useUnlinkResources,
-} from '@/lib/queries';
+import { useLinkResources, useResource, useResources, useUnlinkResources } from '@/lib/queries';
 
 import { IconButton } from './IconButton';
 import { Markdown } from './Markdown';
@@ -48,7 +43,6 @@ export function ResourcesDrawer(props: {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [type, setType] = useState<'all' | 'md'>('all');
   const [viewId, setViewId] = useState<number | null>(null);
-
 
   const linkResources = useLinkResources();
   const unlinkResources = useUnlinkResources();
@@ -92,20 +86,16 @@ export function ResourcesDrawer(props: {
       const postId = props.post?.id ?? (await props.ensurePostId?.());
       if (postId === undefined || postId === null) return;
       if (linkedIds.has(resource.id)) {
-      act(
-        () =>
-          unlinkResources.mutateAsync({
-            id: postId,
-            resource_ids: [resource.id],
-          }),
-        'Unlinked',
-      );
-    } else {
-      act(
-        () =>
-          linkResources.mutateAsync({ id: postId, resource_ids: [resource.id] }),
-        'Linked',
-      );
+        act(
+          () =>
+            unlinkResources.mutateAsync({
+              id: postId,
+              resource_ids: [resource.id],
+            }),
+          'Unlinked',
+        );
+      } else {
+        act(() => linkResources.mutateAsync({ id: postId, resource_ids: [resource.id] }), 'Linked');
       }
     })();
   };
@@ -127,17 +117,9 @@ export function ResourcesDrawer(props: {
 
   const actions = (resource: Resource) => (
     <div className="acts">
-      <IconButton
-        label="Insert text into post"
-        icon={Type}
-        onClick={() => insertText(resource)}
-      />
+      <IconButton label="Insert text into post" icon={Type} onClick={() => insertText(resource)} />
       {linkedIds.has(resource.id) ? (
-        <IconButton
-          label="Unlink from post"
-          icon={Link2Off}
-          onClick={() => toggleLink(resource)}
-        />
+        <IconButton label="Unlink from post" icon={Link2Off} onClick={() => toggleLink(resource)} />
       ) : (
         <IconButton
           label="Link to post"
@@ -175,18 +157,11 @@ export function ResourcesDrawer(props: {
                 (props.onNavigate ?? navigate)(`/resources/${viewId}`);
               }}
             />
-            <IconButton
-              label="Close"
-              icon={X}
-              variant="ghost"
-              onClick={props.onClose}
-            />
+            <IconButton label="Close" icon={X} variant="ghost" onClick={props.onClose} />
           </div>
           <div className="dview">
             {detail.isPending && <div className="muted">Loading…</div>}
-            {detail.isError && (
-              <div className="muted">{errorMessage(detail.error)}</div>
-            )}
+            {detail.isError && <div className="muted">{errorMessage(detail.error)}</div>}
             {viewed && (
               <>
                 <div className="body">
@@ -199,9 +174,7 @@ export function ResourcesDrawer(props: {
                 </div>
                 <div className="acts">
                   <span className="note">
-                    {linkedIds.has(viewed.id)
-                      ? 'Linked to this post'
-                      : 'Not linked'}
+                    {linkedIds.has(viewed.id) ? 'Linked to this post' : 'Not linked'}
                   </span>
                   {actions(viewed)}
                 </div>
@@ -241,12 +214,7 @@ export function ResourcesDrawer(props: {
                 <FileText size={16} strokeWidth={1.75} />
               </button>
             </div>
-            <IconButton
-              label="Close"
-              icon={X}
-              variant="ghost"
-              onClick={props.onClose}
-            />
+            <IconButton label="Close" icon={X} variant="ghost" onClick={props.onClose} />
           </div>
           <div className="dlist">
             {items.map((resource) => (
@@ -260,19 +228,11 @@ export function ResourcesDrawer(props: {
                   <FileText size={16} strokeWidth={1.75} />
                 </button>
                 <div className="dmeta">
-                  <button
-                    type="button"
-                    className="tt"
-                    onClick={() => setViewId(resource.id)}
-                  >
+                  <button type="button" className="tt" onClick={() => setViewId(resource.id)}>
                     {resource.title}
-                    {linkedIds.has(resource.id) && (
-                      <span className="faint"> · linked</span>
-                    )}
+                    {linkedIds.has(resource.id) && <span className="faint"> · linked</span>}
                   </button>
-                  <div className="sub">
-                    {insertableText(resource).slice(0, 80)}
-                  </div>
+                  <div className="sub">{insertableText(resource).slice(0, 80)}</div>
                 </div>
                 {actions(resource)}
               </div>
@@ -282,15 +242,10 @@ export function ResourcesDrawer(props: {
                 <b>Nothing found</b>
               </div>
             )}
-            {resources.isPending && (
-              <div className="countline">Loading…</div>
-            )}
+            {resources.isPending && <div className="countline">Loading…</div>}
             {resources.hasNextPage &&
               (() => {
-                const total = Math.max(
-                  resources.data?.pages[0]?.total ?? 0,
-                  items.length,
-                );
+                const total = Math.max(resources.data?.pages[0]?.total ?? 0, items.length);
                 const left = total - items.length;
                 return (
                   <div className="loadmore">

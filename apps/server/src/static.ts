@@ -19,8 +19,7 @@ export function staticHandler(webDist: string): Handler {
     }
 
     const candidate = path.join(webDist, pathname);
-    const inside =
-      candidate === webDist || candidate.startsWith(webDist + path.sep);
+    const inside = candidate === webDist || candidate.startsWith(webDist + path.sep);
 
     if (inside && fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
       return new Response(Bun.file(candidate), {

@@ -39,9 +39,7 @@ describe('database', () => {
     expect(getSettings(db, 1).timezone).toBe('Europe/Berlin');
     expect(() => getSettings(db, 2)).toThrow('settings row missing');
     expect(() =>
-      db.insert(settings)
-        .values({ userId: 999, timezone: 'UTC', charLimitOverride: null })
-        .run(),
+      db.insert(settings).values({ userId: 999, timezone: 'UTC', charLimitOverride: null }).run(),
     ).toThrow();
   });
 });

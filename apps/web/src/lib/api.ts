@@ -30,9 +30,7 @@ export interface JsonResponse<T> {
   json(): Promise<T>;
 }
 
-export async function unwrap<T>(
-  responsePromise: Promise<JsonResponse<T>>,
-): Promise<T> {
+export async function unwrap<T>(responsePromise: Promise<JsonResponse<T>>): Promise<T> {
   const response = await responsePromise;
   if (response.ok) return response.json();
 

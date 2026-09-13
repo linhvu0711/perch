@@ -11,7 +11,7 @@ None for fake X. Set a disposable `PERCH_TOKEN` and use it on the login screen. 
 ## Local setup
 - Ensure Bun is available; this environment has `~/.bun/bin/bun`.
 - From the repo root, install dependencies if needed and build the web app; the fake server serves `apps/web/dist`, not a live frontend dev bundle.
-- Start `PERCH_TOKEN=<disposable-token> bun apps/server/scripts/dev-fake.ts`.
+- Start `PERCH_TOKEN=<disposable-token> bun apps/server/scripts/devFake.ts`.
 - Open `http://127.0.0.1:3000`, enter the configured token, and press Enter. Keep this origin consistent through the test; the fake OAuth callback always returns to 127.0.0.1, so testing on another origin loses authentication.
 - Every server process creates a fresh temporary SQLite DB. Restarting is a clean-state reset, and may require reauthentication.
 - Verify the listening process actually stopped before restarting: a terminated shell wrapper can leave its child alive. Send SIGTERM to the verified server PID if needed.
