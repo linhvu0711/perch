@@ -63,7 +63,8 @@ async function uploadImages(...files: UploadFile[]): Promise<number[]> {
   };
   return body.results.map((result) => {
     expect(result.ok).toBe(true);
-    return result.resource?.id;
+    if (!result.resource) throw new Error('resource missing');
+    return result.resource.id;
   });
 }
 
@@ -99,6 +100,7 @@ describe('post media', () => {
   test('attaches from a resource: copies the file, links it, and records the row', async () => {
     // Given: one image resource and one post
     const [imageId] = await uploadImages({ name: 'a.png', bytes: PNG_3X2 });
+    if (imageId === undefined) throw new Error('upload failed');
     await createPost({ text: 'Hi' });
 
     // When: attaching the resource to the post
@@ -109,7 +111,7 @@ describe('post media', () => {
     const media = {
       id: 1,
       position: 1,
-      mime: 'image/png',
+      mime: 'image/png' as const,
       bytes: 73,
       from_resource_id: 1,
     };
@@ -138,11 +140,13 @@ describe('post media', () => {
       { name: 'd.png', bytes: PNG_3X2 },
       { name: 'e.png', bytes: PNG_3X2 },
     );
+    const fifth = ids[4];
+    if (fifth === undefined) throw new Error('upload failed');
     await createPost({ text: 'Hi' });
 
     // When: attaching four then one more
     const first = await attachMedia(1, ids.slice(0, 4));
-    const second = await attachMedia(1, [ids[4] as number]);
+    const second = await attachMedia(1, [fifth]);
 
     // Then: the first four attach, the fifth names the limit
     expect(first.status).toBe(200);
@@ -167,6 +171,7 @@ describe('post media', () => {
     });
     expect(note.status).toBe(201);
     const [imageId] = await uploadImages({ name: 'a.png', bytes: PNG_3X2 });
+    if (imageId === undefined) throw new Error('upload failed');
     await createPost({ text: 'Hi' });
 
     // When: attaching a missing id, the note, and the image

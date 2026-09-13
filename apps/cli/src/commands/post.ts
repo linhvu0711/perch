@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 
 import {
   formatCost,
@@ -55,6 +56,7 @@ function printPost(ctx: CliContext, options: GlobalOptions, post: Post): void {
       scheduled: post.scheduled_at ?? '',
       published: post.published_at ?? '',
       links: post.links.map((link) => link.resource_id).join(', '),
+      media: post.media.map((item) => item.position).join(', '),
       created: post.created_at,
       updated: post.updated_at,
     })}\n\n${post.text}\n`,
@@ -368,6 +370,76 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
       printResult(ctx, resolveMode(program.opts<GlobalOptions>(), ctx.isTTY), response.results);
       const failed = response.results.filter((result) => !result.ok).length;
       if (failed > 0) throw new BatchFailure(failed, response.results.length);
+    });
+
+  post
+    .command('attach <id>')
+    .description('Attach media to a post')
+    .option('--resource <rid...>')
+    .option('--file <path...>')
+    .action(async (idValue: string, commandOptions: { resource?: string[]; file?: string[] }) => {
+      const id = positiveId(idValue);
+      const mode = resolveMode(program.opts<GlobalOptions>(), ctx.isTTY);
+      const resourceIds = (commandOptions.resource ?? []).map((value) => positiveId(value, true));
+      const files = commandOptions.file ?? [];
+      if (resourceIds.length === 0 && files.length === 0) {
+        throw new CliError('bad_args', 'Use --resource or --file');
+      }
+
+      const api = apiFor(program, ctx);
+      const results: Array<{ ok: boolean }> = [];
+      if (resourceIds.length > 0) {
+        const response = await api.call(
+          api.client.api.posts[':id'].media.$post({
+            param: { id: String(id) },
+            json: { resource_ids: resourceIds },
+          }),
+        );
+        results.push(...response.results);
+      }
+      if (files.length > 0) {
+        const response = await api.call(
+          api.client.api.posts[':id'].media.files.$post({
+            param: { id: String(id) },
+            form: {
+              files: files.map(
+                (filePath) =>
+                  new File(
+                    [fs.readFileSync(filePath).slice().buffer as ArrayBuffer],
+                    path.basename(filePath),
+                  ),
+              ),
+            },
+          }),
+        );
+        results.push(...response.results);
+      }
+
+      printResult(ctx, mode, results);
+      const failed = results.filter((result) => !result.ok).length;
+      if (failed > 0) throw new BatchFailure(failed, results.length);
+    });
+
+  post
+    .command('detach <id>')
+    .description('Detach media from a post')
+    .option('--media <n...>')
+    .option('--all')
+    .action(async (idValue: string, commandOptions: { media?: string[]; all?: boolean }) => {
+      const id = positiveId(idValue);
+      const positions = (commandOptions.media ?? []).map((value) => positiveId(value, true));
+      if (positions.length > 0 === (commandOptions.all === true)) {
+        throw new CliError('bad_args', 'Use one of --media or --all');
+      }
+
+      const api = apiFor(program, ctx);
+      const response = await api.call(
+        api.client.api.posts[':id'].media.$delete({
+          param: { id: String(id) },
+          json: commandOptions.all ? { all: true } : { positions },
+        }),
+      );
+      printResult(ctx, resolveMode(program.opts<GlobalOptions>(), ctx.isTTY), response.media);
     });
 
   post

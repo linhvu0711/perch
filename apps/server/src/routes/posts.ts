@@ -168,56 +168,61 @@ export function postsRoutes(deps: AppDeps) {
         }
       },
     )
-    .post('/:id/media/files', zValidator('param', idParamSchema, validationHook), async (c) => {
-      const { id } = c.req.valid('param');
-      const userId = c.get('user').id;
-      const form = await c.req.formData();
-      const files = form.getAll('files').filter((v): v is File => v instanceof File);
-      if (files.length === 0) {
-        throw new ApiError(400, 'validation', 'Invalid request', [
-          { path: 'files', message: 'At least one file is required' },
-        ]);
-      }
+    .post(
+      '/:id/media/files',
+      zValidator('param', idParamSchema, validationHook),
+      zValidator(
+        'form',
+        z.object({
+          files: z.union([z.instanceof(File), z.array(z.instanceof(File))]),
+        }),
+        validationHook,
+      ),
+      async (c) => {
+        const { id } = c.req.valid('param');
+        const userId = c.get('user').id;
+        const formFiles = c.req.valid('form').files;
+        const files = Array.isArray(formFiles) ? formFiles : [formFiles];
 
-      const inputs = [];
-      const results: Array<
-        | { name: string; ok: true }
-        | { name: string; ok: false; error: { code: string; message: string } }
-      > = [];
-      for (const file of files) {
-        const bytes = await file.bytes();
-        const inspected = await inspectImage(bytes);
-        if (!inspected.ok) {
-          results.push({ name: file.name, ok: false, error: inspected.error });
-          continue;
+        const inputs = [];
+        const results: Array<
+          | { name: string; ok: true }
+          | { name: string; ok: false; error: { code: string; message: string } }
+        > = [];
+        for (const file of files) {
+          const bytes = await file.bytes();
+          const inspected = await inspectImage(bytes);
+          if (!inspected.ok) {
+            results.push({ name: file.name, ok: false, error: inspected.error });
+            continue;
+          }
+          inputs.push({ name: file.name, bytes, mime: inspected.mime, ext: inspected.ext });
+          results.push({ name: file.name, ok: true });
         }
-        inputs.push({ name: file.name, bytes, mime: inspected.mime, ext: inspected.ext });
-        results.push({ name: file.name, ok: true });
-      }
 
-      try {
-        const response = await attachFromFiles(
-          deps.db,
-          userId,
-          id,
-          inputs,
-          mediaFiles(deps, userId),
-        );
-        if (!response) throw notFound(id);
-        let index = 0;
-        return c.json(
-          {
-            results: results.map((result) =>
-              result.ok ? { ...response.results[index++]! } : result,
-            ),
-          },
-          200,
-        );
-      } catch (error) {
-        if (error instanceof MediaLimitError) throw mediaLimit(error);
-        throw immutable(error);
-      }
-    })
+        try {
+          const response = await attachFromFiles(
+            deps.db,
+            userId,
+            id,
+            inputs,
+            mediaFiles(deps, userId),
+          );
+          if (!response) throw notFound(id);
+          let index = 0;
+          const merged = results.map((result) => {
+            if (!result.ok) return result;
+            const attached = response.results[index];
+            index += 1;
+            return attached ?? result;
+          });
+          return c.json({ results: merged }, 200);
+        } catch (error) {
+          if (error instanceof MediaLimitError) throw mediaLimit(error);
+          throw immutable(error);
+        }
+      },
+    )
     .get(
       '/:id/media/:mediaId/file',
       zValidator(

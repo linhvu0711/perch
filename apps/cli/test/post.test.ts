@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { POST_LIST_LIMIT_DEFAULT } from '@perch/core';
 import type { TestServer } from '@perch/server/testing';
-import { createTestServer } from '@perch/server/testing';
+import { createTestServer, PNG_3X2 } from '@perch/server/testing';
 
 import { runCli } from '../src/cli';
 import { makeCtx } from './helpers';
@@ -251,6 +251,74 @@ describe('post link and unlink', () => {
     const bad = makeCtx(server);
     expect(await runCli(['post', 'link', '1', '--resource', 'abc', '--json'], bad.ctx)).toBe(1);
     expect(JSON.parse(bad.err()).code).toBe('bad_args');
+  });
+});
+
+describe('post attach and detach', () => {
+  test('attaches resources and files, shows media, and detaches', async () => {
+    const png = path.join(server.dir, 'pic.png');
+    fs.writeFileSync(png, Buffer.from(PNG_3X2));
+    const upload = makeCtx(server);
+    expect(await runCli(['resource', 'add', 'image', png, '--json'], upload.ctx)).toBe(0);
+    const resourceId = (
+      JSON.parse(upload.out()) as Array<{ ok: boolean; resource: { id: number } }>
+    )[0]!.resource.id;
+
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--text', 'hi', '--json'], setup.ctx);
+
+    const attach = makeCtx(server);
+    expect(
+      await runCli(['post', 'attach', '1', '--resource', String(resourceId), '--json'], attach.ctx),
+    ).toBe(0);
+    expect(JSON.parse(attach.out())).toEqual([
+      {
+        id: resourceId,
+        ok: true,
+        media: { id: 1, position: 1, mime: 'image/png', bytes: 73, from_resource_id: resourceId },
+      },
+    ]);
+
+    const attachFile = makeCtx(server);
+    expect(await runCli(['post', 'attach', '1', '--file', png, '--json'], attachFile.ctx)).toBe(0);
+    expect(JSON.parse(attachFile.out())).toEqual([
+      {
+        name: 'pic.png',
+        ok: true,
+        media: { id: 2, position: 2, mime: 'image/png', bytes: 73, from_resource_id: null },
+      },
+    ]);
+
+    const show = makeCtx(server, { isTTY: true });
+    await runCli(['post', 'show', '1'], show.ctx);
+    expect(show.out()).toContain('1, 2');
+
+    const detach = makeCtx(server);
+    expect(await runCli(['post', 'detach', '1', '--media', '1', '--json'], detach.ctx)).toBe(0);
+    expect(JSON.parse(detach.out())).toEqual([
+      { id: 2, position: 1, mime: 'image/png', bytes: 73, from_resource_id: null },
+    ]);
+
+    const detachAll = makeCtx(server);
+    expect(await runCli(['post', 'detach', '1', '--all', '--json'], detachAll.ctx)).toBe(0);
+    expect(JSON.parse(detachAll.out())).toEqual([]);
+
+    const neither = makeCtx(server);
+    expect(await runCli(['post', 'attach', '1', '--json'], neither.ctx)).toBe(1);
+    expect(JSON.parse(neither.err()).code).toBe('bad_args');
+
+    const detachNeither = makeCtx(server);
+    expect(await runCli(['post', 'detach', '1', '--json'], detachNeither.ctx)).toBe(1);
+    expect(JSON.parse(detachNeither.err())).toEqual({
+      code: 'bad_args',
+      message: 'Use one of --media or --all',
+    });
+
+    const detachBoth = makeCtx(server);
+    expect(
+      await runCli(['post', 'detach', '1', '--media', '1', '--all', '--json'], detachBoth.ctx),
+    ).toBe(1);
+    expect(JSON.parse(detachBoth.err()).code).toBe('bad_args');
   });
 });
 
