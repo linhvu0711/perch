@@ -39,6 +39,7 @@ export const imageResourceSchema = z.object({
   bytes: z.number().int().nonnegative(),
   width: z.number().int().positive(),
   height: z.number().int().positive(),
+  used_by: z.number().int().nonnegative().optional(),
 });
 export const resourceSchema = z.discriminatedUnion('type', [
   noteResourceSchema,

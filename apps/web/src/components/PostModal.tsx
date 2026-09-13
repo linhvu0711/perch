@@ -11,6 +11,7 @@ import { useNavigate, useParams } from 'react-router';
 
 import { ApiError, errorMessage } from '@/lib/api';
 import {
+  useAccount,
   useCreatePost,
   useDeletePosts,
   usePost,
@@ -56,6 +57,7 @@ export function PostModal(): JSX.Element | null {
   const invalidId = !isNew && parsedId === null;
 
   const postQuery = usePost(isNew || invalidId ? null : parsedId);
+  const account = useAccount();
   const createPost = useCreatePost();
   const updatePost = useUpdatePost();
   const deletePosts = useDeletePosts();
@@ -126,6 +128,7 @@ export function PostModal(): JSX.Element | null {
       const patch = pendingRef.current;
       const hasChanges =
         patch.title !== undefined || patch.text !== undefined;
+      pendingRef.current = {};
       let id = currentId;
       if (id === undefined) {
         if (!hasChanges && createRef.current === null) return;
@@ -137,7 +140,6 @@ export function PostModal(): JSX.Element | null {
         }
       }
       if (!hasChanges) return;
-      pendingRef.current = {};
       try {
         await updatePost.mutateAsync({ id, patch });
         savedRef.current = true;
@@ -249,6 +251,7 @@ export function PostModal(): JSX.Element | null {
     text: drafts?.text ?? post?.text ?? '',
     character_count: weightedLength(drafts?.text ?? post?.text ?? ''),
     estimated_cost: estimateCost(drafts?.text ?? post?.text ?? ''),
+    limit: post?.limit ?? account.data?.char_limit ?? CHAR_LIMIT_DEFAULT,
   };
   const over = viewPost.character_count > viewPost.limit;
   const metricClass = over

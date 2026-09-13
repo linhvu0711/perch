@@ -41,7 +41,7 @@ export function ResourceCard({ resource }: { resource: Resource }): JSX.Element 
       )}
       <div className="foot">
         <span className="uses">
-          {resource.type !== 'md' || !resource.used_by
+          {!resource.used_by
             ? 'not used'
             : `used by ${resource.used_by} post${resource.used_by === 1 ? '' : 's'}`}
         </span>

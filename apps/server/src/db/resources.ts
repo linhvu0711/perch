@@ -59,6 +59,7 @@ function toResource(row: ResourceRow, usedBy = 0): Resource {
       bytes: row.imageBytes,
       width: row.imageWidth,
       height: row.imageHeight,
+      ...(usedBy > 0 ? { used_by: usedBy } : {}),
     };
   }
   if (row.type !== 'md') throw new Error('unsupported resource type');

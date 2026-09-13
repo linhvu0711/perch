@@ -171,8 +171,11 @@ export function useUploadImages() {
         }) as Promise<JsonResponse<ImageCreateResponse>>,
       );
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: ['resources'] });
+      if (data.results.some((result) => result.ok)) {
+        void queryClient.invalidateQueries({ queryKey: ['counts'] });
+      }
     },
   });
 }
