@@ -1,15 +1,11 @@
-import {
-  CHAR_LIMIT_MAX,
-  charLimitOverrideSchema,
-  type Settings,
-} from '@perch/core';
+import { CHAR_LIMIT_MAX, charLimitOverrideSchema, type Settings } from '@perch/core';
 import type { Command } from 'commander';
 
 import { createApi } from '../api';
 import {
   LOCAL_CONFIG_KEYS,
-  readConfig,
   REMOTE_CONFIG_KEYS,
+  readConfig,
   resolveServerUrl,
   resolveToken,
   writeConfig,
@@ -49,10 +45,7 @@ export function addConfigCommands(program: Command, ctx: CliContext): void {
         const serverUrl = resolveServerUrl(ctx, options.server);
         const api = createApi(ctx, serverUrl, resolveToken(ctx));
         const settings = await api.call(api.client.api.settings.$get());
-        value =
-          key === 'timezone'
-            ? settings.timezone
-            : settings.char_limit_override;
+        value = key === 'timezone' ? settings.timezone : settings.char_limit_override;
       }
 
       printResult(ctx, resolveMode(options, ctx.isTTY), {
