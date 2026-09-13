@@ -1,0 +1,457 @@
+import fs from 'node:fs';
+
+import {
+  formatCost,
+  POST_STATUSES,
+  type Post,
+  type PostPatch,
+  type PostPreview,
+} from '@perch/core';
+import type { Command } from 'commander';
+
+import { createApi } from '../api';
+import { resolveServerUrl, resolveToken } from '../config';
+import type { CliContext } from '../context';
+import {
+  BatchFailure,
+  CliError,
+  formatTable,
+  printResult,
+  resolveMode,
+} from '../output';
+
+interface GlobalOptions {
+  json?: boolean;
+  table?: boolean;
+  server?: string;
+  yes?: boolean;
+}
+
+function apiFor(program: Command, ctx: CliContext) {
+  const options = program.opts<GlobalOptions>();
+  return createApi(ctx, resolveServerUrl(ctx, options.server), resolveToken(ctx));
+}
+
+function positiveId(value: string, plural = false): number {
+  if (!/^\d+$/.test(value) || Number(value) <= 0) {
+    throw new CliError(
+      'bad_args',
+      plural ? 'ids must be positive integers' : 'id must be a positive integer',
+    );
+  }
+  return Number(value);
+}
+
+function printPost(
+  ctx: CliContext,
+  options: GlobalOptions,
+  post: Post,
+): void {
+  const mode = resolveMode(options, ctx.isTTY);
+  if (mode === 'json') {
+    printResult(ctx, mode, post);
+    return;
+  }
+
+  ctx.stdout.write(
+    `${formatTable({
+      id: post.id,
+      status: post.status,
+      title: post.title,
+      characters: `${post.character_count} / ${post.limit}`,
+      cost: formatCost(post.estimated_cost),
+      scheduled: post.scheduled_at ?? '',
+      published: post.published_at ?? '',
+      links: post.links.map((link) => link.resource_id).join(', '),
+      created: post.created_at,
+      updated: post.updated_at,
+    })}\n\n${post.text}\n`,
+  );
+}
+
+function wordWrap(text: string, width: number): string[] {
+  const lines: string[] = [];
+  for (const rawLine of text.split('\n')) {
+    let current = '';
+    for (const word of rawLine.split(' ')) {
+      const rest = current === '' ? word : `${current} ${word}`;
+      if (rest.length <= width) {
+        current = rest;
+        continue;
+      }
+      if (current !== '') lines.push(current);
+      let piece = word;
+      while (piece.length > width) {
+        lines.push(piece.slice(0, width));
+        piece = piece.slice(width);
+      }
+      current = piece;
+    }
+    lines.push(current);
+  }
+  return lines;
+}
+
+function printPreviewCard(
+  ctx: CliContext,
+  preview: PostPreview,
+  text: string,
+): void {
+  const lines =
+    text === '' ? ['Nothing yet.'] : text.split('\n').flatMap((l) => wordWrap(l, 56));
+  const border = `+${'-'.repeat(58)}+`;
+  ctx.stdout.write(
+    `${border}\n${lines.map((line) => `| ${line.padEnd(56)} |`).join('\n')}\n${border}\n` +
+      `Characters: ${preview.character_count} / ${preview.limit}\n` +
+      `Cost: ${formatCost(preview.estimated_cost)}\n`,
+  );
+}
+
+async function readTextInput(
+  ctx: CliContext,
+  commandOptions: { text?: string; file?: string },
+  stdinArg: string | undefined,
+): Promise<string> {
+  const given = [
+    commandOptions.text !== undefined,
+    commandOptions.file !== undefined,
+    stdinArg !== undefined,
+  ].filter(Boolean).length;
+  if (given > 1 || (stdinArg !== undefined && stdinArg !== '-')) {
+    throw new CliError('bad_args', 'Use one of --text, --file, or -');
+  }
+  if (commandOptions.text !== undefined) return commandOptions.text;
+  if (commandOptions.file !== undefined) {
+    return fs.readFileSync(commandOptions.file, 'utf8');
+  }
+  if (stdinArg === '-') return ctx.readStdin();
+  return '';
+}
+
+export function addPostCommands(program: Command, ctx: CliContext): void {
+  const post = program.command('post').description('Manage posts');
+
+  post
+    .command('create [stdin]')
+    .description('Create a post')
+    .option('--title <title>')
+    .option('--text <text>')
+    .option('--file <path>')
+    .option('--from <rid...>')
+    .action(
+      async (
+        stdinArg: string | undefined,
+        commandOptions: {
+          title?: string;
+          text?: string;
+          file?: string;
+          from?: string[];
+        },
+      ) => {
+        const text = await readTextInput(ctx, commandOptions, stdinArg);
+        const from = (commandOptions.from ?? []).map((value) =>
+          positiveId(value, true),
+        );
+
+        const api = apiFor(program, ctx);
+        const created = await api.call(
+          api.client.api.posts.$post({
+            json: {
+              ...(commandOptions.title !== undefined
+                ? { title: commandOptions.title }
+                : {}),
+              text,
+              ...(from.length > 0 ? { from } : {}),
+            },
+          }),
+        );
+        printPost(ctx, program.opts<GlobalOptions>(), created);
+      },
+    );
+
+  post
+    .command('list')
+    .description('List posts')
+    .option('--status <status>')
+    .option('--search <q>')
+    .option('--from <d>')
+    .option('--to <d>')
+    .option('--limit <n>', 'page size', '50')
+    .option('--cursor <cursor>')
+    .action(
+      async (commandOptions: {
+        status?: string;
+        search?: string;
+        from?: string;
+        to?: string;
+        limit: string;
+        cursor?: string;
+      }) => {
+        if (
+          commandOptions.status !== undefined &&
+          !(POST_STATUSES as readonly string[]).includes(commandOptions.status)
+        ) {
+          throw new CliError(
+            'bad_value',
+            `Unknown status: ${commandOptions.status}. Use ${POST_STATUSES.join(', ')}`,
+          );
+        }
+        for (const [flag, value] of [
+          ['--from', commandOptions.from],
+          ['--to', commandOptions.to],
+        ] as const) {
+          if (value !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+            throw new CliError('bad_value', `${flag} must be YYYY-MM-DD`);
+          }
+        }
+        if (!/^\d+$/.test(commandOptions.limit) || Number(commandOptions.limit) <= 0) {
+          throw new CliError('bad_value', '--limit must be a positive integer');
+        }
+
+        const options = program.opts<GlobalOptions>();
+        const api = apiFor(program, ctx);
+        const result = await api.call(
+          api.client.api.posts.$get({
+            query: {
+              ...(commandOptions.status !== undefined
+                ? { status: commandOptions.status }
+                : {}),
+              ...(commandOptions.search !== undefined
+                ? { search: commandOptions.search }
+                : {}),
+              ...(commandOptions.from !== undefined
+                ? { from: commandOptions.from }
+                : {}),
+              ...(commandOptions.to !== undefined ? { to: commandOptions.to } : {}),
+              limit: String(Number(commandOptions.limit)),
+              ...(commandOptions.cursor !== undefined
+                ? { cursor: commandOptions.cursor }
+                : {}),
+            },
+          }),
+        );
+        const mode = resolveMode(options, ctx.isTTY);
+        if (mode === 'json') {
+          printResult(ctx, mode, result);
+          return;
+        }
+
+        const rows = result.items.map((item) => ({
+          id: item.id,
+          status: item.status,
+          when: item.scheduled_at ?? item.published_at ?? '',
+          title: item.title,
+          chars: `${item.character_count} / ${item.limit}`,
+          cost: formatCost(item.estimated_cost),
+        }));
+        const summary = `${result.items.length} shown · ${result.total} total`;
+        if (rows.length === 0) {
+          ctx.stdout.write(`${summary}\n`);
+          return;
+        }
+
+        ctx.stdout.write(`${formatTable(rows)}\n\n${summary}\n`);
+        if (result.next_cursor !== null) {
+          ctx.stdout.write(`next: --cursor ${result.next_cursor}\n`);
+        }
+      },
+    );
+
+  post
+    .command('show <id>')
+    .description('Show a post')
+    .action(async (idValue: string) => {
+      const id = positiveId(idValue);
+      const api = apiFor(program, ctx);
+      const found = await api.call(
+        api.client.api.posts[':id'].$get({ param: { id: String(id) } }),
+      );
+      printPost(ctx, program.opts<GlobalOptions>(), found);
+    });
+
+  post
+    .command('preview <id>')
+    .description('Preview a post as it looks on X')
+    .action(async (idValue: string) => {
+      const id = positiveId(idValue);
+      const options = program.opts<GlobalOptions>();
+      const mode = resolveMode(options, ctx.isTTY);
+      const api = apiFor(program, ctx);
+      const preview = await api.call(
+        api.client.api.posts[':id'].preview.$get({ param: { id: String(id) } }),
+      );
+      if (mode === 'json') {
+        printResult(ctx, mode, preview);
+        return;
+      }
+      const found = await api.call(
+        api.client.api.posts[':id'].$get({ param: { id: String(id) } }),
+      );
+      printPreviewCard(ctx, preview, found.text);
+    });
+
+  post
+    .command('edit <id> [stdin]')
+    .description('Edit a post')
+    .option('--title <title>')
+    .option('--text <text>')
+    .option('--file <path>')
+    .option('-e, --editor')
+    .action(
+      async (
+        idValue: string,
+        stdinArg: string | undefined,
+        commandOptions: {
+          title?: string;
+          text?: string;
+          file?: string;
+          editor?: boolean;
+        },
+      ) => {
+        const id = positiveId(idValue);
+
+        const textSources = [
+          commandOptions.text !== undefined,
+          commandOptions.file !== undefined,
+          stdinArg !== undefined,
+          commandOptions.editor === true,
+        ].filter(Boolean).length;
+        if (textSources > 1) {
+          throw new CliError('bad_args', 'Use one of --text, --file, -, or -e');
+        }
+        if (commandOptions.title === undefined && textSources === 0) {
+          throw new CliError(
+            'bad_args',
+            'Nothing to update: pass --title, --text, --file, -, or -e',
+          );
+        }
+        if (commandOptions.editor && (!ctx.isTTY || !ctx.stdinIsTTY)) {
+          throw new CliError('no_tty', '-e needs a terminal');
+        }
+
+        const api = apiFor(program, ctx);
+        const patch: PostPatch = {
+          ...(commandOptions.title !== undefined
+            ? { title: commandOptions.title }
+            : {}),
+        };
+        let current: Post | undefined;
+
+        if (commandOptions.editor) {
+          current = await api.call(
+            api.client.api.posts[':id'].$get({ param: { id: String(id) } }),
+          );
+          patch.text = await ctx.editText(current.text);
+        } else {
+          const text = await readTextInput(ctx, commandOptions, stdinArg);
+          if (
+            commandOptions.text !== undefined ||
+            commandOptions.file !== undefined ||
+            stdinArg !== undefined
+          ) {
+            patch.text = text;
+          }
+        }
+
+        const updated = await api.call(
+          api.client.api.posts[':id'].$patch({
+            param: { id: String(id) },
+            json: patch,
+          }),
+        );
+        printPost(ctx, program.opts<GlobalOptions>(), updated);
+      },
+    );
+
+  post
+    .command('link <id>')
+    .description('Link resources to a post')
+    .requiredOption('--resource <rid...>')
+    .action(async (idValue: string, commandOptions: { resource: string[] }) => {
+      const id = positiveId(idValue);
+      const ids = commandOptions.resource.map((value) => positiveId(value, true));
+      const api = apiFor(program, ctx);
+      const response = await api.call(
+        api.client.api.posts[':id'].links.$post({
+          param: { id: String(id) },
+          json: { resource_ids: ids },
+        }),
+      );
+      printResult(
+        ctx,
+        resolveMode(program.opts<GlobalOptions>(), ctx.isTTY),
+        response.results,
+      );
+      const failed = response.results.filter((result) => !result.ok).length;
+      if (failed > 0) throw new BatchFailure(failed, response.results.length);
+    });
+
+  post
+    .command('unlink <id>')
+    .description('Unlink resources from a post')
+    .requiredOption('--resource <rid...>')
+    .action(async (idValue: string, commandOptions: { resource: string[] }) => {
+      const id = positiveId(idValue);
+      const ids = commandOptions.resource.map((value) => positiveId(value, true));
+      const api = apiFor(program, ctx);
+      const response = await api.call(
+        api.client.api.posts[':id'].links.$delete({
+          param: { id: String(id) },
+          json: { resource_ids: ids },
+        }),
+      );
+      printResult(
+        ctx,
+        resolveMode(program.opts<GlobalOptions>(), ctx.isTTY),
+        response.results,
+      );
+      const failed = response.results.filter((result) => !result.ok).length;
+      if (failed > 0) throw new BatchFailure(failed, response.results.length);
+    });
+
+  post
+    .command('delete <id...>')
+    .description('Delete posts')
+    .action(async (idValues: string[]) => {
+      const ids = idValues.map((value) => positiveId(value, true));
+      const options = program.opts<GlobalOptions>();
+
+      if (!options.yes) {
+        if (!ctx.isTTY || !ctx.stdinIsTTY) {
+          throw new CliError(
+            'confirm_required',
+            'Refusing to delete without --yes',
+          );
+        }
+        const confirmed = await ctx.confirm(
+          `Delete ${ids.length} post${ids.length === 1 ? '' : 's'} (${ids.join(', ')})?`,
+        );
+        if (!confirmed) {
+          ctx.stderr.write('Cancelled\n');
+          return;
+        }
+      }
+
+      const api = apiFor(program, ctx);
+      const response = await api.call(
+        api.client.api.posts.$delete({ json: { ids } }),
+      );
+      const mode = resolveMode(options, ctx.isTTY);
+      if (mode === 'json') {
+        printResult(ctx, mode, response.results);
+      } else {
+        printResult(
+          ctx,
+          mode,
+          response.results.map((result) => ({
+            id: result.id,
+            ok: result.ok,
+            error: result.ok ? '' : result.error.message,
+          })),
+        );
+      }
+
+      const failed = response.results.filter((result) => !result.ok).length;
+      if (failed > 0) throw new BatchFailure(failed, response.results.length);
+    });
+}

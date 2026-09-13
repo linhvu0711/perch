@@ -4,6 +4,8 @@ import { Command, CommanderError } from 'commander';
 import { addAccountCommands } from './commands/account';
 import { addAuthCommands } from './commands/auth';
 import { addConfigCommands } from './commands/config';
+import { addOpenCommands } from './commands/open';
+import { addPostCommands } from './commands/post';
 import { addResourceCommands } from './commands/resource';
 import { addStatusCommands } from './commands/status';
 import type { CliContext } from './context';
@@ -34,7 +36,9 @@ export async function runCli(
   addAccountCommands(program, ctx);
   addAuthCommands(program, ctx);
   addConfigCommands(program, ctx);
+  addPostCommands(program, ctx);
   addResourceCommands(program, ctx);
+  addOpenCommands(program, ctx);
   addStatusCommands(program, ctx);
 
   try {

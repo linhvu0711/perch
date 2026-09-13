@@ -106,6 +106,15 @@ perch cost       [--month YYYY-MM]    default: this month. Total and split by ki
 perch serve                           run the server (used in production and `bun run dev`)
 ```
 
+### Open
+
+```
+perch open post <id>                  open the post in the web app
+perch open resource <id>              open the resource in the web app
+```
+
+- Prints the URL and opens it in the browser on a terminal; without a TTY it only prints.
+
 ## Post status and time
 
 | status | scheduled | scheduler does |

@@ -15,19 +15,19 @@ import { createApi } from '../api';
 import { resolveMirrorDir, resolveServerUrl, resolveToken } from '../config';
 import type { CliContext } from '../context';
 import { applyMirror } from '../mirror';
-import { CliError, formatTable, printResult, resolveMode } from '../output';
+import {
+  BatchFailure,
+  CliError,
+  formatTable,
+  printResult,
+  resolveMode,
+} from '../output';
 
 interface GlobalOptions {
   json?: boolean;
   table?: boolean;
   server?: string;
   yes?: boolean;
-}
-
-class BatchFailure extends CliError {
-  constructor(failed: number, total: number) {
-    super('batch_failed', `${failed} of ${total} items failed`, 1);
-  }
 }
 
 function apiFor(program: Command, ctx: CliContext) {
@@ -304,10 +304,10 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
             `Unknown type: ${commandOptions.type}. Use tweet, image, or md`,
           );
         }
-        if (commandOptions.sort !== 'created') {
+        if (commandOptions.sort !== 'created' && commandOptions.sort !== 'used') {
           throw new CliError(
             'bad_value',
-            `Sort '${commandOptions.sort}' is not available yet. Use created`,
+            `Unknown sort: ${commandOptions.sort}. Use created or used`,
           );
         }
         if (!/^\d+$/.test(commandOptions.limit) || Number(commandOptions.limit) <= 0) {
@@ -325,7 +325,7 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
               ...(commandOptions.search !== undefined
                 ? { search: commandOptions.search }
                 : {}),
-              sort: 'created',
+              sort: commandOptions.sort as 'created' | 'used',
               order: commandOptions.desc ? 'desc' : 'asc',
               limit: String(Number(commandOptions.limit)),
               ...(commandOptions.cursor !== undefined
