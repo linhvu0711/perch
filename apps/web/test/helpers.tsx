@@ -12,6 +12,7 @@ import { Toaster } from '@/components/Toast';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ApiProvider } from '@/lib/api';
 import { Posts } from '@/pages/Posts';
+import { Resources } from '@/pages/Resources';
 
 // happy-dom's File lacks Bun's `.bytes()`; the server reads uploads through it.
 if (typeof (File.prototype as { bytes?: unknown }).bytes !== 'function') {
@@ -46,6 +47,7 @@ export function renderApp(
               <Route path="/posts" element={<Posts />}>
                 <Route path=":id" element={<PostModal />} />
               </Route>
+              <Route path="/resources" element={<Resources />} />
             </Routes>
             <LocationProbe />
           </MemoryRouter>
