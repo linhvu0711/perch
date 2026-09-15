@@ -20,7 +20,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 
-import { ApiError, type JsonResponse, unwrap, useApi } from './api';
+import { type ApiClient, ApiError, type JsonResponse, unwrap, useApi } from './api';
 
 export function useMe() {
   const api = useApi();
@@ -435,11 +435,13 @@ export function useDeletePosts() {
   });
 }
 
-export function usePromotePosts() {
+function usePostBatch<T extends { results: Array<{ id: number; ok: boolean }> }>(
+  call: (api: ApiClient, ids: number[]) => Promise<JsonResponse<T>>,
+) {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (ids: number[]) => unwrap(api.api.posts.promote.$post({ json: { ids } })),
+    mutationFn: (ids: number[]) => unwrap(call(api, ids)),
     onSuccess: (data) => {
       for (const result of data.results) {
         if (result.ok) {
@@ -449,54 +451,22 @@ export function usePromotePosts() {
       void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
     },
   });
+}
+
+export function usePromotePosts() {
+  return usePostBatch((api, ids) => api.api.posts.promote.$post({ json: { ids } }));
 }
 
 export function useDemotePosts() {
-  const api = useApi();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (ids: number[]) => unwrap(api.api.posts.demote.$post({ json: { ids } })),
-    onSuccess: (data) => {
-      for (const result of data.results) {
-        if (result.ok) {
-          void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', result.id] });
-        }
-      }
-      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
-    },
-  });
+  return usePostBatch((api, ids) => api.api.posts.demote.$post({ json: { ids } }));
 }
 
 export function useDismissPosts() {
-  const api = useApi();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (ids: number[]) => unwrap(api.api.posts.dismiss.$post({ json: { ids } })),
-    onSuccess: (data) => {
-      for (const result of data.results) {
-        if (result.ok) {
-          void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', result.id] });
-        }
-      }
-      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
-    },
-  });
+  return usePostBatch((api, ids) => api.api.posts.dismiss.$post({ json: { ids } }));
 }
 
 export function useUnschedulePosts() {
-  const api = useApi();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (ids: number[]) => unwrap(api.api.posts.unschedule.$post({ json: { ids } })),
-    onSuccess: (data) => {
-      for (const result of data.results) {
-        if (result.ok) {
-          void queryClient.invalidateQueries({ queryKey: ['posts', 'detail', result.id] });
-        }
-      }
-      void queryClient.invalidateQueries({ queryKey: ['posts', 'list'] });
-    },
-  });
+  return usePostBatch((api, ids) => api.api.posts.unschedule.$post({ json: { ids } }));
 }
 
 export function useSchedulePost() {
