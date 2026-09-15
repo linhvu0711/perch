@@ -58,33 +58,40 @@ function postChecks(input: PostChecksInput): PostCheck[] {
       label: `${length.toLocaleString('en-US')} of ${input.limit.toLocaleString('en-US')} characters`,
       message: `${length} of ${input.limit} characters`,
     },
+  ];
+  const missing = input.media
+    .filter((media) => !media.present)
+    .map((media) => media.position);
+  checks.push(
     {
       code: 'media',
       path: 'media',
-      ok: input.media.length <= POST_MEDIA_MAX,
-      label: `${input.media.length} of ${POST_MEDIA_MAX} images`,
-      message: `${input.media.length} of ${POST_MEDIA_MAX} media`,
+      ok: input.media.length <= POST_MEDIA_MAX && missing.length === 0,
+      label:
+        missing.length > 0
+          ? missingLabel(missing)
+          : `${input.media.length} of ${POST_MEDIA_MAX} images`,
+      message:
+        missing.length > 0
+          ? missingLabel(missing)
+          : `${input.media.length} of ${POST_MEDIA_MAX} media`,
     },
-  ];
-  for (const media of input.media) {
-    if (media.present === false) {
-      checks.push({
-        code: 'media',
-        path: 'media',
-        ok: false,
-        label: `Media ${media.position} file is missing`,
-        message: `Media ${media.position} file is missing`,
-      });
-    }
-  }
-  checks.push({
-    code: 'account',
-    path: 'account',
-    ok: input.accountConnected,
-    label: input.accountConnected ? 'X account connected' : 'No X account connected',
-    message: 'No X account connected',
-  });
+    {
+      code: 'account',
+      path: 'account',
+      ok: input.accountConnected,
+      label: input.accountConnected ? 'X account connected' : 'No X account connected',
+      message: 'No X account connected',
+    },
+  );
   return checks;
+}
+
+function missingLabel(positions: number[]): string {
+  if (positions.length === 1) {
+    return `Media ${positions[0]} file is missing`;
+  }
+  return `Media ${positions.join(', ')} files are missing`;
 }
 
 /** Checks a post must pass to be promoted, in order; an empty list means ready. */

@@ -62,11 +62,45 @@ test('readyChecks lists a missing media file and fails', () => {
     checks: [
       { code: 'text', ok: true, label: 'Text is not empty' },
       { code: 'limit', ok: true, label: '2 of 280 characters' },
-      { code: 'media', ok: true, label: '2 of 4 images' },
       { code: 'media', ok: false, label: 'Media 2 file is missing' },
       { code: 'account', ok: true, label: 'X account connected' },
     ],
   });
+});
+
+test('readyChecks names every missing media file in one row', () => {
+  const input = {
+    text: 'Hi',
+    limit: 280,
+    media: [
+      { position: 1, present: false },
+      { position: 2, present: true },
+      { position: 3, present: false },
+    ],
+    accountConnected: true,
+  };
+  const ready = readyChecks(input);
+  expect(ready.ok).toBe(false);
+  expect(ready.checks).toHaveLength(4);
+  expect(ready.checks[2]).toEqual({
+    code: 'media',
+    ok: false,
+    label: 'Media 1, 3 files are missing',
+  });
+});
+
+test('promoteChecks reports several missing files in one message', () => {
+  expect(
+    promoteChecks({
+      text: 'Hi',
+      limit: 280,
+      media: [
+        { position: 1, present: false },
+        { position: 2, present: true },
+        { position: 3, present: false },
+      ],
+    }),
+  ).toEqual([{ path: 'media', message: 'Media 1, 3 files are missing' }]);
 });
 
 describe('status rules', () => {
