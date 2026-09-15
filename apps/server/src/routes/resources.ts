@@ -169,11 +169,6 @@ export function resourcesRoutes(deps: AppDeps) {
         const patch = c.req.valid('json');
         const stored = getResource(deps.db, c.get('user').id, id);
         if (!stored) throw notFound('Resource', id);
-        if (stored.type === 'image' && patch.body !== undefined) {
-          throw new ApiError(400, 'validation', 'Invalid request', [
-            { path: 'body', message: 'Only notes have a body' },
-          ]);
-        }
         const resource = updateResource(deps.db, c.get('user').id, id, patch);
         if (!resource) throw notFound('Resource', id);
         return c.json(resource, 200);
