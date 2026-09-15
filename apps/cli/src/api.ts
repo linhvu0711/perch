@@ -3,7 +3,7 @@ import type { AppType } from '@perch/server';
 import { hc } from 'hono/client';
 
 import type { CliContext } from './context';
-import { CliError } from './output';
+import { AuthError, CliError } from './output';
 
 interface JsonResponse<T> {
   ok: boolean;
@@ -30,12 +30,9 @@ export function createApi(ctx: CliContext, serverUrl: string, token: string | un
     try {
       const parsed = apiErrorSchema.safeParse(await response.json());
       if (parsed.success) {
-        throw new CliError(
-          parsed.data.code,
-          parsed.data.message,
-          parsed.data.code === 'unauthorized' ? 3 : 1,
-          parsed.data.errors,
-        );
+        throw parsed.data.code === 'unauthorized'
+          ? new AuthError(parsed.data.message)
+          : new CliError(parsed.data.code, parsed.data.message, parsed.data.errors);
       }
     } catch (error) {
       if (error instanceof CliError) throw error;

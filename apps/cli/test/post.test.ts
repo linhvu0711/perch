@@ -70,7 +70,7 @@ describe('post create', () => {
     const both = makeCtx(server);
     expect(
       await runCli(['post', 'create', '--text', 'a', '--file', filePath, '--json'], both.ctx),
-    ).toBe(1);
+    ).toBe(2);
     expect(JSON.parse(both.err()).code).toBe('bad_args');
 
     const empty = makeCtx(server);
@@ -115,7 +115,7 @@ describe('post edit', () => {
     expect(JSON.parse(noTty.err()).code).toBe('no_tty');
 
     const nothing = makeCtx(server);
-    expect(await runCli(['post', 'edit', '1', '--json'], nothing.ctx)).toBe(1);
+    expect(await runCli(['post', 'edit', '1', '--json'], nothing.ctx)).toBe(2);
     expect(JSON.parse(nothing.err()).code).toBe('bad_args');
   });
 });
@@ -154,7 +154,7 @@ describe('post list and show', () => {
     expect(JSON.parse(page2.out()).items.map((i: { id: number }) => i.id)).toEqual([1]);
 
     const badStatus = makeCtx(server);
-    expect(await runCli(['post', 'list', '--status', 'nope', '--json'], badStatus.ctx)).toBe(1);
+    expect(await runCli(['post', 'list', '--status', 'nope', '--json'], badStatus.ctx)).toBe(2);
     expect(JSON.parse(badStatus.err()).code).toBe('bad_value');
 
     const table = makeCtx(server, { isTTY: true });
@@ -169,7 +169,7 @@ describe('post list and show', () => {
     expect(show.out()).toContain('banana split');
 
     const badId = makeCtx(server);
-    expect(await runCli(['post', 'show', 'abc', '--json'], badId.ctx)).toBe(1);
+    expect(await runCli(['post', 'show', 'abc', '--json'], badId.ctx)).toBe(2);
     expect(JSON.parse(badId.err()).code).toBe('bad_args');
   });
 
@@ -249,7 +249,7 @@ describe('post link and unlink', () => {
     expect(await runCli(['post', 'unlink', '1', '--resource', '1', '--json'], unlink.ctx)).toBe(0);
 
     const bad = makeCtx(server);
-    expect(await runCli(['post', 'link', '1', '--resource', 'abc', '--json'], bad.ctx)).toBe(1);
+    expect(await runCli(['post', 'link', '1', '--resource', 'abc', '--json'], bad.ctx)).toBe(2);
     expect(JSON.parse(bad.err()).code).toBe('bad_args');
   });
 });
@@ -344,11 +344,11 @@ describe('post attach and detach', () => {
     await attachFixtures();
 
     const neither = makeCtx(server);
-    expect(await runCli(['post', 'attach', '1', '--json'], neither.ctx)).toBe(1);
+    expect(await runCli(['post', 'attach', '1', '--json'], neither.ctx)).toBe(2);
     expect(JSON.parse(neither.err()).code).toBe('bad_args');
 
     const detachNeither = makeCtx(server);
-    expect(await runCli(['post', 'detach', '1', '--json'], detachNeither.ctx)).toBe(1);
+    expect(await runCli(['post', 'detach', '1', '--json'], detachNeither.ctx)).toBe(2);
     expect(JSON.parse(detachNeither.err())).toEqual({
       code: 'bad_args',
       message: 'Use one of --media or --all',
@@ -357,7 +357,7 @@ describe('post attach and detach', () => {
     const detachBoth = makeCtx(server);
     expect(
       await runCli(['post', 'detach', '1', '--media', '1', '--all', '--json'], detachBoth.ctx),
-    ).toBe(1);
+    ).toBe(2);
     expect(JSON.parse(detachBoth.err()).code).toBe('bad_args');
   });
 });
@@ -547,7 +547,7 @@ describe('post status and schedule', () => {
 
     const both = makeCtx(server);
     expect(await runCli(['post', 'list', '--scheduled', '--unscheduled', '--json'], both.ctx)).toBe(
-      1,
+      2,
     );
     expect(JSON.parse(both.err())).toEqual({
       code: 'bad_args',

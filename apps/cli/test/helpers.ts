@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import type { TestServer } from '@perch/server/testing';
 
+import { readConfig } from '../src/config';
 import type { CliContext } from '../src/context';
 import type { CliEnv } from '../src/env';
 
@@ -28,7 +29,6 @@ export function makeCtx(
   const confirms: string[] = [];
   const edits: string[] = [];
   const ctx: CliContext = {
-    argv: [],
     env: { PERCH_TOKEN: server.token, ...over.env },
     stdout: {
       write: (value) => {
@@ -43,6 +43,7 @@ export function makeCtx(
     isTTY: false,
     stdinIsTTY: over.stdinIsTTY ?? false,
     configPath: path.join(server.dir, 'config.json'),
+    readConfig: () => readConfig(ctx.configPath),
     homeDir: server.dir,
     now: () => new Date('2026-09-04T10:00:00Z'),
     fetch: ((input, init) => server.app.request(new Request(input, init))) as typeof fetch,

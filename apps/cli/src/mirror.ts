@@ -81,7 +81,6 @@ export async function applyMirror(
       throw new CliError(
         'write_failed',
         `Disk error at ${entry.path}: ${message}. Written before the error: ${written.join(', ') || 'none'}`,
-        1,
         written.map((p) => ({ path: p, message: 'written' })),
       );
     }
@@ -99,7 +98,6 @@ export async function applyMirror(
       throw new CliError(
         'write_failed',
         `Disk error at ${imagePath}: ${message}. Written before the error: ${written.join(', ') || 'none'}`,
-        1,
         written.map((p) => ({ path: p, message: 'written' })),
       );
     }

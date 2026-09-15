@@ -1,21 +1,32 @@
-import type { ItemTagsResponse } from '@perch/core';
-
 import type { CliContext } from './context';
 
 export class CliError extends Error {
+  readonly exitCode: number = 1;
+
   constructor(
     public code: string,
     message: string,
-    public exitCode = 1,
     public errors?: Array<{ path: string; message: string }>,
   ) {
     super(message);
   }
 }
 
+export class UsageError extends CliError {
+  override readonly exitCode = 2;
+}
+
+export class AuthError extends CliError {
+  override readonly exitCode = 3;
+
+  constructor(message: string) {
+    super('unauthorized', message);
+  }
+}
+
 export class BatchFailure extends CliError {
   constructor(failed: number, total: number) {
-    super('batch_failed', `${failed} of ${total} items failed`, 1);
+    super('batch_failed', `${failed} of ${total} items failed`);
   }
 }
 
@@ -88,18 +99,4 @@ export function printError(ctx: CliContext, mode: OutputMode, error: CliError): 
 
   const details = error.errors?.map(({ path, message }) => `  ${path}: ${message}`) ?? [];
   ctx.stderr.write([`Error: ${error.message}`, ...details].join('\n') + '\n');
-}
-
-/** Merges sequential tag add/remove results per id: a later result wins only when the earlier one succeeded. */
-export function mergeItemTagResults(
-  ...batches: ItemTagsResponse['results'][]
-): ItemTagsResponse['results'] {
-  const merged = new Map<number, ItemTagsResponse['results'][number]>();
-  for (const batch of batches) {
-    for (const result of batch) {
-      const existing = merged.get(result.id);
-      if (existing === undefined || existing.ok) merged.set(result.id, result);
-    }
-  }
-  return [...merged.values()];
 }

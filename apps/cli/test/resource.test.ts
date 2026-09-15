@@ -104,7 +104,7 @@ describe('resource add', () => {
 
   test('rejects stdin more than once before making requests', async () => {
     const capture = makeCtx(server, { stdin: '# One' });
-    expect(await runCli(['resource', 'add', 'md', '-', '-', '--json'], capture.ctx)).toBe(1);
+    expect(await runCli(['resource', 'add', 'md', '-', '-', '--json'], capture.ctx)).toBe(2);
     expect(JSON.parse(capture.err()).code).toBe('bad_args');
     const response = await server.app.request('/api/resources', {
       headers: { Authorization: `Bearer ${server.token}` },
@@ -164,11 +164,11 @@ describe('resource list and show', () => {
     await create('# Gamma');
 
     const type = makeCtx(server);
-    expect(await runCli(['resource', 'list', '--type', 'nope', '--json'], type.ctx)).toBe(1);
+    expect(await runCli(['resource', 'list', '--type', 'nope', '--json'], type.ctx)).toBe(2);
     expect(JSON.parse(type.err()).code).toBe('bad_value');
 
     const sort = makeCtx(server);
-    expect(await runCli(['resource', 'list', '--sort', 'nope', '--json'], sort.ctx)).toBe(1);
+    expect(await runCli(['resource', 'list', '--sort', 'nope', '--json'], sort.ctx)).toBe(2);
     expect(JSON.parse(sort.err()).code).toBe('bad_value');
 
     const table = makeCtx(server, { isTTY: true });
@@ -218,7 +218,7 @@ describe('resource list and show', () => {
     expect(JSON.parse(missing.err()).code).toBe('not_found');
 
     const invalid = makeCtx(server);
-    expect(await runCli(['resource', 'show', 'abc', '--json'], invalid.ctx)).toBe(1);
+    expect(await runCli(['resource', 'show', 'abc', '--json'], invalid.ctx)).toBe(2);
     expect(JSON.parse(invalid.err()).code).toBe('bad_args');
   });
 });
@@ -277,7 +277,7 @@ describe('resource edit', () => {
     expect(JSON.parse(noTty.err()).code).toBe('no_tty');
 
     const noFlags = makeCtx(server);
-    expect(await runCli(['resource', 'edit', String(resource.id), '--json'], noFlags.ctx)).toBe(1);
+    expect(await runCli(['resource', 'edit', String(resource.id), '--json'], noFlags.ctx)).toBe(2);
     expect(JSON.parse(noFlags.err()).code).toBe('bad_args');
 
     const both = makeCtx(server);
@@ -286,7 +286,7 @@ describe('resource edit', () => {
         ['resource', 'edit', String(resource.id), '--content', 'f', '-e', '--json'],
         both.ctx,
       ),
-    ).toBe(1);
+    ).toBe(2);
     expect(JSON.parse(both.err()).code).toBe('bad_args');
   });
 });
@@ -348,7 +348,7 @@ describe('resource delete', () => {
 
   test('rejects invalid ids before a request', async () => {
     const capture = makeCtx(server);
-    expect(await runCli(['resource', 'delete', 'abc', '--yes', '--json'], capture.ctx)).toBe(1);
+    expect(await runCli(['resource', 'delete', 'abc', '--yes', '--json'], capture.ctx)).toBe(2);
     expect(JSON.parse(capture.err()).code).toBe('bad_args');
   });
 });
@@ -426,14 +426,14 @@ describe('resource add image', () => {
     const many = makeCtx(server);
     expect(
       await runCli(['resource', 'add', 'image', a, b, '--title', 'X', '--json'], many.ctx),
-    ).toBe(1);
+    ).toBe(2);
     expect(JSON.parse(many.err())).toMatchObject({
       code: 'bad_args',
       message: '--title needs exactly one path',
     });
 
     const stdin = makeCtx(server);
-    expect(await runCli(['resource', 'add', 'image', '-', '--json'], stdin.ctx)).toBe(1);
+    expect(await runCli(['resource', 'add', 'image', '-', '--json'], stdin.ctx)).toBe(2);
     expect(JSON.parse(stdin.err())).toMatchObject({
       code: 'bad_args',
       message: 'stdin (-) is not supported for images',
@@ -576,7 +576,7 @@ describe('resource add image', () => {
 
     const badDate = makeCtx(server);
     expect(await runCli(['resource', 'list', '--from', 'yesterday', '--json'], badDate.ctx)).toBe(
-      1,
+      2,
     );
     expect(JSON.parse(badDate.err()).code).toBe('bad_value');
   });
