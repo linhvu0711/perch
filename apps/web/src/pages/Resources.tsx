@@ -122,18 +122,20 @@ export function Resources() {
     <>
       <div className="head">
         <h1>Resources</h1>
-        <IconButton
-          label="Save tweets"
-          icon={BookmarkPlus}
-          onClick={() => navigate('/resources/save-tweets')}
-        />
-        <IconButton label="Upload images" icon={Upload} onClick={() => setUploadOpen(true)} />
-        <IconButton
-          label="New note"
-          icon={FilePlus}
-          variant="primary"
-          onClick={() => navigate('/resources/new')}
-        />
+        <div className="inline">
+          <IconButton
+            label="Save tweets"
+            icon={BookmarkPlus}
+            onClick={() => navigate('/resources/save-tweets')}
+          />
+          <IconButton label="Upload images" icon={Upload} onClick={() => setUploadOpen(true)} />
+          <IconButton
+            label="New note"
+            icon={FilePlus}
+            variant="primary"
+            onClick={() => navigate('/resources/new')}
+          />
+        </div>
       </div>
       <div className="filters">
         <fieldset className="seg icons" aria-label="Type">
