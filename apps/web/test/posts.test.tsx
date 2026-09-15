@@ -87,4 +87,71 @@ describe('posts page', () => {
     expect((await getPost(server, 1)).text).toBe('Hello world!');
     expect(document.querySelector('.toast')?.textContent).toBe('Saved');
   });
+
+  test('shows the server message when an edit is refused as in flight', async () => {
+    // Given: a Post, and the next PATCH is refused as in flight
+    await seedPost(server, { text: 'Hello world' });
+    let refused = true;
+    renderApp(server, '/posts/1', (_input, init) => {
+      if (refused && init?.method === 'PATCH') {
+        refused = false;
+        return Promise.resolve(
+          new Response(JSON.stringify({ code: 'in_flight', message: 'Post 1 is being sent' }), {
+            status: 409,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+      }
+      return null;
+    });
+    await screen.findByDisplayValue('Hello world');
+    // When: a save is refused
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Text'), { target: { value: 'Hello world!' } });
+    });
+    // Then: the toast shows the server message and the row kept its text
+    await waitFor(
+      () => expect(document.querySelector('.toast')?.textContent).toBe('Post 1 is being sent'),
+      { timeout: 2000 },
+    );
+    expect((await getPost(server, 1)).text).toBe('Hello world');
+  });
+
+  test('shows the server message when a delete is refused as in flight', async () => {
+    // Given: a Post whose delete answers an in_flight per-id result
+    await seedPost(server, { text: 'Hello world' });
+    renderApp(server, '/posts/1', (_input, init) => {
+      if (init?.method === 'DELETE') {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              results: [
+                {
+                  id: 1,
+                  ok: false,
+                  error: { code: 'in_flight', message: 'Post 1 is being sent' },
+                },
+              ],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+        );
+      }
+      return null;
+    });
+    await screen.findByDisplayValue('Hello world');
+    // When: the delete is confirmed
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Delete post' }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    });
+    // Then: the toast shows the server message and the modal stays open
+    await waitFor(
+      () => expect(document.querySelector('.toast')?.textContent).toBe('Post 1 is being sent'),
+      { timeout: 2000 },
+    );
+    expect(screen.getByTestId('location').textContent).toBe('/posts/1');
+  });
 });

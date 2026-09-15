@@ -802,3 +802,267 @@ describe('retry', () => {
     expect(server.xClient.calls).toEqual([]);
   });
 });
+
+describe('in flight', () => {
+  test('refuses an edit while the post is being sent and X gets the old text', async () => {
+    // Given: a connected account, an official post, and a send that waits on a gate
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+
+    // When: a publish holds the send and an edit arrives before it answers
+    const first = request('/api/posts/1/publish', { method: 'POST' });
+    const patch = await request('/api/posts/1', {
+      method: 'PATCH',
+      body: JSON.stringify({ text: 'Changed' }),
+    });
+    release();
+    const firstResponse = await first;
+
+    // Then: the edit is refused and X received the text the send started with
+    expect(patch.status).toBe(409);
+    expect(await patch.json()).toEqual({
+      code: 'in_flight',
+      message: 'Post 1 is being sent',
+    });
+    expect(firstResponse.status).toBe(200);
+    const created = server.xClient.calls.filter((call) => call.name === 'createPost');
+    expect(created).toHaveLength(1);
+    expect(created[0]?.args[1]).toEqual({ text: 'Hello' });
+    expect(await getPost(1)).toMatchObject({
+      text: 'Hello',
+      status: 'published',
+      x_post_id: '2',
+    });
+  });
+
+  test('edits and deletes work again after the send ends', async () => {
+    // Given: post 1 published through a released send, post 2 failed by X
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const first = request('/api/posts/1/publish', { method: 'POST' });
+    release();
+    const firstResponse = await first;
+    expect(firstResponse.status).toBe(200);
+    await createPost({ text: 'Two', official: true });
+    server.xClient.createPostError = new XError('http', 503, 'Service Unavailable');
+    const failed = await request('/api/posts/2/publish', { method: 'POST' });
+    expect(failed.status).toBe(502);
+
+    // When: editing and deleting after the sends ended
+    const patchPublished = await request('/api/posts/1', {
+      method: 'PATCH',
+      body: JSON.stringify({ text: 'Changed' }),
+    });
+    const del = await request('/api/posts', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids: [1] }),
+    });
+    const patchFailed = await request('/api/posts/2', {
+      method: 'PATCH',
+      body: JSON.stringify({ text: 'Changed' }),
+    });
+
+    // Then: the usual rules apply again
+    expect(patchPublished.status).toBe(400);
+    expect(await patchPublished.json()).toEqual({
+      code: 'validation',
+      message: 'Invalid request',
+      errors: [{ path: 'status', message: 'Post 1 is published' }],
+    });
+    expect(await del.json()).toEqual({ results: [{ id: 1, ok: true }] });
+    expect(patchFailed.status).toBe(200);
+    expect((await getPost(2)).text).toBe('Changed');
+  });
+
+  test('refuses a delete of a post being sent, deletes the rest, and keeps the row and media', async () => {
+    // Given: post 1 with media being sent on a held gate, and post 2
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    await attachPng(1);
+    await createPost({ text: 'Two' });
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+
+    // When: a publish holds the send and a batch delete arrives before it answers
+    const first = request('/api/posts/1/publish', { method: 'POST' });
+    const del = await request('/api/posts', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids: [1, 2] }),
+    });
+    release();
+    const firstResponse = await first;
+
+    // Then: id 1 is refused per-id, id 2 is gone, and post 1 kept its row and media
+    expect(del.status).toBe(200);
+    expect(await del.json()).toEqual({
+      results: [
+        {
+          id: 1,
+          ok: false,
+          error: { code: 'in_flight', message: 'Post 1 is being sent' },
+        },
+        { id: 2, ok: true },
+      ],
+    });
+    expect(firstResponse.status).toBe(200);
+    expect(await getPost(1)).toMatchObject({ status: 'published', x_post_id: '2' });
+    expect((await getPost(1)).media).toHaveLength(1);
+    expect(fs.existsSync(mediaDir(1))).toBe(true);
+    expect((await request('/api/posts/2')).status).toBe(404);
+  });
+
+  test('refuses media changes while the post is being sent and X gets the media the send started with', async () => {
+    // Given: a connected account and post 1 with one image being sent on a held gate
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    await attachPng(1);
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+
+    // When: a publish holds the send and media changes arrive before it answers
+    const form = new FormData();
+    form.append(
+      'files',
+      new File([PNG_3X2.slice().buffer as ArrayBuffer], 'b.png', { type: 'image/png' }),
+    );
+    const first = request('/api/posts/1/publish', { method: 'POST' });
+    const files = await request('/api/posts/1/media/files', {
+      method: 'POST',
+      body: form,
+    });
+    const attach = await request('/api/posts/1/media', {
+      method: 'POST',
+      body: JSON.stringify({ resource_ids: [1] }),
+    });
+    const detach = await request('/api/posts/1/media', {
+      method: 'DELETE',
+      body: JSON.stringify({ all: true }),
+    });
+    release();
+    const firstResponse = await first;
+
+    // Then: each change is refused and X got the media the send started with
+    for (const response of [files, attach, detach]) {
+      expect(response.status).toBe(409);
+      expect(await response.json()).toEqual({
+        code: 'in_flight',
+        message: 'Post 1 is being sent',
+      });
+    }
+    expect(firstResponse.status).toBe(200);
+    expect(server.xClient.calls.map((call) => call.name)).toEqual(['uploadMedia', 'createPost']);
+    expect(server.xClient.calls[1]?.args[1]).toEqual({
+      text: 'Hello',
+      mediaIds: ['media-1'],
+    });
+    expect((await getPost(1)).media).toHaveLength(1);
+  });
+
+  test('refuses demote, unschedule, dismiss, and schedule while the post is being sent', async () => {
+    // Given: a connected account, post 1 being sent on a held gate, and post 2
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    await createPost({ text: 'Two', official: true });
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+
+    // When: a publish holds the send and status changes arrive before it answers
+    const first = request('/api/posts/1/publish', { method: 'POST' });
+    const demote = await request('/api/posts/demote', {
+      method: 'POST',
+      body: JSON.stringify({ ids: [1, 2] }),
+    });
+    const unschedule = await request('/api/posts/unschedule', {
+      method: 'POST',
+      body: JSON.stringify({ ids: [1] }),
+    });
+    const dismiss = await request('/api/posts/dismiss', {
+      method: 'POST',
+      body: JSON.stringify({ ids: [1] }),
+    });
+    const schedule = await request('/api/posts/1/schedule', {
+      method: 'POST',
+      body: JSON.stringify({ at: '2026-09-05 10:00' }),
+    });
+    release();
+    const firstResponse = await first;
+
+    // Then: id 1 is refused everywhere, id 2 demotes, and post 1 ends published
+    expect(await demote.json()).toEqual({
+      results: [
+        {
+          id: 1,
+          ok: false,
+          error: { code: 'in_flight', message: 'Post 1 is being sent' },
+        },
+        { id: 2, ok: true },
+      ],
+    });
+    for (const response of [unschedule, dismiss]) {
+      expect(await response.json()).toEqual({
+        results: [
+          {
+            id: 1,
+            ok: false,
+            error: { code: 'in_flight', message: 'Post 1 is being sent' },
+          },
+        ],
+      });
+    }
+    expect(schedule.status).toBe(409);
+    expect(await schedule.json()).toEqual({
+      code: 'in_flight',
+      message: 'Post 1 is being sent',
+    });
+    expect(firstResponse.status).toBe(200);
+    expect(await getPost(1)).toMatchObject({ status: 'published', scheduled_at: null });
+    expect((await getPost(2)).status).toBe('draft');
+  });
+
+  test('a post that changed under the send is not marked published', async () => {
+    // Given: a connected account and post 1 being sent on a held gate
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+
+    // When: the row changes under the send before the gate opens
+    const first = request('/api/posts/1/publish', { method: 'POST' });
+    while (!server.xClient.calls.some((call) => call.name === 'createPost')) {
+      await Promise.resolve();
+    }
+    setPost(1, { status: 'draft' });
+    release();
+    const response = await first;
+
+    // Then: the send reports failure and the post is not published
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({
+      code: 'publish_failed',
+      message: 'Post 1 changed during send',
+    });
+    expect(await getPost(1)).toMatchObject({
+      status: 'failed',
+      last_error: 'Post 1 changed during send',
+      x_post_id: null,
+      retry_count: 1,
+    });
+    expect(await monthCostUsd()).toBe(0.015);
+  });
+});

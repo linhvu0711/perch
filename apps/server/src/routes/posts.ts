@@ -46,7 +46,7 @@ import {
   removeMediaDir,
   storeMedia,
 } from '../images';
-import { PostNotReadyError } from '../postLifecycle';
+import { InFlightError, PostNotReadyError } from '../postLifecycle';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -61,6 +61,9 @@ const mediaFiles = (deps: AppDeps, userId: number): MediaFiles => ({
 });
 
 export function postsRoutes(deps: AppDeps) {
+  function refuseInFlight(id: number): void {
+    if (deps.lifecycle.isInFlight(id)) throw new InFlightError(id);
+  }
   return new Hono<AppEnv>()
     .get('/', zValidator('query', postListQuerySchema, validationHook), (c) => {
       const userId = c.get('user').id;
@@ -180,6 +183,7 @@ export function postsRoutes(deps: AppDeps) {
       zValidator('json', postPatchSchema, validationHook),
       (c) => {
         const { id } = c.req.valid('param');
+        refuseInFlight(id);
         const post = updatePost(
           deps.db,
           c.get('user').id,
@@ -199,6 +203,7 @@ export function postsRoutes(deps: AppDeps) {
       async (c) => {
         const { id } = c.req.valid('param');
         const userId = c.get('user').id;
+        refuseInFlight(id);
         const result = await attachFromResources(
           deps.db,
           userId,
@@ -223,6 +228,7 @@ export function postsRoutes(deps: AppDeps) {
       async (c) => {
         const { id } = c.req.valid('param');
         const userId = c.get('user').id;
+        refuseInFlight(id);
         const formFiles = c.req.valid('form').files;
         const files = Array.isArray(formFiles) ? formFiles : [formFiles];
 
@@ -286,6 +292,7 @@ export function postsRoutes(deps: AppDeps) {
       (c) => {
         const { id } = c.req.valid('param');
         const userId = c.get('user').id;
+        refuseInFlight(id);
         const post = detachMedia(
           deps.db,
           userId,
@@ -333,8 +340,12 @@ export function postsRoutes(deps: AppDeps) {
     .delete('/', zValidator('json', postDeleteBodySchema, validationHook), (c) => {
       const userId = c.get('user').id;
       return c.json(
-        deletePosts(deps.db, userId, c.req.valid('json').ids, (postId) =>
-          removeMediaDir(deps.uploadDir, userId, postId),
+        deletePosts(
+          deps.db,
+          userId,
+          c.req.valid('json').ids,
+          (postId) => removeMediaDir(deps.uploadDir, userId, postId),
+          (id) => deps.lifecycle.isInFlight(id),
         ),
         200,
       );

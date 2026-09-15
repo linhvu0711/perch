@@ -77,6 +77,7 @@ export interface PostLifecycle {
   publishNow(userId: number, id: number): Promise<Post | null>;
   retry(userId: number, id: number): Promise<Post | null>;
   sendDue(now: Date): Promise<void>;
+  isInFlight(id: number): boolean;
 }
 
 type SendResult = { ok: true } | { ok: false; message: string };
@@ -116,6 +117,7 @@ export function createPostLifecycle(deps: {
     account: XAccountRow,
     accessToken: string,
     now: Date,
+    fromStatus: PostStatus,
   ): Promise<SendResult> {
     try {
       const mediaIds: string[] = [];
@@ -139,8 +141,8 @@ export function createPostLifecycle(deps: {
         accessToken,
         mediaIds.length > 0 ? { text: row.text, mediaIds } : { text: row.text },
       );
-      deps.db.transaction((tx) => {
-        patchPostRow(
+      const written = deps.db.transaction((tx) => {
+        const patched = patchPostRow(
           tx,
           row.userId,
           row.id,
@@ -154,6 +156,7 @@ export function createPostLifecycle(deps: {
             lastError: null,
           },
           now,
+          fromStatus,
         );
         logApiCall(tx, row.userId, {
           endpoint: X_ENDPOINTS.createPost,
@@ -162,7 +165,9 @@ export function createPostLifecycle(deps: {
           xAccountId: account.id,
           now,
         });
+        return patched;
       });
+      if (!written) return { ok: false, message: `Post ${row.id} changed during send` };
       return { ok: true };
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) };
@@ -199,6 +204,9 @@ export function createPostLifecycle(deps: {
           if (!row) {
             return statusResultError(id, 'not_found', `Post ${id} not found`);
           }
+          if (inFlight.has(id)) {
+            return statusResultError(id, 'in_flight', `Post ${id} is being sent`);
+          }
           if (!(DEMOTE_FROM as readonly string[]).includes(row.status)) {
             return statusResultError(id, 'invalid_status', `Post ${id} is ${row.status}`);
           }
@@ -217,6 +225,7 @@ export function createPostLifecycle(deps: {
     schedule(userId, id, body) {
       const row = getPostRow(deps.db, userId, id);
       if (!row) return null;
+      if (inFlight.has(id)) throw new InFlightError(id);
       if (row.status === 'published') throw new PostImmutableError(id);
       if (!(SCHEDULE_FROM as readonly string[]).includes(row.status)) {
         throw new PostStatusError(id, row.status);
@@ -245,6 +254,9 @@ export function createPostLifecycle(deps: {
           if (!row) {
             return statusResultError(id, 'not_found', `Post ${id} not found`);
           }
+          if (inFlight.has(id)) {
+            return statusResultError(id, 'in_flight', `Post ${id} is being sent`);
+          }
           if (!(SCHEDULE_FROM as readonly string[]).includes(row.status)) {
             return statusResultError(id, 'invalid_status', `Post ${id} is ${row.status}`);
           }
@@ -267,6 +279,9 @@ export function createPostLifecycle(deps: {
           const row = postJoinRow(deps.db, userId, id, now);
           if (row === undefined) {
             return statusResultError(id, 'not_found', `Post ${id} not found`);
+          }
+          if (inFlight.has(id)) {
+            return statusResultError(id, 'in_flight', `Post ${id} is being sent`);
           }
           const { dismiss } = postState(row);
           if (dismiss === null) {
@@ -312,7 +327,7 @@ export function createPostLifecycle(deps: {
         if (row.status === 'draft') {
           patchPostRow(deps.db, userId, id, { status: 'official' }, now);
         }
-        const sent = await send(row, account, accessToken, now);
+        const sent = await send(row, account, accessToken, now, 'official');
         if (!sent.ok) {
           patchPostRow(
             deps.db,
@@ -342,7 +357,7 @@ export function createPostLifecycle(deps: {
       try {
         const { account, accessToken } = await deps.accounts.accessTokenFor(userId);
         const now = deps.clock.now();
-        const sent = await send(row, account, accessToken, now);
+        const sent = await send(row, account, accessToken, now, 'failed');
         if (!sent.ok) {
           patchPostRow(
             deps.db,
@@ -359,6 +374,10 @@ export function createPostLifecycle(deps: {
       }
     },
 
+    isInFlight(id) {
+      return inFlight.has(id);
+    },
+
     async sendDue(now) {
       for (const row of duePosts(deps.db, now)) {
         if (inFlight.has(row.id)) continue;
@@ -372,7 +391,7 @@ export function createPostLifecycle(deps: {
             if (error instanceof DomainError) continue;
             throw error;
           }
-          const sent = await send(row, account, accessToken, now);
+          const sent = await send(row, account, accessToken, now, 'official');
           if (!sent.ok) {
             const failedAttempts = row.retryCount + 1;
             const next = nextAttemptAt(row.scheduledAt ?? now, failedAttempts);

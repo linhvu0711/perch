@@ -624,6 +624,47 @@ describe('post publish and retry', () => {
     });
   });
 
+  test('post edit and delete print in_flight and exit 1 while the post is being sent', async () => {
+    // Given: an official post and a send held on the X gate
+    connectTestAccount(server);
+    const setup = makeCtx(server);
+    await runCli(['post', 'create', '--text', 'Hello', '--official', '--json'], setup.ctx);
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+
+    // When: a publish holds the send while an edit and a delete arrive
+    const pub = makeCtx(server);
+    const first = runCli(['post', 'publish', '1', '--json'], pub.ctx);
+    const editJson = makeCtx(server);
+    const edit = await runCli(['post', 'edit', '1', '--text', 'Changed', '--json'], editJson.ctx);
+    const editPlain = makeCtx(server, { isTTY: true });
+    const plain = await runCli(['post', 'edit', '1', '--text', 'Changed'], editPlain.ctx);
+    const del = makeCtx(server);
+    const deleted = await runCli(['post', 'delete', '1', '--yes', '--json'], del.ctx);
+    release();
+
+    // Then: both refuse with the server message and exit 1, and the send lands
+    expect(edit).toBe(1);
+    expect(JSON.parse(editJson.err())).toEqual({
+      code: 'in_flight',
+      message: 'Post 1 is being sent',
+    });
+    expect(plain).toBe(1);
+    expect(editPlain.err()).toContain('Error: Post 1 is being sent');
+    expect(deleted).toBe(1);
+    expect(JSON.parse(del.out())).toEqual([
+      {
+        id: 1,
+        ok: false,
+        error: { code: 'in_flight', message: 'Post 1 is being sent' },
+      },
+    ]);
+    expect(del.err()).toBe('');
+    expect(await first).toBe(0);
+  });
+
   test('publish without an account exits 1', async () => {
     const setup = makeCtx(server);
     await runCli(['post', 'create', '--text', 'Hello', '--json'], setup.ctx);
