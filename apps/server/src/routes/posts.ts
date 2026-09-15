@@ -203,6 +203,7 @@ export function postsRoutes(deps: AppDeps) {
       async (c) => {
         const { id } = c.req.valid('param');
         const userId = c.get('user').id;
+        refuseInFlight(id);
         const result = await attachFromResources(
           deps.db,
           userId,
@@ -227,6 +228,7 @@ export function postsRoutes(deps: AppDeps) {
       async (c) => {
         const { id } = c.req.valid('param');
         const userId = c.get('user').id;
+        refuseInFlight(id);
         const formFiles = c.req.valid('form').files;
         const files = Array.isArray(formFiles) ? formFiles : [formFiles];
 
@@ -290,6 +292,7 @@ export function postsRoutes(deps: AppDeps) {
       (c) => {
         const { id } = c.req.valid('param');
         const userId = c.get('user').id;
+        refuseInFlight(id);
         const post = detachMedia(
           deps.db,
           userId,

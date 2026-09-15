@@ -920,4 +920,56 @@ describe('in flight', () => {
     expect(fs.existsSync(mediaDir(1))).toBe(true);
     expect((await request('/api/posts/2')).status).toBe(404);
   });
+
+  test('refuses media changes while the post is being sent and X gets the media the send started with', async () => {
+    // Given: a connected account and post 1 with one image being sent on a held gate
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    await attachPng(1);
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+
+    // When: a publish holds the send and media changes arrive before it answers
+    const form = new FormData();
+    form.append(
+      'files',
+      new File([PNG_3X2.slice().buffer as ArrayBuffer], 'b.png', { type: 'image/png' }),
+    );
+    const first = request('/api/posts/1/publish', { method: 'POST' });
+    const files = await request('/api/posts/1/media/files', {
+      method: 'POST',
+      body: form,
+    });
+    const attach = await request('/api/posts/1/media', {
+      method: 'POST',
+      body: JSON.stringify({ resource_ids: [1] }),
+    });
+    const detach = await request('/api/posts/1/media', {
+      method: 'DELETE',
+      body: JSON.stringify({ all: true }),
+    });
+    release();
+    const firstResponse = await first;
+
+    // Then: each change is refused and X got the media the send started with
+    for (const response of [files, attach, detach]) {
+      expect(response.status).toBe(409);
+      expect(await response.json()).toEqual({
+        code: 'in_flight',
+        message: 'Post 1 is being sent',
+      });
+    }
+    expect(firstResponse.status).toBe(200);
+    expect(server.xClient.calls.map((call) => call.name)).toEqual([
+      'uploadMedia',
+      'createPost',
+    ]);
+    expect(server.xClient.calls[1]?.args[1]).toEqual({
+      text: 'Hello',
+      mediaIds: ['media-1'],
+    });
+    expect((await getPost(1)).media).toHaveLength(1);
+  });
 });
