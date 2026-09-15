@@ -453,6 +453,171 @@ describe('post media', () => {
     expect(mediaFiles(1)).toHaveLength(2);
   });
 
+  test('keeps positions contiguous when a detach lands during an attach', async () => {
+    // Given: four images, a post with media at positions 1-3, and a held file write
+    await uploadImages(
+      { name: 'a.png', bytes: PNG_3X2 },
+      { name: 'b.png', bytes: PNG_3X2 },
+      { name: 'c.png', bytes: PNG_3X2 },
+      { name: 'd.png', bytes: PNG_3X2 },
+    );
+    await createPost({ text: 'Hi' });
+    expect((await attachMedia(1, [1, 2, 3])).status).toBe(200);
+    let resolveEntered!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      resolveEntered = resolve;
+    });
+    let resolveRelease!: () => void;
+    const release = new Promise<void>((resolve) => {
+      resolveRelease = resolve;
+    });
+    let calls = 0;
+    const realWrite = Bun.write.bind(Bun);
+    const write = spyOn(Bun, 'write');
+    write.mockImplementation((...args) => {
+      calls += 1;
+      const call = () => realWrite(args[0] as string, args[1] as Uint8Array);
+      if (calls === 1) {
+        resolveEntered();
+        return release.then(call);
+      }
+      return call();
+    });
+
+    // When: a detach of position 2 lands while an attach is still writing its file
+    const held = attachMedia(1, [4]);
+    await entered;
+    const detach = await request('/api/posts/1/media', {
+      method: 'DELETE',
+      body: JSON.stringify({ positions: [2] }),
+    });
+    resolveRelease();
+    const attach = await held;
+    write.mockRestore();
+
+    // Then: the attach lands at position 3 and the next attach gets position 4
+    expect(detach.status).toBe(200);
+    const detachBody = (await detach.json()) as { media: Post['media'] };
+    expect(detachBody.media.map((m) => m.position)).toEqual([1, 2]);
+    expect(attach.status).toBe(200);
+    expect((await getPost(1)).media.map((m) => m.position)).toEqual([1, 2, 3]);
+    const retry = await attachMedia(1, [2]);
+    expect(retry.status).toBe(200);
+    const retryBody = (await retry.json()) as PostMediaAttachResponse;
+    const retryMedia = retryBody.results[0];
+    expect(retryMedia?.ok).toBe(true);
+    expect(retryMedia?.ok && retryMedia.media.position).toBe(4);
+    expect((await getPost(1)).media.map((m) => m.position)).toEqual([1, 2, 3, 4]);
+    expect(mediaFiles(1)).toHaveLength(4);
+  });
+
+  test('keeps positions contiguous when two attaches overlap', async () => {
+    // Given: four images, a post with two media, and a held file write
+    await uploadImages(
+      { name: 'a.png', bytes: PNG_3X2 },
+      { name: 'b.png', bytes: PNG_3X2 },
+      { name: 'c.png', bytes: PNG_3X2 },
+      { name: 'd.png', bytes: PNG_3X2 },
+    );
+    await createPost({ text: 'Hi' });
+    expect((await attachMedia(1, [1, 2])).status).toBe(200);
+    let resolveEntered!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      resolveEntered = resolve;
+    });
+    let resolveRelease!: () => void;
+    const release = new Promise<void>((resolve) => {
+      resolveRelease = resolve;
+    });
+    let calls = 0;
+    const realWrite = Bun.write.bind(Bun);
+    const write = spyOn(Bun, 'write');
+    write.mockImplementation((...args) => {
+      calls += 1;
+      const call = () => realWrite(args[0] as string, args[1] as Uint8Array);
+      if (calls === 1) {
+        resolveEntered();
+        return release.then(call);
+      }
+      return call();
+    });
+
+    // When: a second attach lands while the first is still writing its file
+    const held = attachMedia(1, [3]);
+    await entered;
+    const first = await attachMedia(1, [4]);
+    resolveRelease();
+    const second = await held;
+    write.mockRestore();
+
+    // Then: both attach and positions stay contiguous
+    expect(first.status).toBe(200);
+    const firstBody = (await first.json()) as PostMediaAttachResponse;
+    const firstMedia = firstBody.results[0];
+    expect(firstMedia?.ok && firstMedia.media.position).toBe(3);
+    expect(second.status).toBe(200);
+    const secondBody = (await second.json()) as PostMediaAttachResponse;
+    const secondMedia = secondBody.results[0];
+    expect(secondMedia?.ok && secondMedia.media.position).toBe(4);
+    expect((await getPost(1)).media.map((m) => m.position)).toEqual([1, 2, 3, 4]);
+    expect(mediaFiles(1)).toHaveLength(4);
+  });
+
+  test('refuses the fifth media when another attach lands first', async () => {
+    // Given: five images, a post with three media, and a held file write
+    await uploadImages(
+      { name: 'a.png', bytes: PNG_3X2 },
+      { name: 'b.png', bytes: PNG_3X2 },
+      { name: 'c.png', bytes: PNG_3X2 },
+      { name: 'd.png', bytes: PNG_3X2 },
+      { name: 'e.png', bytes: PNG_3X2 },
+    );
+    await createPost({ text: 'Hi' });
+    expect((await attachMedia(1, [1, 2, 3])).status).toBe(200);
+    let resolveEntered!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      resolveEntered = resolve;
+    });
+    let resolveRelease!: () => void;
+    const release = new Promise<void>((resolve) => {
+      resolveRelease = resolve;
+    });
+    let calls = 0;
+    const realWrite = Bun.write.bind(Bun);
+    const write = spyOn(Bun, 'write');
+    write.mockImplementation((...args) => {
+      calls += 1;
+      const call = () => realWrite(args[0] as string, args[1] as Uint8Array);
+      if (calls === 1) {
+        resolveEntered();
+        return release.then(call);
+      }
+      return call();
+    });
+
+    // When: a second attach lands while the first is still writing its file
+    const held = attachMedia(1, [4]);
+    await entered;
+    const first = await attachMedia(1, [5]);
+    resolveRelease();
+    const second = await held;
+    write.mockRestore();
+
+    // Then: the second attach wins position 4 and the held attach names the limit
+    expect(first.status).toBe(200);
+    const firstBody = (await first.json()) as PostMediaAttachResponse;
+    const firstMedia = firstBody.results[0];
+    expect(firstMedia?.ok && firstMedia.media.position).toBe(4);
+    expect(second.status).toBe(400);
+    expect(await second.json()).toEqual({
+      code: 'validation',
+      message: 'Invalid request',
+      errors: [{ path: 'resource_ids', message: 'At most 4 media per post' }],
+    });
+    expect((await getPost(1)).media.map((m) => m.position)).toEqual([1, 2, 3, 4]);
+    expect(mediaFiles(1)).toHaveLength(4);
+  });
+
   test('detaches all media at once', async () => {
     // Given: a post with two media
     const ids = await uploadImages(

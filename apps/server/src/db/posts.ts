@@ -263,7 +263,7 @@ function mediaForPosts(
   return result;
 }
 
-export function mediaRowsForPost(db: Db, postId: number): PostMediaRow[] {
+export function mediaRowsForPost(db: Db | Tx, postId: number): PostMediaRow[] {
   return db
     .select()
     .from(postMedia)
@@ -329,11 +329,11 @@ export function removeMediaRows(db: Db, deletedIds: number[], kept: PostMediaRow
   });
 }
 
-/** Inserts media rows starting at position `first`, and a post link per sourced row, in one transaction. */
+/** Inserts media rows from a fresh count inside the transaction — which also decides the media cap — and a post link per sourced row. */
 export function insertMediaRows(
   db: Db,
   postId: number,
-  first: number,
+  limitPath: 'resource_ids' | 'files',
   files: Array<{
     path: string;
     mime: PostMedia['mime'];
@@ -342,20 +342,22 @@ export function insertMediaRows(
   }>,
   fileExists: (rel: string) => boolean,
 ): PostMedia[] {
-  return db.transaction((tx) =>
-    files.map((file, index) => {
+  return db.transaction((tx) => {
+    const count = mediaRowsForPost(tx, postId).length;
+    if (count + files.length > POST_MEDIA_MAX) throw new MediaLimitError(limitPath);
+    return files.map((file, index) => {
       const media = insertMediaRow(
         tx,
         postId,
-        first + index,
+        count + 1 + index,
         file,
         file.fromResourceId,
         fileExists,
       );
       if (file.fromResourceId !== null) insertPostLink(tx, postId, file.fromResourceId);
       return media;
-    }),
-  );
+    });
+  });
 }
 
 export function getPost(
