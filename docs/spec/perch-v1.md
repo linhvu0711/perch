@@ -117,9 +117,9 @@ Build Perch v1: a single-user tool that keeps my Resources (Tweet Resources, Ima
 87. As a User, I want to list Posts filtered by status, scheduled or unscheduled, Missed, Tag, search text, and date range, so that I can find any Post in one query.
 88. As a User, I want `--from` and `--to` on Posts to filter on Schedule Time, or on Published time for Published Posts, so that date filters mean "when it goes or went out".
 89. As a User, I want Posts sorted by time descending with untimed Posts last, so that the list reads like a timeline.
-90. As a User, I want a "needs attention" set made of Missed Posts, Failed Posts, and Drafts whose Schedule Time is within the next 3 days, so that I see everything that needs my hand in one place.
+90. As a User, I want an "Issues" set made of Missed Posts and Failed Posts, so that I see everything that needs my hand in one place.
 91. As a User, I want each needs-attention row to state its reason in plain words, so that I know whether to Promote, retry, or reschedule.
-92. As a User, I want a dismiss action that clears the time of a Missed or due-soon Draft, or Demotes a Failed Post to Draft, so that acknowledged items leave the list without a new "dismissed" flag and without deleting anything.
+92. As a User, I want a dismiss action that clears the time of a Missed Post or Demotes a Failed Post to Draft, so that acknowledged items leave the list without a new "dismissed" flag and without deleting anything.
 93. As a User, I want the Post modal to show an amber banner when the Post is Missed or due soon and a red banner with the error and try count when Failed, so that the problem is visible while I edit.
 94. As a User, I want `perch status` to print the connected account, the next 5 due Posts, Missed and Failed counts, and this month's Cost in one screen, so that an agent can orient itself in one call.
 
@@ -166,7 +166,7 @@ Build Perch v1: a single-user tool that keeps my Resources (Tweet Resources, Ima
 124. As a User, I want the Post modal in two columns, editor left and X-style preview right, with a Resources drawer that slides over the preview, so that I can browse sources while writing.
 125. As a User, I want the drawer to have search, type filters, a list with attach, insert-text, and link/unlink actions, and an "Upload from computer" row, so that adding to a Post is one gesture.
 126. As a User, I want clicking a Linked Resource or a drawer item to open its detail on the side of the same modal, with a back arrow and an "open full resource" icon, so that I never leave the Post I am writing.
-127. As a User, I want a Dashboard with a greeting and current time in my zone, four stat cards (next Official Post, needs attention, scheduled next 7 days, Cost this month), the needs-attention list capped at 10 with "See all", and the next 3 days of Posts, so that I see what needs me the moment I open the app.
+127. As a User, I want a Dashboard with a greeting and current time in my zone, four stat cards (next Official Post, issues, scheduled next 7 days, Cost this month), the next 3 days of Posts, and the Issues list with no cap, so that I see what needs me the moment I open the app.
 128. As a User, I want a banner on the Dashboard when no X Account is connected, so that I cannot forget before a Scheduled Post goes Missed.
 129. As a User, I want Posts, Resources, and the drawer to load in batches with "load more" on scroll and a "8 of 14 posts" count line, so that long lists never block the page.
 130. As a User, I want dropdowns for Tags and authors to load everything and filter as I type, so that small lists feel instant.
@@ -244,12 +244,11 @@ All decisions below come from the design session and are recorded in the ADRs an
 - Scheduling in the past requires a force flag. Scheduling a Published Post is an error.
 - Attach from a Resource copies the file into the Post's media directory and adds a Link. Attach from a file stores the upload as Media only. Total Media may not exceed four. No alt text exists anywhere.
 - Deleting a Resource deletes its Links from all Posts (Published included) and reports the affected Post ids. Media copies are untouched.
-- Dismiss is not a state. It is unschedule (for Missed or due-soon Drafts) or demote (for Failed Posts). This rule came out of the mockup prototype; the decision-bearing part is:
+- Dismiss is not a state. It is unschedule (for Missed Posts) or demote (for Failed Posts). This rule came out of the mockup prototype; the decision-bearing part is:
 
   ```
   needsAttention(post, now) =
-    missed(post, now) || post.status == failed || dueSoonDraft(post, now)
-  dueSoonDraft = status draft && scheduledAt in [now, now + 3 days]
+    missed(post, now) || post.status == failed
   dismiss(post) = status failed ? demote(post) : unschedule(post)
   ```
 
@@ -281,7 +280,7 @@ All decisions below come from the design session and are recorded in the ADRs an
 - Resources: tweet save accepts standalone text (including note tweets), rejects each of the five reasons with the reason named, returns the existing row for a duplicate URL with no X call, re-fetches with refresh; image upload validates size and type and records dimensions; notes default their title from the first heading; list filters, sorts, search, and cursor paging return stable pages when rows are inserted mid-walk; delete reports unlinked posts and leaves Media copies in place.
 - Posts: create defaults to Draft and copies tags from linked resources; promote returns every failing check; demote clears errors; schedule rejects past times without force and rejects Published Posts; link and attach honor the four-Media cap and the copy-and-link rule; publish on a Draft promotes first, uploads media, creates the post, stores the X ids, clears the time, and logs the Cost with the URL price when a link is present; Published Posts reject edits; delete never calls X.
 - Scheduler: at a due time a Draft is left and reads as Missed; an Official Post is Published; a disconnected account leaves it Missed; failures retry at +1, +5, +15 and then become Failed with the error; a Failed Post is never retried by the tick; a Post claimed by one tick is not sent by a second tick; retry by hand sends once.
-- Needs attention and dismiss: the three groups appear with their reasons; dismiss unschedules or demotes and the row disappears; nothing is deleted.
+- Issues and dismiss: the two groups appear with their reasons; dismiss unschedules or demotes and the row disappears; nothing is deleted.
 - Tags: shared across types, rename applies everywhere, delete removes from everything, counts are correct.
 - Calendar and cost: range query groups by day in the configured time zone; month summaries match the api_calls rows.
 - X Account: connect stores tokens and subscription type and sets the limit; a second connect disconnects the first; refresh persists a rotated token; disconnect revokes and keeps the row; Published Posts keep their account after disconnect.

@@ -1,5 +1,4 @@
 import {
-  ATTENTION_LIST_LIMIT,
   ATTENTION_WINDOW_DAYS,
   addDays,
   DEFAULT_TIMEZONE,
@@ -55,6 +54,10 @@ export function Dashboard() {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (attention.hasNextPage && !attention.isFetching) void attention.fetchNextPage();
+  }, [attention.fetchNextPage, attention.hasNextPage, attention.isFetching]);
+
   const today = zonedParts(now, timezone).date;
   const calendar = useCalendar({ from: today, to: addDays(today, ATTENTION_WINDOW_DAYS) });
 
@@ -72,10 +75,8 @@ export function Dashboard() {
   }).format(now);
 
   const snapshot = status.data;
-  const attentionTotal =
-    (snapshot?.missed_count ?? 0) + (snapshot?.failed_count ?? 0) + (snapshot?.due_soon_count ?? 0);
+  const attentionTotal = (snapshot?.missed_count ?? 0) + (snapshot?.failed_count ?? 0);
   const attentionItems = attention.data?.pages.flatMap((page) => page.items) ?? [];
-  const attentionListTotal = attention.data?.pages[0]?.total ?? 0;
   const costPage = cursors.length;
   const costItems = costMonths.data?.items ?? [];
   const costTotal = costMonths.data?.total ?? 0;
@@ -150,14 +151,14 @@ export function Dashboard() {
               </div>
             </div>
             <div className="card stat">
-              <div className="lbl">Needs attention</div>
+              <div className="lbl">Issues</div>
               <div className={`val ${attentionTotal > 0 ? 'warn' : 'ok'}`}>
                 {status.isPending ? '…' : attentionTotal}
               </div>
               <div className="sub">
                 {snapshot === undefined
                   ? ''
-                  : `${snapshot.missed_count} missed · ${snapshot.failed_count} failed · ${snapshot.due_soon_count} draft due soon`}
+                  : `${snapshot.missed_count} missed · ${snapshot.failed_count} failed`}
               </div>
             </div>
             <div className="card stat">
@@ -194,45 +195,6 @@ export function Dashboard() {
           </div>
           <div className="section">
             <h2>
-              Needs attention
-              <small>
-                missed, failed, or still a draft with a time in the next {ATTENTION_WINDOW_DAYS}{' '}
-                days
-              </small>
-            </h2>
-            <div className="card list">
-              {attention.isPending ? (
-                <div className="empty">
-                  <b>Loading…</b>
-                </div>
-              ) : attentionItems.length === 0 ? (
-                <div className="empty">
-                  <b>All clear</b>Nothing missed, nothing failed, no drafts due soon.
-                </div>
-              ) : (
-                <>
-                  {attentionItems.slice(0, ATTENTION_LIST_LIMIT).map((post) => (
-                    <AttentionRow key={post.id} post={post} />
-                  ))}
-                  {attentionListTotal > ATTENTION_LIST_LIMIT && (
-                    <div className="loadmore">
-                      <Link to="/posts?status=attention">
-                        See all {attentionListTotal} in Posts
-                      </Link>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-            {attentionItems.length > 0 && (
-              <div className="note">
-                Dismiss clears the time (missed or due-soon draft) or moves the post back to drafts
-                (failed). Nothing is deleted.
-              </div>
-            )}
-          </div>
-          <div className="section">
-            <h2>
               Next {ATTENTION_WINDOW_DAYS} days
               <small>until {formatDayTitle(addDays(today, ATTENTION_WINDOW_DAYS))}</small>
             </h2>
@@ -252,6 +214,34 @@ export function Dashboard() {
                 ))
               )}
             </div>
+          </div>
+          <div className="section">
+            <h2>
+              Issues<small>missed or failed</small>
+            </h2>
+            <div className="card list">
+              {attention.isPending ? (
+                <div className="empty">
+                  <b>Loading…</b>
+                </div>
+              ) : attentionItems.length === 0 ? (
+                <div className="empty">
+                  <b>All clear</b>Nothing missed, nothing failed.
+                </div>
+              ) : (
+                <>
+                  {attentionItems.map((post) => (
+                    <AttentionRow key={post.id} post={post} />
+                  ))}
+                </>
+              )}
+            </div>
+            {attentionItems.length > 0 && (
+              <div className="note">
+                Dismiss clears the time (missed) or moves the post back to drafts (failed). Nothing
+                is deleted.
+              </div>
+            )}
           </div>
           <div className="section">
             <h2>

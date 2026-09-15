@@ -2,7 +2,6 @@ import type { PostStatus } from './posts';
 
 export const ATTENTION_WINDOW_DAYS = 3;
 export const ATTENTION_WINDOW_MS = ATTENTION_WINDOW_DAYS * 86_400_000;
-export const ATTENTION_LIST_LIMIT = 10;
 
 /** A Draft whose schedule time falls inside the closed window [now, now + 3 days]. */
 export function dueSoonDraft(
