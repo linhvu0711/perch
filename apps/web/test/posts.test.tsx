@@ -57,7 +57,7 @@ describe('posts page', () => {
     // Given: a Post, and the next PATCH fails
     await seedPost(server, { text: 'Hello world' });
     let failNext = true;
-    renderApp(server, '/posts/1', (input, init) => {
+    renderApp(server, '/posts/1', (_input, init) => {
       if (failNext && init?.method === 'PATCH') {
         failNext = false;
         return Promise.resolve(
