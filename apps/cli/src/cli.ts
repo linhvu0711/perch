@@ -1,5 +1,5 @@
-import { Command, CommanderError } from 'commander';
 import type { ItemTagsResponse } from '@perch/core';
+import { Command, CommanderError } from 'commander';
 import packageJson from '../package.json' with { type: 'json' };
 
 import { createApi } from './api';

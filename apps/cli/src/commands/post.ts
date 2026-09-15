@@ -268,7 +268,9 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
     .action(
       run(ctx, async ({ api }, idValue: string) => {
         const id = positiveId(idValue);
-        const found = await api.call(api.client.api.posts[':id'].$get({ param: { id: String(id) } }));
+        const found = await api.call(
+          api.client.api.posts[':id'].$get({ param: { id: String(id) } }),
+        );
         return postResult(found);
       }),
     );
@@ -407,7 +409,11 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
     .action(
       run(
         ctx,
-        async ({ api }, idValues: string[], commandOptions: { add?: string[]; remove?: string[] }) => {
+        async (
+          { api },
+          idValues: string[],
+          commandOptions: { add?: string[]; remove?: string[] },
+        ) => {
           const ids = idValues.map((value) => positiveId(value, true));
           if (commandOptions.add === undefined && commandOptions.remove === undefined) {
             throw new UsageError('usage', 'Give --add or --remove');
@@ -459,7 +465,11 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
     .action(
       run(
         ctx,
-        async ({ api }, idValue: string, commandOptions: { resource?: string[]; file?: string[] }) => {
+        async (
+          { api },
+          idValue: string,
+          commandOptions: { resource?: string[]; file?: string[] },
+        ) => {
           const id = positiveId(idValue);
           const resourceIds = (commandOptions.resource ?? []).map((value) =>
             positiveId(value, true),
@@ -584,16 +594,19 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
     .requiredOption('--at <time>')
     .option('--force')
     .action(
-      run(ctx, async ({ api }, idValue: string, commandOptions: { at: string; force?: boolean }) => {
-        const id = positiveId(idValue);
-        const updated = await api.call(
-          api.client.api.posts[':id'].schedule.$post({
-            param: { id: String(id) },
-            json: { at: commandOptions.at, ...(commandOptions.force ? { force: true } : {}) },
-          }),
-        );
-        return postResult(updated);
-      }),
+      run(
+        ctx,
+        async ({ api }, idValue: string, commandOptions: { at: string; force?: boolean }) => {
+          const id = positiveId(idValue);
+          const updated = await api.call(
+            api.client.api.posts[':id'].schedule.$post({
+              param: { id: String(id) },
+              json: { at: commandOptions.at, ...(commandOptions.force ? { force: true } : {}) },
+            }),
+          );
+          return postResult(updated);
+        },
+      ),
     );
 
   post

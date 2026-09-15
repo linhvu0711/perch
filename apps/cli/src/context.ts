@@ -29,18 +29,14 @@ export interface CliContext {
 
 export function realContext(env: Record<string, string | undefined>): CliContext;
 /** @deprecated argv is no longer part of the context; kept for existing callers. */
-export function realContext(
-  argv: string[],
-  env: Record<string, string | undefined>,
-): CliContext;
+export function realContext(argv: string[], env: Record<string, string | undefined>): CliContext;
 export function realContext(
   a: string[] | Record<string, string | undefined>,
   b?: Record<string, string | undefined>,
 ): CliContext {
   const env = (b ?? a) as Record<string, string | undefined>;
   const parsed = parseCliEnv(env);
-  const configPath =
-    parsed.PERCH_CONFIG_PATH ?? path.join(os.homedir(), '.perch', 'config.json');
+  const configPath = parsed.PERCH_CONFIG_PATH ?? path.join(os.homedir(), '.perch', 'config.json');
   return {
     env: parsed,
     stdout: process.stdout,

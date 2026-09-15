@@ -235,7 +235,10 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
               const response = await api.call(
                 api.client.api.resources.images.$post({
                   form: {
-                    files: new File([bytes.slice().buffer as ArrayBuffer], path.basename(inputPath)),
+                    files: new File(
+                      [bytes.slice().buffer as ArrayBuffer],
+                      path.basename(inputPath),
+                    ),
                     ...(commandOptions.title !== undefined ? { title: commandOptions.title } : {}),
                     ...(commandOptions.tag !== undefined ? { tags: commandOptions.tag } : {}),
                   },
@@ -517,7 +520,11 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
     .action(
       run(
         ctx,
-        async ({ api }, idValues: string[], commandOptions: { add?: string[]; remove?: string[] }) => {
+        async (
+          { api },
+          idValues: string[],
+          commandOptions: { add?: string[]; remove?: string[] },
+        ) => {
           const ids = idValues.map((value) => positiveId(value, true));
           if (commandOptions.add === undefined && commandOptions.remove === undefined) {
             throw new UsageError('usage', 'Give --add or --remove');
@@ -575,7 +582,10 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
           try {
             resources.push(resourceSchema.parse(JSON.parse(line)));
           } catch {
-            throw new CliError('bad_response', `Server at ${serverUrl} sent an invalid export line`);
+            throw new CliError(
+              'bad_response',
+              `Server at ${serverUrl} sent an invalid export line`,
+            );
           }
         }
         const result = await applyMirror(dir, resources, ctx.now(), (id) =>

@@ -54,9 +54,7 @@ export function addStatusCommands(program: Command, ctx: CliContext): void {
             month_cost: formatCost(status.month_cost_usd),
             mirror_dir: dir,
             last_pull_at: lastPullAt,
-          })}\n\n${
-            rows.length === 0 ? 'no posts with a time from now on' : formatTable(rows)
-          }`,
+          })}\n\n${rows.length === 0 ? 'no posts with a time from now on' : formatTable(rows)}`,
         };
       }),
     );
