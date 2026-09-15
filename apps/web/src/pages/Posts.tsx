@@ -1,5 +1,6 @@
 import type { PostStatus } from '@perch/core';
 import {
+  AlarmClockOff,
   Calendar,
   CalendarClock,
   CalendarOff,
@@ -9,8 +10,7 @@ import {
   PenLine,
   Plus,
   Search,
-  ShieldCheck,
-  TriangleAlert,
+  Send,
 } from 'lucide-react';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 import { Outlet, useNavigate, useSearchParams } from 'react-router';
@@ -24,27 +24,27 @@ import { errorMessage } from '@/lib/api';
 import { POSTS_PAGE_SIZE, usePosts } from '@/lib/queries';
 
 const STATUS_TABS: Array<{
-  value: PostStatus | 'attention' | undefined;
+  value: PostStatus | 'missed' | undefined;
   dataStatus: string;
   label: string;
   icon: typeof LayoutGrid;
 }> = [
   { value: undefined, dataStatus: 'all', label: 'All', icon: LayoutGrid },
-  { value: 'draft', dataStatus: 'draft', label: 'Drafts', icon: PenLine },
-  { value: 'official', dataStatus: 'official', label: 'Official', icon: ShieldCheck },
+  { value: 'draft', dataStatus: 'draft', label: 'Draft', icon: PenLine },
+  { value: 'official', dataStatus: 'official', label: 'Official', icon: Send },
   { value: 'published', dataStatus: 'published', label: 'Published', icon: CircleCheck },
   { value: 'failed', dataStatus: 'failed', label: 'Failed', icon: CircleAlert },
-  { value: 'attention', dataStatus: 'attention', label: 'Needs attention', icon: TriangleAlert },
+  { value: 'missed', dataStatus: 'missed', label: 'Missed', icon: AlarmClockOff },
 ];
 
 export function Posts() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const statusParam = searchParams.get('status');
-  const status: PostStatus | 'attention' | undefined = STATUS_TABS.some(
+  const status: PostStatus | 'missed' | undefined = STATUS_TABS.some(
     (tab) => tab.value === statusParam,
   )
-    ? (statusParam as PostStatus | 'attention')
+    ? (statusParam as PostStatus | 'missed')
     : undefined;
   const [tag, setTag] = useState<string | undefined>();
   const [scheduled, setScheduled] = useState<boolean | undefined>();
@@ -58,8 +58,8 @@ export function Posts() {
 
   const filters = useMemo(
     () => ({
-      ...(status === 'attention'
-        ? { needs_attention: true }
+      ...(status === 'missed'
+        ? { missed: true }
         : status !== undefined
           ? { status }
           : {}),
