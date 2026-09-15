@@ -272,7 +272,7 @@ export function createImage(
   now: Date,
   removeFile?: (path: string) => void,
 ): Resource {
-  let row;
+  let row: ResourceRow;
   try {
     row = db.transaction((tx) => {
       const inserted = tx

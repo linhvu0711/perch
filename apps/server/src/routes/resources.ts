@@ -107,8 +107,7 @@ export function resourcesRoutes(deps: AppDeps) {
           deps.db,
           c.get('user').id,
           {
-            title:
-              (title ?? file.name).trim().slice(0, RESOURCE_TITLE_MAX) || NOTE_TITLE_FALLBACK,
+            title: (title ?? file.name).trim().slice(0, RESOURCE_TITLE_MAX) || NOTE_TITLE_FALLBACK,
             notes: '',
             path: rel,
             mime: inspected.mime,
