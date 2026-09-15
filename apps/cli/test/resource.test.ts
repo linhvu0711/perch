@@ -304,10 +304,7 @@ describe('resource edit', () => {
 
     // When
     const edit = makeCtx(server);
-    const code = await runCli(
-      ['resource', 'edit', '1', '--content', bodyFile, '--json'],
-      edit.ctx,
-    );
+    const code = await runCli(['resource', 'edit', '1', '--content', bodyFile, '--json'], edit.ctx);
 
     // Then
     expect(code).toBe(1);
