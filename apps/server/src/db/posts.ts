@@ -53,7 +53,7 @@ import {
 import { DomainError } from '../errors';
 import { decodePostCursor, encodePostCursor } from './cursor';
 import type { Db } from './index';
-import { type MediaFiles, mediaForPosts } from './postMedia';
+import { type MediaFiles, mediaForPosts, mediaPathsForPosts } from './postMedia';
 import { accountConnectedAtSql, attentionSql, missedSql, postState } from './postState';
 import { postLinks, postMedia, posts, postTags, resources, xAccounts } from './schema';
 import { getSettings } from './settings';
@@ -188,7 +188,8 @@ export async function createPost(
   userId: number,
   input: PostCreate,
   now: Date,
-  files?: MediaFiles,
+  files: MediaFiles | undefined,
+  fileExists: (rel: string) => boolean,
 ): Promise<Post> {
   const fromResources = (input.from ?? []).map((resourceId) => {
     const resource = db
@@ -266,7 +267,7 @@ export async function createPost(
       .run();
   }
 
-  const post = getPost(db, userId, row.id, now);
+  const post = getPost(db, userId, row.id, now, fileExists);
   if (!post) throw new Error('post insert failed');
   return post;
 }
@@ -284,12 +285,19 @@ function postJoinRow(db: Db, userId: number, id: number, now: Date): PostJoinRow
     .get();
 }
 
-export function getPost(db: Db, userId: number, id: number, now: Date): Post | null {
+export function getPost(
+  db: Db,
+  userId: number,
+  id: number,
+  now: Date,
+  fileExists: (rel: string) => boolean,
+): Post | null {
   const row = postJoinRow(db, userId, id, now);
   if (!row) return null;
 
   const limit = postLimit(db, userId);
   const media = mediaForPosts(db, [row.id]).get(row.id) ?? [];
+  const mediaPaths = mediaPathsForPosts(db, [row.id]).get(row.id) ?? [];
   return toPost(
     row,
     linksForPosts(db, [row.id]).get(row.id) ?? [],
@@ -299,7 +307,10 @@ export function getPost(db: Db, userId: number, id: number, now: Date): Post | n
     readyChecks({
       text: row.text,
       limit,
-      mediaCount: media.length,
+      media: mediaPaths.map(({ position, path }) => ({
+        position,
+        present: fileExists(path),
+      })),
       accountConnected: getConnectedAccount(db, userId) !== null,
     }),
     now,
@@ -312,6 +323,7 @@ export function listPosts(
   query: PostListQuery,
   timeZone: string,
   now: Date,
+  fileExists: (rel: string) => boolean,
 ): PostList {
   const sortTime = sql`CASE WHEN ${posts.status} = 'published' THEN ${posts.publishedAt} ELSE ${posts.scheduledAt} END`;
 
@@ -399,7 +411,7 @@ export function listPosts(
   const pageRows = hasNextPage ? rows.slice(0, query.limit) : rows;
   const last = pageRows.at(-1);
 
-  const items = postsFromRows(db, userId, pageRows, now);
+  const items = postsFromRows(db, userId, pageRows, now, fileExists);
 
   const sortTimeOf = (row: PostRow): number | null => {
     const value = row.status === 'published' ? row.publishedAt : row.scheduledAt;
@@ -435,12 +447,19 @@ function tagFilterConditions(db: Db, userId: number, tagNames: string[]): SQL[] 
   return conditions;
 }
 
-function postsFromRows(db: Db, userId: number, rows: PostJoinRow[], now: Date): Post[] {
+function postsFromRows(
+  db: Db,
+  userId: number,
+  rows: PostJoinRow[],
+  now: Date,
+  fileExists: (rel: string) => boolean,
+): Post[] {
   const limit = postLimit(db, userId);
   const accountConnected = getConnectedAccount(db, userId) !== null;
   const postIds = rows.map((row) => row.id);
   const links = linksForPosts(db, postIds);
   const media = mediaForPosts(db, postIds);
+  const mediaPaths = mediaPathsForPosts(db, postIds);
   const postTagsMap = tagsForPosts(db, userId, postIds);
   const items = rows.map((row) => {
     const mediaItems = media.get(row.id) ?? [];
@@ -453,7 +472,10 @@ function postsFromRows(db: Db, userId: number, rows: PostJoinRow[], now: Date): 
       readyChecks({
         text: row.text,
         limit,
-        mediaCount: mediaItems.length,
+        media: (mediaPaths.get(row.id) ?? []).map(({ position, path }) => ({
+          position,
+          present: fileExists(path),
+        })),
         accountConnected,
       }),
       now,
@@ -470,6 +492,7 @@ export function calendarDays(
   query: CalendarQuery,
   timeZone: string,
   now: Date,
+  fileExists: (rel: string) => boolean,
 ): CalendarRange {
   const sortTime = sql`CASE WHEN ${posts.status} = 'published' THEN ${posts.publishedAt} ELSE ${posts.scheduledAt} END`;
 
@@ -492,7 +515,7 @@ export function calendarDays(
     .orderBy(asc(sortTime), asc(posts.id))
     .all();
 
-  const items = postsFromRows(db, userId, rows, now);
+  const items = postsFromRows(db, userId, rows, now, fileExists);
 
   const byDay = new Map<string, CalendarPost[]>();
   for (const post of items) {
@@ -517,6 +540,7 @@ export function updatePost(
   id: number,
   patch: PostPatch,
   now: Date,
+  fileExists: (rel: string) => boolean,
 ): Post | null {
   const current = getPostRow(db, userId, id);
   if (!current) return null;
@@ -531,7 +555,7 @@ export function updatePost(
     .where(and(eq(posts.id, id), eq(posts.userId, userId)))
     .run();
 
-  return getPost(db, userId, id, now);
+  return getPost(db, userId, id, now, fileExists);
 }
 
 export function getPostRow(db: Db, userId: number, id: number): PostRow | undefined {
@@ -565,6 +589,7 @@ export function upcomingPosts(
   userId: number,
   now: Date,
   options: { official?: boolean; limit: number },
+  fileExists: (rel: string) => boolean,
 ): Post[] {
   const rows = db
     .select({
@@ -586,7 +611,7 @@ export function upcomingPosts(
     .orderBy(asc(posts.scheduledAt), asc(posts.id))
     .limit(options.limit)
     .all();
-  return postsFromRows(db, userId, rows, now);
+  return postsFromRows(db, userId, rows, now, fileExists);
 }
 
 function resourceExists(db: Db, userId: number, resourceId: number): boolean {
@@ -766,6 +791,7 @@ export function schedulePost(
   body: PostScheduleBody,
   timeZone: string,
   now: Date,
+  fileExists: (rel: string) => boolean,
 ): Post | null {
   const row = getPostRow(db, userId, id);
   if (!row) return null;
@@ -788,7 +814,7 @@ export function schedulePost(
     })
     .where(and(eq(posts.id, id), eq(posts.userId, userId)))
     .run();
-  return getPost(db, userId, id, now);
+  return getPost(db, userId, id, now, fileExists);
 }
 
 export function unschedulePosts(

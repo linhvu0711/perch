@@ -157,7 +157,7 @@ export function createPublishService(deps: {
             .run();
           throw new PublishFailedError(sent.message);
         }
-        return getPost(deps.db, userId, id, now);
+        return getPost(deps.db, userId, id, now, fileExists);
       } finally {
         inFlight.delete(id);
       }
@@ -189,7 +189,7 @@ export function createPublishService(deps: {
             .run();
           throw new PublishFailedError(sent.message);
         }
-        return getPost(deps.db, userId, id, now);
+        return getPost(deps.db, userId, id, now, fileExists);
       } finally {
         inFlight.delete(id);
       }

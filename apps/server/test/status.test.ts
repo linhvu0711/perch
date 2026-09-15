@@ -483,6 +483,32 @@ describe('post status', () => {
     expect(fs.readdirSync(mediaDir(post.id))).toHaveLength(1);
   });
 
+  test('get shows a missing media file in the ready checklist', async () => {
+    // Given: a draft with one image whose file is deleted, and an account connected
+    await uploadImage('a.png');
+    await createPost({ text: 'Hello', from: [1] });
+    connectAccount();
+    const files = fs.readdirSync(mediaDir(1));
+    for (const file of files) {
+      fs.unlinkSync(path.join(mediaDir(1), file));
+    }
+
+    // When
+    const post = await getPost(1);
+
+    // Then: the checklist names the missing file
+    expect(post.ready).toEqual({
+      ok: false,
+      checks: [
+        { code: 'text', ok: true, label: 'Text is not empty' },
+        { code: 'limit', ok: true, label: '5 of 25,000 characters' },
+        { code: 'media', ok: true, label: '1 of 4 images' },
+        { code: 'media', ok: false, label: 'Media 1 file is missing' },
+        { code: 'account', ok: true, label: 'X account connected' },
+      ],
+    });
+  });
+
   test('get carries the ready checklist', async () => {
     // Given: a draft with one image and no account
     await uploadImage('a.png');

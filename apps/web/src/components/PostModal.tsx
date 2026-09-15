@@ -341,7 +341,10 @@ export function PostModal(): JSX.Element | null {
                       const bad = readyChecks({
                         text: viewPost.text,
                         limit: viewPost.limit,
-                        mediaCount: viewPost.media.length,
+                        media: viewPost.media.map((item) => ({
+                          position: item.position,
+                          present: true,
+                        })),
                         accountConnected: account.data?.account != null,
                       }).checks.find((check) => !check.ok);
                       if (bad) {
@@ -644,7 +647,10 @@ export function PostModal(): JSX.Element | null {
                     {readyChecks({
                       text: viewPost.text,
                       limit: viewPost.limit,
-                      mediaCount: viewPost.media.length,
+                      media: viewPost.media.map((item) => ({
+                        position: item.position,
+                        present: true,
+                      })),
                       accountConnected: account.data?.account != null,
                     }).checks.map((check) => (
                       <li key={check.code} className={check.ok ? 'ok' : 'bad'}>

@@ -13,7 +13,13 @@ function countWhere(db: Db, condition: SQL): number {
 }
 
 /** The one-call picture behind the Dashboard and `perch status`. */
-export function statusSnapshot(db: Db, userId: number, timeZone: string, now: Date): Status {
+export function statusSnapshot(
+  db: Db,
+  userId: number,
+  timeZone: string,
+  now: Date,
+  fileExists: (rel: string) => boolean,
+): Status {
   const account = getConnectedAccount(db, userId);
   const week = and(
     eq(posts.userId, userId),
@@ -24,8 +30,9 @@ export function statusSnapshot(db: Db, userId: number, timeZone: string, now: Da
   return {
     timezone: timeZone,
     account: account !== null ? toXAccount(account) : null,
-    next_due: upcomingPosts(db, userId, now, { limit: STATUS_NEXT_DUE }),
-    next_official: upcomingPosts(db, userId, now, { official: true, limit: 1 })[0] ?? null,
+    next_due: upcomingPosts(db, userId, now, { limit: STATUS_NEXT_DUE }, fileExists),
+    next_official:
+      upcomingPosts(db, userId, now, { official: true, limit: 1 }, fileExists)[0] ?? null,
     missed_count: countWhere(db, and(eq(posts.userId, userId), missedSql(userId, now))!),
     failed_count: countWhere(db, and(eq(posts.userId, userId), eq(posts.status, 'failed'))!),
     week_official_count: countWhere(db, and(week, eq(posts.status, 'official'))!),

@@ -47,6 +47,7 @@ import { notFound, validationHook } from '../errors';
 import {
   copyToR2,
   inspectImage,
+  mediaFileExists,
   readMedia,
   removeMedia,
   removeMediaDir,
@@ -76,6 +77,7 @@ export function postsRoutes(deps: AppDeps) {
           c.req.valid('query'),
           getSettings(deps.db, userId).timezone,
           deps.clock.now(),
+          mediaFileExists(deps.uploadDir),
         ),
         200,
       );
@@ -89,6 +91,7 @@ export function postsRoutes(deps: AppDeps) {
           c.req.valid('json'),
           deps.clock.now(),
           mediaFiles(deps, userId),
+          mediaFileExists(deps.uploadDir),
         ),
         201,
       );
@@ -146,6 +149,7 @@ export function postsRoutes(deps: AppDeps) {
           c.req.valid('json'),
           getSettings(deps.db, userId).timezone,
           deps.clock.now(),
+          mediaFileExists(deps.uploadDir),
         );
         if (!post) throw notFound('Post', id);
         return c.json(post, 200);
@@ -167,7 +171,13 @@ export function postsRoutes(deps: AppDeps) {
     })
     .get('/:id', zValidator('param', idParamSchema, validationHook), (c) => {
       const { id } = c.req.valid('param');
-      const post = getPost(deps.db, c.get('user').id, id, deps.clock.now());
+      const post = getPost(
+        deps.db,
+        c.get('user').id,
+        id,
+        deps.clock.now(),
+        mediaFileExists(deps.uploadDir),
+      );
       if (!post) throw notFound('Post', id);
       return c.json(post, 200);
     })
@@ -189,6 +199,7 @@ export function postsRoutes(deps: AppDeps) {
           id,
           c.req.valid('json'),
           deps.clock.now(),
+          mediaFileExists(deps.uploadDir),
         );
         if (!post) throw notFound('Post', id);
         return c.json(post, 200);
@@ -300,8 +311,13 @@ export function postsRoutes(deps: AppDeps) {
       (c) => {
         const { id } = c.req.valid('param');
         const userId = c.get('user').id;
-        const post = detachMedia(deps.db, userId, id, c.req.valid('json'), (rel) =>
-          removeMedia(deps.uploadDir, rel),
+        const post = detachMedia(
+          deps.db,
+          userId,
+          id,
+          c.req.valid('json'),
+          (rel) => removeMedia(deps.uploadDir, rel),
+          mediaFileExists(deps.uploadDir),
         );
         if (!post) throw notFound('Post', id);
         return c.json({ media: post.media }, 200);
