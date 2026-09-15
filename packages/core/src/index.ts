@@ -1,5 +1,4 @@
 export * from './api';
-export * from './attention';
 export * from './calendar';
 export * from './charCount';
 export * from './charLimit';

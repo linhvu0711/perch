@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { listDateSchema, type Post, type PostStatus, postSchema } from './posts';
+import { listDateSchema, type Post, postSchema } from './posts';
 import { addDays } from './schedule';
 import { tagFilterSchema } from './tags';
 
@@ -26,19 +26,6 @@ export const calendarRangeSchema = z.object({
   days: z.array(calendarDaySchema),
 });
 export type CalendarRange = z.infer<typeof calendarRangeSchema>;
-
-/** A post due in the past that cannot go out: a draft, or an official post with no X account. */
-export function isMissed(
-  post: { status: PostStatus; scheduled_at: string | null },
-  now: Date,
-  accountConnected: boolean,
-): boolean {
-  return (
-    post.scheduled_at !== null &&
-    new Date(post.scheduled_at) < now &&
-    (post.status === 'draft' || (post.status === 'official' && !accountConnected))
-  );
-}
 
 /** The instant a post is placed under on the calendar; published posts sit at publish time. */
 export function postCalendarTime(

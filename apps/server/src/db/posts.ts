@@ -52,8 +52,8 @@ import {
 
 import { decodePostCursor, encodePostCursor } from './cursor';
 import type { Db } from './index';
-import { accountConnectedAtSql, attentionSql, missedSql, postState } from './postState';
 import { type MediaFiles, mediaForPosts } from './postMedia';
+import { accountConnectedAtSql, attentionSql, missedSql, postState } from './postState';
 import { postLinks, postMedia, posts, postTags, resources, xAccounts } from './schema';
 import { getSettings } from './settings';
 import { addPostTags, tagIdsByName, tagsForPosts, tagsForResources } from './tags';
