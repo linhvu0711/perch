@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import fs from 'node:fs';
 import path from 'node:path';
 
 import { createTestServer, type TestServer } from '@perch/server/testing';
 
 import { runCli } from '../src/cli';
+import { readConfig, writeConfig } from '../src/config';
 import { AuthError, BatchFailure, CliError, UsageError } from '../src/output';
 import { makeCtx } from './helpers';
 
@@ -166,6 +168,36 @@ describe('exit numbers', () => {
       },
     ]);
     expect(err()).toBe('');
+  });
+
+  test('reads config.json once per invocation', async () => {
+    // Given: a note on the server, a mirror-dir in the config, a counting readConfig
+    const dir = path.join(server.dir, 'mirror');
+    const created = await server.app.request('/api/resources/notes', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${server.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ body: '# Hello' }),
+    });
+    expect(created.status).toBe(201);
+
+    let reads = 0;
+    const { ctx } = makeCtx(server);
+    writeConfig(ctx.configPath, { 'mirror-dir': dir });
+    ctx.readConfig = () => {
+      reads += 1;
+      return readConfig(ctx.configPath);
+    };
+
+    // When
+    const code = await runCli(['resource', 'pull', '--json'], ctx);
+
+    // Then
+    expect(code).toBe(0);
+    expect(reads).toBe(1);
+    expect(fs.existsSync(path.join(dir, 'notes/2026-09-04-1-hello.md'))).toBe(true);
   });
 
   test('the entry file prints Error: and exits 2 on a bad env', () => {
