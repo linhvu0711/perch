@@ -9,13 +9,7 @@ export function statusRoutes(deps: AppDeps) {
     const user = c.get('user');
     const settings = getSettings(deps.db, user.id);
     return c.json(
-      statusSnapshot(
-        deps.db,
-        user.id,
-        settings.timezone,
-        deps.clock.now(),
-        deps.media.exists,
-      ),
+      statusSnapshot(deps.db, user.id, settings.timezone, deps.clock.now(), deps.media.exists),
       200,
     );
   });

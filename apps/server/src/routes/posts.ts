@@ -58,13 +58,7 @@ export function postsRoutes(deps: AppDeps) {
     .post('/', zValidator('json', postCreateSchema, validationHook), async (c) => {
       const userId = c.get('user').id;
       const body = c.req.valid('json');
-      const post = createPost(
-        deps.db,
-        userId,
-        body,
-        deps.clock.now(),
-        deps.media.exists,
-      );
+      const post = createPost(deps.db, userId, body, deps.clock.now(), deps.media.exists);
       const imageIds = new Set(
         post.links.filter((link) => link.type === 'image').map((link) => link.resource_id),
       );
@@ -74,39 +68,23 @@ export function postsRoutes(deps: AppDeps) {
         if (!attached) throw new Error('post insert failed');
         const failed = attached.results.filter((item) => !item.ok);
         if (failed.length > 0) {
-          deletePosts(deps.db, userId, [post.id], (postId) =>
-            deps.media.removeAll(userId, postId),
-          );
+          deletePosts(deps.db, userId, [post.id], (postId) => deps.media.removeAll(userId, postId));
           throw new MediaAttachError(failed.map((item) => item.error.message));
         }
       }
       if (body.official === true) {
         const result = deps.lifecycle.promote(userId, [post.id]).results[0];
         if (result !== undefined && result.ok === false) {
-          deletePosts(deps.db, userId, [post.id], (postId) =>
-            deps.media.removeAll(userId, postId),
-          );
+          deletePosts(deps.db, userId, [post.id], (postId) => deps.media.removeAll(userId, postId));
           throw new PostNotReadyError(
             result.error.errors ?? [{ path: 'status', message: result.error.message }],
           );
         }
-        const fresh = getPost(
-          deps.db,
-          userId,
-          post.id,
-          deps.clock.now(),
-          deps.media.exists,
-        );
+        const fresh = getPost(deps.db, userId, post.id, deps.clock.now(), deps.media.exists);
         if (!fresh) throw notFound('Post', post.id);
         return c.json(fresh, 201);
       }
-      const created = getPost(
-        deps.db,
-        userId,
-        post.id,
-        deps.clock.now(),
-        deps.media.exists,
-      );
+      const created = getPost(deps.db, userId, post.id, deps.clock.now(), deps.media.exists);
       if (!created) throw new Error('post insert failed');
       return c.json(created, 201);
     })
@@ -159,13 +137,7 @@ export function postsRoutes(deps: AppDeps) {
     })
     .get('/:id', zValidator('param', idParamSchema, validationHook), (c) => {
       const { id } = c.req.valid('param');
-      const post = getPost(
-        deps.db,
-        c.get('user').id,
-        id,
-        deps.clock.now(),
-        deps.media.exists,
-      );
+      const post = getPost(deps.db, c.get('user').id, id, deps.clock.now(), deps.media.exists);
       if (!post) throw notFound('Post', id);
       return c.json(post, 200);
     })

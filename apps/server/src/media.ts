@@ -19,9 +19,9 @@ import {
   insertMediaRow,
   insertPostLink,
   MediaLimitError,
-  type PostMediaRow,
   mediaRowsForPost,
   PostImmutableError,
+  type PostMediaRow,
   removeMediaRows,
 } from './db/posts';
 import { getResource } from './db/resources';
