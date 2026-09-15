@@ -1,12 +1,18 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Post, PostMediaAttachResponse, Resource } from '@perch/core';
+import type { Post, PostList, PostMediaAttachResponse, Resource } from '@perch/core';
 import { eq } from 'drizzle-orm';
 
 import { openDb } from '../src/db';
 import { posts } from '../src/db/schema';
-import { createTestServer, JPG_3X2, PNG_3X2, type TestServer } from '../src/testing';
+import {
+  connectTestAccount,
+  createTestServer,
+  JPG_3X2,
+  PNG_3X2,
+  type TestServer,
+} from '../src/testing';
 
 let server: TestServer;
 
@@ -114,6 +120,7 @@ describe('post media', () => {
       mime: 'image/png' as const,
       bytes: 73,
       from_resource_id: 1,
+      present: true,
     };
     expect(await response.json()).toEqual({ results: [{ id: 1, ok: true, media }] });
 
@@ -194,7 +201,14 @@ describe('post media', () => {
         {
           id: 2,
           ok: true,
-          media: { id: 1, position: 1, mime: 'image/png', bytes: 73, from_resource_id: 2 },
+          media: {
+            id: 1,
+            position: 1,
+            mime: 'image/png',
+            bytes: 73,
+            from_resource_id: 2,
+            present: true,
+          },
         },
       ],
     });
@@ -253,7 +267,7 @@ describe('post media', () => {
     const post = await getPost(1);
     expect(post.links).toEqual([]);
     expect(post.media).toEqual([
-      { id: 1, position: 1, mime: 'image/png', bytes: 73, from_resource_id: null },
+      { id: 1, position: 1, mime: 'image/png', bytes: 73, from_resource_id: null, present: true },
     ]);
   });
 
@@ -318,7 +332,14 @@ describe('post media', () => {
         {
           name: 'photo.jpg',
           ok: true,
-          media: { id: 1, position: 1, mime: 'image/jpeg', bytes: 777, from_resource_id: null },
+          media: {
+            id: 1,
+            position: 1,
+            mime: 'image/jpeg',
+            bytes: 777,
+            from_resource_id: null,
+            present: true,
+          },
         },
       ],
     });
@@ -535,7 +556,7 @@ describe('post media', () => {
 
     // Then: the image attaches as media, both are linked
     expect(post.media).toEqual([
-      { id: 1, position: 1, mime: 'image/png', bytes: 73, from_resource_id: 1 },
+      { id: 1, position: 1, mime: 'image/png', bytes: 73, from_resource_id: 1, present: true },
     ]);
     expect(post.links).toHaveLength(2);
     expect(mediaFiles(post.id)).toHaveLength(1);
@@ -563,6 +584,104 @@ describe('post media', () => {
       code: 'validation',
       message: 'Invalid request',
       errors: [{ path: 'from', message: 'At most 4 media per post' }],
+    });
+  });
+
+  test('every Media item carries present on get, list, calendar, and status', async () => {
+    // Given: a connected account and a scheduled post with one attached image
+    connectTestAccount(server);
+    await createPost({ text: 'Hi' });
+    const [imageId] = await uploadImages({ name: 'a.png', bytes: PNG_3X2 });
+    if (imageId === undefined) throw new Error('upload failed');
+    await attachMedia(1, [imageId]);
+    const scheduled = await request('/api/posts/1/schedule', {
+      method: 'POST',
+      body: JSON.stringify({ at: '2026-09-10 09:00' }),
+    });
+    expect(scheduled.status).toBe(200);
+
+    // When: reading the post back on every surface, before and after the file is removed
+    const read = async () => {
+      const post = await getPost(1);
+      const list = (await (await request('/api/posts')).json()) as PostList;
+      const calendar = (await (
+        await request('/api/calendar?from=2026-09-01&to=2026-09-30')
+      ).json()) as { days: Array<{ posts: Post[] }> };
+      const status = (await (await request('/api/status')).json()) as {
+        next_due: Post[];
+      };
+      return [
+        post.media[0]?.present,
+        list.items[0]?.media[0]?.present,
+        calendar.days[0]?.posts[0]?.media[0]?.present,
+        status.next_due[0]?.media[0]?.present,
+      ];
+    };
+    const before = await read();
+    for (const file of fs.readdirSync(mediaDir(1))) {
+      fs.unlinkSync(path.join(mediaDir(1), file));
+    }
+    const after = await read();
+
+    // Then: present tracks the file on disk
+    expect(before).toEqual([true, true, true, true]);
+    expect(after).toEqual([false, false, false, false]);
+  });
+
+  test('attach and detach responses carry present', async () => {
+    // Given: a post and one image resource
+    await createPost({ text: 'Hi' });
+    const [imageId] = await uploadImages({ name: 'a.png', bytes: PNG_3X2 });
+    if (imageId === undefined) throw new Error('upload failed');
+
+    // When: attaching the resource, attaching an uploaded file, then detaching the first
+    const attached = await attachMedia(1, [imageId]);
+    const form = new FormData();
+    form.append(
+      'files',
+      new File([PNG_3X2.slice().buffer as ArrayBuffer], 'c.png', { type: 'image/png' }),
+    );
+    const fileAttached = await request('/api/posts/1/media/files', {
+      method: 'POST',
+      body: form,
+    });
+    const detached = await request('/api/posts/1/media', {
+      method: 'DELETE',
+      body: JSON.stringify({ positions: [1] }),
+    });
+
+    // Then: every returned Media item carries present: true
+    expect(await attached.json()).toEqual({
+      results: [
+        {
+          id: 1,
+          ok: true,
+          media: {
+            id: 1,
+            position: 1,
+            mime: 'image/png',
+            bytes: 73,
+            from_resource_id: 1,
+            present: true,
+          },
+        },
+      ],
+    });
+    const fileBody = (await fileAttached.json()) as {
+      results: Array<{ ok: boolean; media?: { present: boolean } }>;
+    };
+    expect(fileBody.results[0]?.media?.present).toBe(true);
+    expect(await detached.json()).toEqual({
+      media: [
+        {
+          id: 2,
+          position: 1,
+          mime: 'image/png',
+          bytes: 73,
+          from_resource_id: null,
+          present: true,
+        },
+      ],
     });
   });
 

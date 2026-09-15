@@ -30,6 +30,7 @@ export const postMediaSchema = z.object({
   mime: z.enum(IMAGE_MIME_TYPES),
   bytes: z.number().int(),
   from_resource_id: z.number().int().nullable(),
+  present: z.boolean(),
 });
 export type PostMedia = z.infer<typeof postMediaSchema>;
 
