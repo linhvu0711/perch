@@ -8,16 +8,14 @@ import {
 } from '@perch/core';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 
+import { DomainError } from '../errors';
 import type { Db } from './index';
 import { getPost, MediaLimitError, PostImmutableError } from './posts';
 import { postLinks, postMedia, posts, resources } from './schema';
 
-export class MissingMediaPositionError extends Error {
-  constructor(
-    public postId: number,
-    public position: number,
-  ) {
-    super(`No media at position ${position}`);
+export class MissingMediaPositionError extends DomainError {
+  constructor(postId: number, position: number) {
+    super('validation', 'positions', `No media at position ${position}`);
   }
 }
 

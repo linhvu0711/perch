@@ -24,7 +24,6 @@ import {
   attachFromResources,
   detachMedia,
   type MediaFiles,
-  MissingMediaPositionError,
 } from '../db/postMedia';
 import {
   createPost,
@@ -32,17 +31,10 @@ import {
   demotePosts,
   dismissPosts,
   getPost,
-  InvalidPostCursorError,
   linkResources,
   listPosts,
-  MediaLimitError,
-  MissingResourceError,
-  PostImmutableError,
-  PostNotReadyError,
-  PostStatusError,
   previewPost,
   promotePosts,
-  ScheduleTimeError,
   schedulePost,
   unlinkResources,
   unschedulePosts,
@@ -51,7 +43,7 @@ import {
 import { postMedia, posts } from '../db/schema';
 import { getSettings } from '../db/settings';
 import { tagPosts, untagPosts } from '../db/tags';
-import { ApiError, validationHook } from '../errors';
+import { notFound, validationHook } from '../errors';
 import {
   copyToR2,
   inspectImage,
@@ -62,28 +54,6 @@ import {
 } from '../images';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
-
-function notFound(id: number): ApiError {
-  return new ApiError(404, 'not_found', `Post ${id} not found`);
-}
-
-function immutable(error: unknown): ApiError {
-  if (error instanceof PostImmutableError) {
-    return new ApiError(400, 'validation', 'Invalid request', [
-      { path: 'status', message: `Post ${error.postId} is published` },
-    ]);
-  }
-  throw error;
-}
-
-function mediaLimit(error: unknown): ApiError {
-  if (error instanceof MediaLimitError) {
-    return new ApiError(400, 'validation', 'Invalid request', [
-      { path: error.path, message: 'At most 4 media per post' },
-    ]);
-  }
-  throw error;
-}
 
 const mediaFiles = (deps: AppDeps, userId: number): MediaFiles => ({
   read: (rel) => readMedia(deps.uploadDir, rel),
@@ -98,52 +68,30 @@ const mediaFiles = (deps: AppDeps, userId: number): MediaFiles => ({
 export function postsRoutes(deps: AppDeps) {
   return new Hono<AppEnv>()
     .get('/', zValidator('query', postListQuerySchema, validationHook), (c) => {
-      try {
-        const userId = c.get('user').id;
-        return c.json(
-          listPosts(
-            deps.db,
-            userId,
-            c.req.valid('query'),
-            getSettings(deps.db, userId).timezone,
-            deps.clock.now(),
-          ),
-          200,
-        );
-      } catch (error) {
-        if (error instanceof InvalidPostCursorError) {
-          throw new ApiError(400, 'validation', 'Invalid request', [
-            { path: 'cursor', message: 'Invalid cursor' },
-          ]);
-        }
-        throw error;
-      }
+      const userId = c.get('user').id;
+      return c.json(
+        listPosts(
+          deps.db,
+          userId,
+          c.req.valid('query'),
+          getSettings(deps.db, userId).timezone,
+          deps.clock.now(),
+        ),
+        200,
+      );
     })
     .post('/', zValidator('json', postCreateSchema, validationHook), async (c) => {
       const userId = c.get('user').id;
-      try {
-        return c.json(
-          await createPost(
-            deps.db,
-            userId,
-            c.req.valid('json'),
-            deps.clock.now(),
-            mediaFiles(deps, userId),
-          ),
-          201,
-        );
-      } catch (error) {
-        if (error instanceof MediaLimitError) throw mediaLimit(error);
-        if (error instanceof PostNotReadyError) {
-          throw new ApiError(400, 'validation', 'Invalid request', error.errors);
-        }
-        if (error instanceof MissingResourceError) {
-          throw new ApiError(400, 'validation', 'Invalid request', [
-            { path: 'from', message: `Resource ${error.resourceId} not found` },
-          ]);
-        }
-        throw error;
-      }
+      return c.json(
+        await createPost(
+          deps.db,
+          userId,
+          c.req.valid('json'),
+          deps.clock.now(),
+          mediaFiles(deps, userId),
+        ),
+        201,
+      );
     })
     .post('/tags', zValidator('json', itemTagsBodySchema, validationHook), (c) => {
       const body = c.req.valid('json');
@@ -191,74 +139,42 @@ export function postsRoutes(deps: AppDeps) {
       (c) => {
         const { id } = c.req.valid('param');
         const userId = c.get('user').id;
-        try {
-          const post = schedulePost(
-            deps.db,
-            userId,
-            id,
-            c.req.valid('json'),
-            getSettings(deps.db, userId).timezone,
-            deps.clock.now(),
-          );
-          if (!post) throw notFound(id);
-          return c.json(post, 200);
-        } catch (error) {
-          if (error instanceof ScheduleTimeError) {
-            throw new ApiError(400, 'validation', 'Invalid request', [
-              { path: 'at', message: error.message },
-            ]);
-          }
-          if (error instanceof PostStatusError) {
-            throw new ApiError(400, 'validation', 'Invalid request', [
-              { path: 'status', message: error.message },
-            ]);
-          }
-          throw immutable(error);
-        }
+        const post = schedulePost(
+          deps.db,
+          userId,
+          id,
+          c.req.valid('json'),
+          getSettings(deps.db, userId).timezone,
+          deps.clock.now(),
+        );
+        if (!post) throw notFound('Post', id);
+        return c.json(post, 200);
       },
     )
     .post('/:id/publish', zValidator('param', idParamSchema, validationHook), async (c) => {
       const { id } = c.req.valid('param');
       const userId = c.get('user').id;
-      try {
-        const post = await deps.publisher.publishNow(userId, id);
-        if (!post) throw notFound(id);
-        return c.json(post, 200);
-      } catch (error) {
-        if (error instanceof PostStatusError) {
-          throw new ApiError(400, 'validation', 'Invalid request', [
-            { path: 'status', message: error.message },
-          ]);
-        }
-        throw error;
-      }
+      const post = await deps.publisher.publishNow(userId, id);
+      if (!post) throw notFound('Post', id);
+      return c.json(post, 200);
     })
     .post('/:id/retry', zValidator('param', idParamSchema, validationHook), async (c) => {
       const { id } = c.req.valid('param');
       const userId = c.get('user').id;
-      try {
-        const post = await deps.publisher.retry(userId, id);
-        if (!post) throw notFound(id);
-        return c.json(post, 200);
-      } catch (error) {
-        if (error instanceof PostStatusError) {
-          throw new ApiError(400, 'validation', 'Invalid request', [
-            { path: 'status', message: error.message },
-          ]);
-        }
-        throw error;
-      }
+      const post = await deps.publisher.retry(userId, id);
+      if (!post) throw notFound('Post', id);
+      return c.json(post, 200);
     })
     .get('/:id', zValidator('param', idParamSchema, validationHook), (c) => {
       const { id } = c.req.valid('param');
       const post = getPost(deps.db, c.get('user').id, id, deps.clock.now());
-      if (!post) throw notFound(id);
+      if (!post) throw notFound('Post', id);
       return c.json(post, 200);
     })
     .get('/:id/preview', zValidator('param', idParamSchema, validationHook), (c) => {
       const { id } = c.req.valid('param');
       const preview = previewPost(deps.db, c.get('user').id, id);
-      if (!preview) throw notFound(id);
+      if (!preview) throw notFound('Post', id);
       return c.json(preview, 200);
     })
     .patch(
@@ -267,19 +183,15 @@ export function postsRoutes(deps: AppDeps) {
       zValidator('json', postPatchSchema, validationHook),
       (c) => {
         const { id } = c.req.valid('param');
-        try {
-          const post = updatePost(
-            deps.db,
-            c.get('user').id,
-            id,
-            c.req.valid('json'),
-            deps.clock.now(),
-          );
-          if (!post) throw notFound(id);
-          return c.json(post, 200);
-        } catch (error) {
-          throw immutable(error);
-        }
+        const post = updatePost(
+          deps.db,
+          c.get('user').id,
+          id,
+          c.req.valid('json'),
+          deps.clock.now(),
+        );
+        if (!post) throw notFound('Post', id);
+        return c.json(post, 200);
       },
     )
     .post(
@@ -289,20 +201,15 @@ export function postsRoutes(deps: AppDeps) {
       async (c) => {
         const { id } = c.req.valid('param');
         const userId = c.get('user').id;
-        try {
-          const result = await attachFromResources(
-            deps.db,
-            userId,
-            id,
-            c.req.valid('json').resource_ids,
-            mediaFiles(deps, userId),
-          );
-          if (!result) throw notFound(id);
-          return c.json(result, 200);
-        } catch (error) {
-          if (error instanceof MediaLimitError) throw mediaLimit(error);
-          throw immutable(error);
-        }
+        const result = await attachFromResources(
+          deps.db,
+          userId,
+          id,
+          c.req.valid('json').resource_ids,
+          mediaFiles(deps, userId),
+        );
+        if (!result) throw notFound('Post', id);
+        return c.json(result, 200);
       },
     )
     .post(
@@ -337,27 +244,22 @@ export function postsRoutes(deps: AppDeps) {
           results.push({ name: file.name, ok: true });
         }
 
-        try {
-          const response = await attachFromFiles(
-            deps.db,
-            userId,
-            id,
-            inputs,
-            mediaFiles(deps, userId),
-          );
-          if (!response) throw notFound(id);
-          let index = 0;
-          const merged = results.map((result) => {
-            if (!result.ok) return result;
-            const attached = response.results[index];
-            index += 1;
-            return attached ?? result;
-          });
-          return c.json({ results: merged }, 200);
-        } catch (error) {
-          if (error instanceof MediaLimitError) throw mediaLimit(error);
-          throw immutable(error);
-        }
+        const response = await attachFromFiles(
+          deps.db,
+          userId,
+          id,
+          inputs,
+          mediaFiles(deps, userId),
+        );
+        if (!response) throw notFound('Post', id);
+        let index = 0;
+        const merged = results.map((result) => {
+          if (!result.ok) return result;
+          const attached = response.results[index];
+          index += 1;
+          return attached ?? result;
+        });
+        return c.json({ results: merged }, 200);
       },
     )
     .get(
@@ -381,7 +283,7 @@ export function postsRoutes(deps: AppDeps) {
             ),
           )
           .get();
-        if (!row) throw notFound(id);
+        if (!row) throw notFound('Post', id);
         const mediaRow = row.media;
         return new Response(Bun.file(path.join(deps.uploadDir, mediaRow.path)), {
           headers: {
@@ -398,21 +300,11 @@ export function postsRoutes(deps: AppDeps) {
       (c) => {
         const { id } = c.req.valid('param');
         const userId = c.get('user').id;
-        try {
-          const post = detachMedia(deps.db, userId, id, c.req.valid('json'), (rel) =>
-            removeMedia(deps.uploadDir, rel),
-          );
-          if (!post) throw notFound(id);
-          return c.json({ media: post.media }, 200);
-        } catch (error) {
-          if (error instanceof MediaLimitError) throw mediaLimit(error);
-          if (error instanceof MissingMediaPositionError) {
-            throw new ApiError(400, 'validation', 'Invalid request', [
-              { path: 'positions', message: `No media at position ${error.position}` },
-            ]);
-          }
-          throw immutable(error);
-        }
+        const post = detachMedia(deps.db, userId, id, c.req.valid('json'), (rel) =>
+          removeMedia(deps.uploadDir, rel),
+        );
+        if (!post) throw notFound('Post', id);
+        return c.json({ media: post.media }, 200);
       },
     )
     .post(
@@ -421,18 +313,14 @@ export function postsRoutes(deps: AppDeps) {
       zValidator('json', postLinksBodySchema, validationHook),
       (c) => {
         const { id } = c.req.valid('param');
-        try {
-          const result = linkResources(
-            deps.db,
-            c.get('user').id,
-            id,
-            c.req.valid('json').resource_ids,
-          );
-          if (!result) throw notFound(id);
-          return c.json(result, 200);
-        } catch (error) {
-          throw immutable(error);
-        }
+        const result = linkResources(
+          deps.db,
+          c.get('user').id,
+          id,
+          c.req.valid('json').resource_ids,
+        );
+        if (!result) throw notFound('Post', id);
+        return c.json(result, 200);
       },
     )
     .delete(
@@ -441,18 +329,14 @@ export function postsRoutes(deps: AppDeps) {
       zValidator('json', postLinksBodySchema, validationHook),
       (c) => {
         const { id } = c.req.valid('param');
-        try {
-          const result = unlinkResources(
-            deps.db,
-            c.get('user').id,
-            id,
-            c.req.valid('json').resource_ids,
-          );
-          if (!result) throw notFound(id);
-          return c.json(result, 200);
-        } catch (error) {
-          throw immutable(error);
-        }
+        const result = unlinkResources(
+          deps.db,
+          c.get('user').id,
+          id,
+          c.req.valid('json').resource_ids,
+        );
+        if (!result) throw notFound('Post', id);
+        return c.json(result, 200);
       },
     )
     .delete('/', zValidator('json', postDeleteBodySchema, validationHook), (c) => {
