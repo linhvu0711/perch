@@ -64,7 +64,15 @@ export function postsRoutes(deps: AppDeps) {
       );
       const sources = (body.from ?? []).filter((id) => imageIds.has(id));
       if (sources.length > 0) {
-        const attached = await deps.media.attachFromResources(userId, post.id, sources);
+        let attached: Awaited<ReturnType<typeof deps.media.attachFromResources>>;
+        try {
+          attached = await deps.media.attachFromResources(userId, post.id, sources);
+        } catch (error) {
+          deletePosts(deps.db, userId, [post.id], (postId) =>
+            deps.media.removeAll(userId, postId),
+          );
+          throw error;
+        }
         if (!attached) throw new Error('post insert failed');
         const failed = attached.results.filter((item) => !item.ok);
         if (failed.length > 0) {

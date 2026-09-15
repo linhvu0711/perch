@@ -764,6 +764,38 @@ describe('post media', () => {
     expect(mediaFiles(1)).toEqual(filesBefore);
   });
 
+  test('rolls back post create when the media copy throws', async () => {
+    // Given: one image resource and a regular file where the media directory must be created
+    const [imageId] = await uploadImages({ name: 'a.png', bytes: PNG_3X2 });
+    if (imageId === undefined) throw new Error('upload failed');
+    const blocker = path.join(server.dir, 'uploads', '1', 'posts');
+    fs.mkdirSync(path.join(server.dir, 'uploads', '1'), { recursive: true });
+    fs.writeFileSync(blocker, '');
+
+    // When: creating a post from the image, then clearing the blocker and retrying
+    const failed = await request('/api/posts', {
+      method: 'POST',
+      body: JSON.stringify({ text: 'Hi', from: [imageId] }),
+    });
+    const firstList = (await (await request('/api/posts')).json()) as PostList;
+    const blockerIsFile = fs.statSync(blocker).isFile();
+    fs.rmSync(blocker);
+    const created = await request('/api/posts', {
+      method: 'POST',
+      body: JSON.stringify({ text: 'Hi', from: [imageId] }),
+    });
+    const secondList = (await (await request('/api/posts')).json()) as PostList;
+
+    // Then: the failed create left no post or directory, and the retry created one post
+    expect(failed.status).toBe(500);
+    expect(await failed.json()).toEqual({ code: 'internal', message: 'Internal error' });
+    expect(firstList.total).toBe(0);
+    expect(blockerIsFile).toBe(true);
+    expect(created.status).toBe(201);
+    expect(secondList.total).toBe(1);
+    expect(secondList.items[0]?.media).toHaveLength(1);
+  });
+
   test('deleting a post removes its media files', async () => {
     // Given: a post with media
     const ids = await uploadImages({ name: 'a.png', bytes: PNG_3X2 });
