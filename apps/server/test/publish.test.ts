@@ -1035,4 +1035,37 @@ describe('in flight', () => {
     expect(await getPost(1)).toMatchObject({ status: 'published', scheduled_at: null });
     expect((await getPost(2)).status).toBe('draft');
   });
+
+  test('a post that changed under the send is not marked published', async () => {
+    // Given: a connected account and post 1 being sent on a held gate
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+
+    // When: the row changes under the send before the gate opens
+    const first = request('/api/posts/1/publish', { method: 'POST' });
+    while (!server.xClient.calls.some((call) => call.name === 'createPost')) {
+      await Promise.resolve();
+    }
+    setPost(1, { status: 'draft' });
+    release();
+    const response = await first;
+
+    // Then: the send reports failure and the post is not published
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({
+      code: 'publish_failed',
+      message: 'Post 1 changed during send',
+    });
+    expect(await getPost(1)).toMatchObject({
+      status: 'failed',
+      last_error: 'Post 1 changed during send',
+      x_post_id: null,
+      retry_count: 1,
+    });
+    expect(await monthCostUsd()).toBe(0.015);
+  });
 });
