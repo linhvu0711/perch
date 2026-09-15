@@ -214,7 +214,7 @@ export function createMediaService(deps: {
         const inserted = insertMediaRows(
           deps.db,
           postId,
-          existing.length + 1,
+          'resource_ids',
           written.map((item) => item.file),
           fileExists,
         );
@@ -284,7 +284,7 @@ export function createMediaService(deps: {
         const inserted = insertMediaRows(
           deps.db,
           postId,
-          existing.length + 1,
+          'files',
           written.map((item) => item.file),
           fileExists,
         );
