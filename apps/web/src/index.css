@@ -1479,23 +1479,26 @@ textarea:focus-visible {
 .seg button[data-status] svg {
   color: var(--text-3);
 }
-.seg button[data-status="draft"][aria-pressed="true"] svg {
+.seg button[data-status="draft"] svg {
   color: var(--draft);
 }
-.seg button[data-status="official"][aria-pressed="true"] svg {
+.seg button[data-status="official"] svg {
   color: var(--official);
 }
-.seg button[data-status="published"][aria-pressed="true"] svg {
+.seg button[data-status="published"] svg {
   color: var(--published);
 }
-.seg button[data-status="failed"][aria-pressed="true"] svg {
+.seg button[data-status="failed"] svg {
   color: var(--failed);
 }
-.seg button[data-status="attention"][aria-pressed="true"] svg {
+.seg button[data-status="missed"] svg {
   color: var(--missed);
 }
 .seg button[data-status="all"][aria-pressed="true"] svg {
   color: var(--indigo-text);
+}
+.filters .btn.sm svg {
+  color: var(--text-3);
 }
 
 /* post modal */

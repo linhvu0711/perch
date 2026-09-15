@@ -110,6 +110,7 @@ export function Sidebar() {
         count={counts.posts}
         collapsed={collapsed}
       />
+      <NavigationItem to="/calendar" label="Calendar" icon={Calendar} collapsed={collapsed} />
       <NavigationItem
         to="/resources"
         label="Resources"
@@ -117,7 +118,6 @@ export function Sidebar() {
         count={counts.resources}
         collapsed={collapsed}
       />
-      <NavigationItem to="/calendar" label="Calendar" icon={Calendar} collapsed={collapsed} />
       <NavigationItem to="/settings" label="Settings" icon={Settings} collapsed={collapsed} />
 
       <div className="spacer" />

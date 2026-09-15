@@ -256,6 +256,7 @@ export interface PostFilters {
   tag?: string[];
   scheduled?: boolean;
   needs_attention?: boolean;
+  missed?: boolean;
 }
 
 export const POSTS_PAGE_SIZE = 50;
@@ -277,6 +278,7 @@ export function usePosts(filters: PostFilters, enabled = true) {
               ? { scheduled: filters.scheduled ? ('true' as const) : ('false' as const) }
               : {}),
             ...(filters.needs_attention === true ? { needs_attention: 'true' as const } : {}),
+            ...(filters.missed === true ? { missed: 'true' as const } : {}),
             limit: String(POSTS_PAGE_SIZE),
             ...(pageParam !== undefined ? { cursor: pageParam } : {}),
           },
