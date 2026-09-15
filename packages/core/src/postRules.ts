@@ -59,9 +59,7 @@ function postChecks(input: PostChecksInput): PostCheck[] {
       message: `${length} of ${input.limit} characters`,
     },
   ];
-  const missing = input.media
-    .filter((media) => !media.present)
-    .map((media) => media.position);
+  const missing = input.media.filter((media) => !media.present).map((media) => media.position);
   checks.push(
     {
       code: 'media',
