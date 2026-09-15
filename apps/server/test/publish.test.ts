@@ -532,6 +532,31 @@ describe('scheduler tick', () => {
     expect((await getPost(1)).status).toBe('published');
   });
 
+  test('answers 503 when the token cannot be refreshed', async () => {
+    // Given: a connected account with an expired token and a refresh endpoint that is down
+    connectTestAccount(server);
+    const { db, sqlite } = openDb(path.join(server.dir, 'perch.db'));
+    db.update(xAccounts)
+      .set({ expiresAt: new Date('2026-09-04T10:01:00Z') })
+      .where(eq(xAccounts.id, 1))
+      .run();
+    sqlite.close();
+    server.xClient.refreshError = new XError('http', 500, 'Internal Server Error');
+    await createPost({ text: 'Hello', official: true });
+
+    // When
+    const res = await request('/api/posts/1/publish', { method: 'POST' });
+
+    // Then
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({
+      code: 'token_refresh_failed',
+      message: 'X token refresh failed',
+    });
+    expect(server.xClient.calls.filter((call) => call.name === 'createPost')).toHaveLength(0);
+    expect((await getPost(1)).status).toBe('official');
+  });
+
   test('does not send a post claimed by an overlapping tick', async () => {
     // Given: a connected account, a due official post, and a send that waits on a gate
     connectTestAccount(server);

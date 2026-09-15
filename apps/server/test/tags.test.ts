@@ -196,7 +196,7 @@ describe('tags', () => {
     expect(await added.json()).toEqual({
       results: [
         { id: 1, ok: true, tags: ['news'] },
-        { id: 2, ok: false, error: { code: 'published', message: 'Post 2 is published' } },
+        { id: 2, ok: false, error: { code: 'invalid_status', message: 'Post 2 is published' } },
         { id: 999, ok: false, error: { code: 'not_found', message: 'Post 999 not found' } },
       ],
     });

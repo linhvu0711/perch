@@ -50,6 +50,7 @@ import {
   sql,
 } from 'drizzle-orm';
 
+import { DomainError } from '../errors';
 import { decodePostCursor, encodePostCursor } from './cursor';
 import type { Db } from './index';
 import { type MediaFiles, mediaForPosts } from './postMedia';
@@ -59,46 +60,51 @@ import { getSettings } from './settings';
 import { addPostTags, tagIdsByName, tagsForPosts, tagsForResources } from './tags';
 import { getConnectedAccount } from './xAccounts';
 
-export class InvalidPostCursorError extends Error {}
-
-export class PostImmutableError extends Error {
-  constructor(public postId: number) {
-    super(`Post ${postId} is published`);
+export class InvalidPostCursorError extends DomainError {
+  constructor() {
+    super('validation', 'cursor', 'Invalid cursor');
   }
 }
 
-export class MediaLimitError extends Error {
-  constructor(public path: 'resource_ids' | 'files' | 'from') {
-    super('At most 4 media per post');
+export class PostImmutableError extends DomainError {
+  constructor(postId: number) {
+    super('invalid_status', 'status', `Post ${postId} is published`);
   }
 }
 
-export class MissingResourceError extends Error {
-  constructor(public resourceId: number) {
-    super(`Resource ${resourceId} not found`);
+export class MediaLimitError extends DomainError {
+  constructor(path: 'resource_ids' | 'files' | 'from') {
+    super('validation', path, 'At most 4 media per post');
   }
 }
 
-export class PostNotReadyError extends Error {
-  constructor(public errors: Array<{ path: string; message: string }>) {
-    super('Post is not ready');
+export class MissingResourceError extends DomainError {
+  constructor(resourceId: number) {
+    super('validation', 'from', `Resource ${resourceId} not found`);
   }
 }
 
-export class PostStatusError extends Error {
-  constructor(
-    public postId: number,
-    status: PostStatus,
-  ) {
-    super(`Post ${postId} is ${status}`);
+export class PostNotReadyError extends DomainError {
+  constructor(errors: Array<{ path: string; message: string }>) {
+    super('validation', null, 'Post is not ready', errors);
   }
 }
 
-export class ScheduleTimeError extends Error {}
+export class PostStatusError extends DomainError {
+  constructor(postId: number, status: PostStatus) {
+    super('invalid_status', 'status', `Post ${postId} is ${status}`);
+  }
+}
 
-export class TagExistsError extends Error {
-  constructor(public tagName: string) {
-    super(`Tag "${tagName}" already exists`);
+export class ScheduleTimeError extends DomainError {
+  constructor(message: string) {
+    super('validation', 'at', message);
+  }
+}
+
+export class TagExistsError extends DomainError {
+  constructor(tagName: string) {
+    super('validation', 'name', `Tag "${tagName}" already exists`);
   }
 }
 

@@ -6,7 +6,6 @@ import {
   noteCreateSchema,
   RESOURCE_BATCH_MAX,
   RESOURCE_TITLE_MAX,
-  type Resource,
   resourceDeleteBodySchema,
   resourceListQuerySchema,
   resourcePatchSchema,
@@ -23,36 +22,22 @@ import {
   createNote,
   deleteResources,
   getResource,
-  InvalidCursorError,
   listAllResources,
   listResources,
   listTweetAuthors,
   updateResource,
 } from '../db/resources';
 import { tagResources, untagResources } from '../db/tags';
-import { ApiError, validationHook } from '../errors';
+import { ApiError, notFound, validationHook } from '../errors';
 import { copyToR2, inspectImage, removeImage, storeImage } from '../images';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
-function notFound(id: number): ApiError {
-  return new ApiError(404, 'not_found', `Resource ${id} not found`);
-}
-
 export function resourcesRoutes(deps: AppDeps) {
   return new Hono<AppEnv>()
-    .get('/', zValidator('query', resourceListQuerySchema, validationHook), (c) => {
-      try {
-        return c.json(listResources(deps.db, c.get('user').id, c.req.valid('query')), 200);
-      } catch (error) {
-        if (error instanceof InvalidCursorError) {
-          throw new ApiError(400, 'validation', 'Invalid request', [
-            { path: 'cursor', message: 'Invalid cursor' },
-          ]);
-        }
-        throw error;
-      }
-    })
+    .get('/', zValidator('query', resourceListQuerySchema, validationHook), (c) =>
+      c.json(listResources(deps.db, c.get('user').id, c.req.valid('query')), 200),
+    )
     .post('/notes', zValidator('json', noteCreateSchema, validationHook), (c) =>
       c.json(createNote(deps.db, c.get('user').id, c.req.valid('json'), deps.clock.now()), 201),
     )
@@ -118,28 +103,22 @@ export function resourcesRoutes(deps: AppDeps) {
         }
         const rel = await storeImage(deps.uploadDir, c.get('user').id, bytes, inspected.ext);
         await copyToR2(deps.r2, rel, bytes, deps.logError);
-        let resource: Resource;
-        try {
-          resource = createImage(
-            deps.db,
-            c.get('user').id,
-            {
-              title:
-                (title ?? file.name).trim().slice(0, RESOURCE_TITLE_MAX) || NOTE_TITLE_FALLBACK,
-              notes: '',
-              path: rel,
-              mime: inspected.mime,
-              bytes: bytes.length,
-              width: inspected.width,
-              height: inspected.height,
-              tags,
-            },
-            deps.clock.now(),
-          );
-        } catch (error) {
-          removeImage(deps.uploadDir, rel);
-          throw error;
-        }
+        const resource = createImage(
+          deps.db,
+          c.get('user').id,
+          {
+            title: (title ?? file.name).trim().slice(0, RESOURCE_TITLE_MAX) || NOTE_TITLE_FALLBACK,
+            notes: '',
+            path: rel,
+            mime: inspected.mime,
+            bytes: bytes.length,
+            width: inspected.width,
+            height: inspected.height,
+            tags,
+          },
+          deps.clock.now(),
+          (rel) => removeImage(deps.uploadDir, rel),
+        );
         results.push({ name: file.name, ok: true as const, resource });
       }
       return c.json({ results }, 200);
@@ -164,13 +143,13 @@ export function resourcesRoutes(deps: AppDeps) {
     .get('/:id', zValidator('param', idParamSchema, validationHook), (c) => {
       const { id } = c.req.valid('param');
       const resource = getResource(deps.db, c.get('user').id, id);
-      if (!resource) throw notFound(id);
+      if (!resource) throw notFound('Resource', id);
       return c.json(resource, 200);
     })
     .get('/:id/file', zValidator('param', idParamSchema, validationHook), (c) => {
       const { id } = c.req.valid('param');
       const resource = getResource(deps.db, c.get('user').id, id);
-      if (!resource) throw notFound(id);
+      if (!resource) throw notFound('Resource', id);
       if (resource.type !== 'image') {
         throw new ApiError(404, 'not_found', `Resource ${id} has no file`);
       }
@@ -189,14 +168,14 @@ export function resourcesRoutes(deps: AppDeps) {
         const { id } = c.req.valid('param');
         const patch = c.req.valid('json');
         const stored = getResource(deps.db, c.get('user').id, id);
-        if (!stored) throw notFound(id);
+        if (!stored) throw notFound('Resource', id);
         if (stored.type === 'image' && patch.body !== undefined) {
           throw new ApiError(400, 'validation', 'Invalid request', [
             { path: 'body', message: 'Only notes have a body' },
           ]);
         }
         const resource = updateResource(deps.db, c.get('user').id, id, patch);
-        if (!resource) throw notFound(id);
+        if (!resource) throw notFound('Resource', id);
         return c.json(resource, 200);
       },
     )
