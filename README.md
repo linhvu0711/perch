@@ -63,7 +63,7 @@ The CLI stores local configuration at `~/.perch/config.json` unless `PERCH_CONFI
 bun run dev        # server with --watch on port 3000
 bun run dev:web    # Vite on port 5173, proxies /api to the Bun server
 bun run build      # build the web app into apps/web/dist
-bun test
+bun run test
 bun run typecheck
 ```
 

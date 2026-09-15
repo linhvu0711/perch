@@ -20,9 +20,10 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 
-import { ApiError, api, type JsonResponse, unwrap } from './api';
+import { ApiError, type JsonResponse, unwrap, useApi } from './api';
 
 export function useMe() {
+  const api = useApi();
   return useQuery({
     queryKey: ['me'],
     queryFn: async () => {
@@ -38,6 +39,7 @@ export function useMe() {
 }
 
 export function useSettings() {
+  const api = useApi();
   const me = useMe();
   return useQuery({
     queryKey: ['settings'],
@@ -47,6 +49,7 @@ export function useSettings() {
 }
 
 export function useLogin() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (token: string) => unwrap(api.api.auth.login.$post({ json: { token } })),
@@ -55,6 +58,7 @@ export function useLogin() {
 }
 
 export function useLogout() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => unwrap(api.api.auth.logout.$post()),
@@ -67,6 +71,7 @@ export function useLogout() {
 }
 
 export function useUpdateSettings() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (patch: SettingsPatch) => unwrap(api.api.settings.$patch({ json: patch })),
@@ -78,6 +83,7 @@ export function useUpdateSettings() {
 }
 
 export function useAccount() {
+  const api = useApi();
   const me = useMe();
   return useQuery({
     queryKey: ['account'],
@@ -87,12 +93,14 @@ export function useAccount() {
 }
 
 export function useConnectX() {
+  const api = useApi();
   return useMutation({
     mutationFn: () => unwrap(api.api.account.connect.$post()),
   });
 }
 
 export function useDisconnectX() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => unwrap(api.api.account.disconnect.$post()),
@@ -114,6 +122,7 @@ export interface ResourceFilters {
 export const RESOURCES_PAGE_SIZE = 30;
 
 export function useResources(filters: ResourceFilters, pageSize = RESOURCES_PAGE_SIZE) {
+  const api = useApi();
   return useInfiniteQuery({
     queryKey: ['resources', 'list', filters, pageSize],
     queryFn: ({ pageParam }) =>
@@ -137,6 +146,7 @@ export function useResources(filters: ResourceFilters, pageSize = RESOURCES_PAGE
 }
 
 export function useResourceAuthors() {
+  const api = useApi();
   return useQuery({
     queryKey: ['resources', 'authors'],
     queryFn: () => unwrap(api.api.resources.authors.$get()),
@@ -144,6 +154,7 @@ export function useResourceAuthors() {
 }
 
 export function useSaveTweets() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: TweetCreate) => unwrap(api.api.resources.tweets.$post({ json: input })),
@@ -162,6 +173,7 @@ export function useSaveTweets() {
 }
 
 export function useResource(id: number | null) {
+  const api = useApi();
   return useQuery({
     queryKey: ['resources', 'detail', id],
     queryFn: () => unwrap(api.api.resources[':id'].$get({ param: { id: String(id) } })),
@@ -170,6 +182,7 @@ export function useResource(id: number | null) {
 }
 
 export function useCreateNote() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: NoteCreate) => unwrap(api.api.resources.notes.$post({ json: input })),
@@ -183,6 +196,7 @@ export function useCreateNote() {
 }
 
 export function useUploadImages() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (files: File[]) => {
@@ -207,6 +221,7 @@ export function useUploadImages() {
 }
 
 export function useUpdateResource() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, patch }: { id: number; patch: ResourcePatch }) =>
@@ -225,6 +240,7 @@ export function useUpdateResource() {
 }
 
 export function useDeleteResources() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (ids: number[]) => unwrap(api.api.resources.$delete({ json: { ids } })),
@@ -262,6 +278,7 @@ export interface PostFilters {
 export const POSTS_PAGE_SIZE = 50;
 
 export function usePosts(filters: PostFilters, enabled = true) {
+  const api = useApi();
   return useInfiniteQuery({
     queryKey: ['posts', 'list', filters],
     queryFn: ({ pageParam }) =>
@@ -299,6 +316,7 @@ export interface CalendarFilters {
 }
 
 export function useCalendar(filters: CalendarFilters) {
+  const api = useApi();
   return useQuery({
     queryKey: ['posts', 'list', 'calendar', filters],
     queryFn: () =>
@@ -317,6 +335,7 @@ export function useCalendar(filters: CalendarFilters) {
 }
 
 export function useStatus() {
+  const api = useApi();
   const me = useMe();
   return useQuery({
     queryKey: ['posts', 'list', 'status'],
@@ -327,6 +346,7 @@ export function useStatus() {
 }
 
 export function useCostSummary() {
+  const api = useApi();
   const me = useMe();
   return useQuery({
     queryKey: ['costs', 'summary'],
@@ -337,6 +357,7 @@ export function useCostSummary() {
 }
 
 export function useCostMonths(cursor: string | undefined) {
+  const api = useApi();
   const me = useMe();
   return useQuery({
     queryKey: ['costs', 'months', cursor ?? null],
@@ -348,6 +369,7 @@ export function useCostMonths(cursor: string | undefined) {
 }
 
 export function usePost(id: number | null) {
+  const api = useApi();
   return useQuery({
     queryKey: ['posts', 'detail', id],
     queryFn: () => unwrap(api.api.posts[':id'].$get({ param: { id: String(id) } })),
@@ -358,6 +380,7 @@ export function usePost(id: number | null) {
 }
 
 export function useCreatePost() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: PostCreate) => unwrap(api.api.posts.$post({ json: input })),
@@ -374,6 +397,7 @@ export function useCreatePost() {
 }
 
 export function useUpdatePost() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, patch }: { id: number; patch: PostPatch }) =>
@@ -386,6 +410,7 @@ export function useUpdatePost() {
 }
 
 export function useDeletePosts() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (ids: number[]) => unwrap(api.api.posts.$delete({ json: { ids } })),
@@ -411,6 +436,7 @@ export function useDeletePosts() {
 }
 
 export function usePromotePosts() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (ids: number[]) => unwrap(api.api.posts.promote.$post({ json: { ids } })),
@@ -426,6 +452,7 @@ export function usePromotePosts() {
 }
 
 export function useDemotePosts() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (ids: number[]) => unwrap(api.api.posts.demote.$post({ json: { ids } })),
@@ -441,6 +468,7 @@ export function useDemotePosts() {
 }
 
 export function useDismissPosts() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (ids: number[]) => unwrap(api.api.posts.dismiss.$post({ json: { ids } })),
@@ -456,6 +484,7 @@ export function useDismissPosts() {
 }
 
 export function useUnschedulePosts() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (ids: number[]) => unwrap(api.api.posts.unschedule.$post({ json: { ids } })),
@@ -471,6 +500,7 @@ export function useUnschedulePosts() {
 }
 
 export function useSchedulePost() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, at }: { id: number; at: string }) =>
@@ -483,6 +513,7 @@ export function useSchedulePost() {
 }
 
 export function usePublishPost() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) =>
@@ -498,6 +529,7 @@ export function usePublishPost() {
 }
 
 export function useRetryPost() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) =>
@@ -513,6 +545,7 @@ export function useRetryPost() {
 }
 
 export function useLinkResources() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, resource_ids }: { id: number; resource_ids: number[] }) =>
@@ -531,6 +564,7 @@ export function useLinkResources() {
 }
 
 export function useUnlinkResources() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, resource_ids }: { id: number; resource_ids: number[] }) =>
@@ -549,6 +583,7 @@ export function useUnlinkResources() {
 }
 
 export function useTags() {
+  const api = useApi();
   return useQuery({
     queryKey: ['tags'],
     queryFn: () => unwrap(api.api.tags.$get()),
@@ -556,6 +591,7 @@ export function useTags() {
 }
 
 export function useTagResources() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { ids: number[]; tags: string[] }) =>
@@ -571,6 +607,7 @@ export function useTagResources() {
 }
 
 export function useUntagResources() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { ids: number[]; tags: string[] }) =>
@@ -586,6 +623,7 @@ export function useUntagResources() {
 }
 
 export function useTagPosts() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { ids: number[]; tags: string[] }) =>
@@ -601,6 +639,7 @@ export function useTagPosts() {
 }
 
 export function useUntagPosts() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { ids: number[]; tags: string[] }) =>
@@ -616,6 +655,7 @@ export function useUntagPosts() {
 }
 
 export function useCreateTag() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (name: string) => unwrap(api.api.tags.$post({ json: { name } })),
@@ -626,6 +666,7 @@ export function useCreateTag() {
 }
 
 export function useRenameTag() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, name }: { id: number; name: string }) =>
@@ -639,6 +680,7 @@ export function useRenameTag() {
 }
 
 export function useDeleteTags() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (ids: number[]) => unwrap(api.api.tags.$delete({ json: { ids } })),
@@ -651,6 +693,7 @@ export function useDeleteTags() {
 }
 
 export function useAttachMedia() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, resource_ids }: { id: number; resource_ids: number[] }) =>
@@ -669,6 +712,7 @@ export function useAttachMedia() {
 }
 
 export function useAttachFiles() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, files }: { id: number; files: File[] }) => {
@@ -690,6 +734,7 @@ export function useAttachFiles() {
 }
 
 export function useDetachMedia() {
+  const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...body }: { id: number } & PostMediaDetachBody) =>
@@ -707,6 +752,7 @@ export function useDetachMedia() {
 }
 
 export function useCounts(): { posts: number; resources: number } {
+  const api = useApi();
   const me = useMe();
   const query = useQuery({
     queryKey: ['counts'],

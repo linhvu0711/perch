@@ -1,10 +1,21 @@
 import { apiErrorSchema } from '@perch/core';
 import type { AppType } from '@perch/server';
-import { hc } from 'hono/client';
+import type { hc } from 'hono/client';
+import { createContext, createElement, type JSX, type ReactNode, useContext } from 'react';
 
-export const api = hc<AppType>('/', {
-  init: { credentials: 'same-origin' },
-});
+export type ApiClient = ReturnType<typeof hc<AppType>>;
+
+const ApiContext = createContext<ApiClient | null>(null);
+
+export function ApiProvider(props: { client: ApiClient; children: ReactNode }): JSX.Element {
+  return createElement(ApiContext.Provider, { value: props.client }, props.children);
+}
+
+export function useApi(): ApiClient {
+  const client = useContext(ApiContext);
+  if (client === null) throw new Error('useApi() needs an ApiProvider');
+  return client;
+}
 
 export class ApiError extends Error {
   constructor(
