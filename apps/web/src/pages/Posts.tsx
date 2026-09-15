@@ -58,11 +58,7 @@ export function Posts() {
 
   const filters = useMemo(
     () => ({
-      ...(status === 'missed'
-        ? { missed: true }
-        : status !== undefined
-          ? { status }
-          : {}),
+      ...(status === 'missed' ? { missed: true } : status !== undefined ? { status } : {}),
       ...(scheduled !== undefined ? { scheduled } : {}),
       ...(debouncedSearch !== '' ? { search: debouncedSearch } : {}),
       ...(tag !== undefined ? { tag: [tag] } : {}),
