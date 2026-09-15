@@ -1,8 +1,8 @@
 import {
-  ATTENTION_WINDOW_DAYS,
   addDays,
   DEFAULT_TIMEZONE,
   postCalendarTime,
+  STATUS_NEXT_DAYS,
   STATUS_WEEK_DAYS,
   X_COSTS_USD,
   zonedParts,
@@ -66,7 +66,7 @@ export function Dashboard() {
   ]);
 
   const today = zonedParts(now, timezone).date;
-  const calendar = useCalendar({ from: today, to: addDays(today, ATTENTION_WINDOW_DAYS) });
+  const calendar = useCalendar({ from: today, to: addDays(today, STATUS_NEXT_DAYS) });
 
   const dayLong = new Intl.DateTimeFormat('en-GB', {
     weekday: 'long',
@@ -202,13 +202,13 @@ export function Dashboard() {
           </div>
           <div className="section">
             <h2>
-              Next {ATTENTION_WINDOW_DAYS} days
-              <small>until {formatDayTitle(addDays(today, ATTENTION_WINDOW_DAYS))}</small>
+              Next {STATUS_NEXT_DAYS} days
+              <small>until {formatDayTitle(addDays(today, STATUS_NEXT_DAYS))}</small>
             </h2>
             <div className="card list">
               {upcomingDays.length === 0 ? (
                 <div className="empty">
-                  <b>Nothing scheduled</b>No posts in the next {ATTENTION_WINDOW_DAYS} days.
+                  <b>Nothing scheduled</b>No posts in the next {STATUS_NEXT_DAYS} days.
                 </div>
               ) : (
                 upcomingDays.map((day) => (

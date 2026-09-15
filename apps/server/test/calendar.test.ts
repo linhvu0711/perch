@@ -164,7 +164,7 @@ describe('GET /api/calendar', () => {
     ]);
   });
 
-  test('marks missed posts', async () => {
+  test('marks missed posts, and keeps them Missed once an account connects', async () => {
     // Given: clock 2026-09-04T10:00Z; 1 past draft, 2 past official,
     // 3 future draft, 4 past failed; no X account
     await createPost({ text: 'one' });
@@ -198,7 +198,7 @@ describe('GET /api/calendar', () => {
     // Then
     expect(connected.days[0]?.posts.map((p) => [p.id, p.missed])).toEqual([
       [1, true],
-      [2, false],
+      [2, true],
       [4, false],
     ]);
   });

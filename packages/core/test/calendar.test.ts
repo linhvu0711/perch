@@ -1,54 +1,14 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 
 import {
   calendarMark,
   calendarQuerySchema,
-  isMissed,
   monthGrid,
   monthOf,
   postCalendarTime,
   weekGrid,
   weekOf,
 } from '../src/calendar';
-
-const NOW = new Date('2026-09-04T10:00:00Z');
-
-describe('isMissed', () => {
-  test('isMissed marks a past draft', () => {
-    // Given: now 2026-09-04T10:00:00Z, account connected
-    // When
-    const missed = isMissed(
-      { status: 'draft', scheduled_at: '2026-09-02T09:00:00.000Z' },
-      NOW,
-      true,
-    );
-    // Then
-    expect(missed).toBe(true);
-  });
-
-  test('isMissed marks a past official post only without an account', () => {
-    // Given: an official post due in the past
-    const post = { status: 'official', scheduled_at: '2026-09-02T09:00:00.000Z' } as const;
-    // When / Then
-    expect(isMissed(post, NOW, false)).toBe(true);
-    expect(isMissed(post, NOW, true)).toBe(false);
-  });
-
-  test('isMissed is false for the future, for no time, and for published or failed', () => {
-    // Given: now 2026-09-04T10:00:00Z, no account
-    // When / Then
-    expect(
-      isMissed({ status: 'draft', scheduled_at: '2026-09-06T09:00:00.000Z' }, NOW, false),
-    ).toBe(false);
-    expect(isMissed({ status: 'draft', scheduled_at: null }, NOW, false)).toBe(false);
-    expect(
-      isMissed({ status: 'published', scheduled_at: '2026-09-02T09:00:00.000Z' }, NOW, false),
-    ).toBe(false);
-    expect(
-      isMissed({ status: 'failed', scheduled_at: '2026-09-02T09:00:00.000Z' }, NOW, false),
-    ).toBe(false);
-  });
-});
 
 test('calendarMark marks missed and failed', () => {
   // Given / When / Then

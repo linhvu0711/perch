@@ -17,7 +17,7 @@ afterEach(() => {
 
 describe('status', () => {
   test('prints the picture in JSON and on one screen', async () => {
-    // Given: a connected account, a due-soon draft, and a missed draft
+    // Given: a connected account, a future draft, and a missed draft
     connectTestAccount(server);
     const setup = makeCtx(server);
     await runCli(['post', 'create', '--text', 'Soon', '--json'], setup.ctx);
@@ -37,7 +37,6 @@ describe('status', () => {
       account: { username: 'perchtester' },
       missed_count: 1,
       failed_count: 0,
-      due_soon_count: 1,
       month_cost_usd: 0,
       last_pull_at: null,
     });

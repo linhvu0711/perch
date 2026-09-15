@@ -1,9 +1,10 @@
-import { ATTENTION_WINDOW_MS, STATUS_NEXT_DUE, STATUS_WEEK_MS, type Status } from '@perch/core';
-import { and, count, eq, gte, inArray, lt, lte, type SQL } from 'drizzle-orm';
+import { STATUS_NEXT_DUE, STATUS_WEEK_MS, type Status } from '@perch/core';
+import { and, count, eq, gte, inArray, lt, type SQL } from 'drizzle-orm';
 
 import { monthCostUsd } from './apiCalls';
 import type { Db } from './index';
-import { missedSql, upcomingPosts } from './posts';
+import { missedSql } from './postState';
+import { upcomingPosts } from './posts';
 import { posts } from './schema';
 import { getConnectedAccount, toXAccount } from './xAccounts';
 
@@ -27,15 +28,6 @@ export function statusSnapshot(db: Db, userId: number, timeZone: string, now: Da
     next_official: upcomingPosts(db, userId, now, { official: true, limit: 1 })[0] ?? null,
     missed_count: countWhere(db, and(eq(posts.userId, userId), missedSql(userId, now))!),
     failed_count: countWhere(db, and(eq(posts.userId, userId), eq(posts.status, 'failed'))!),
-    due_soon_count: countWhere(
-      db,
-      and(
-        eq(posts.userId, userId),
-        eq(posts.status, 'draft'),
-        gte(posts.scheduledAt, now),
-        lte(posts.scheduledAt, new Date(now.getTime() + ATTENTION_WINDOW_MS)),
-      )!,
-    ),
     week_official_count: countWhere(db, and(week, eq(posts.status, 'official'))!),
     week_draft_count: countWhere(db, and(week, eq(posts.status, 'draft'))!),
     month_cost_usd: monthCostUsd(db, userId, timeZone, now),

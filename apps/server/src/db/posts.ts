@@ -1,15 +1,11 @@
 import {
-  attentionReason,
   type CalendarPost,
   type CalendarQuery,
   type CalendarRange,
   DEMOTE_FROM,
   dayBoundsUtc,
-  dismissAction,
   effectiveCharLimit,
   estimateCost,
-  isMissed,
-  needsAttention,
   POST_MEDIA_MAX,
   type Post,
   type PostCreate,
@@ -57,6 +53,7 @@ import {
 import { decodePostCursor, encodePostCursor } from './cursor';
 import type { Db } from './index';
 import { type MediaFiles, mediaForPosts } from './postMedia';
+import { accountConnectedAtSql, attentionSql, missedSql, postState } from './postState';
 import { postLinks, postMedia, posts, postTags, resources, xAccounts } from './schema';
 import { getSettings } from './settings';
 import { addPostTags, tagIdsByName, tagsForPosts, tagsForResources } from './tags';
@@ -118,7 +115,7 @@ function toPost(
   now: Date,
 ): Post {
   const scheduled_at = row.scheduledAt?.toISOString() ?? null;
-  const missed = row.missed === 1;
+  const { missed, reason } = postState(row);
   return {
     id: row.id,
     status: row.status,
@@ -144,10 +141,7 @@ function toPost(
     media,
     ready,
     missed,
-    reason: attentionReason(
-      { status: row.status, scheduled_at, missed, last_error: row.lastError },
-      now,
-    ),
+    reason,
   };
 }
 
@@ -271,8 +265,8 @@ export async function createPost(
   return post;
 }
 
-export function getPost(db: Db, userId: number, id: number, now: Date): Post | null {
-  const row = db
+function postJoinRow(db: Db, userId: number, id: number, now: Date): PostJoinRow | undefined {
+  return db
     .select({
       ...getTableColumns(posts),
       username: xAccounts.username,
@@ -282,6 +276,10 @@ export function getPost(db: Db, userId: number, id: number, now: Date): Post | n
     .leftJoin(xAccounts, eq(xAccounts.id, posts.xAccountId))
     .where(and(eq(posts.id, id), eq(posts.userId, userId)))
     .get();
+}
+
+export function getPost(db: Db, userId: number, id: number, now: Date): Post | null {
+  const row = postJoinRow(db, userId, id, now);
   if (!row) return null;
 
   const limit = postLimit(db, userId);
@@ -395,7 +393,7 @@ export function listPosts(
   const pageRows = hasNextPage ? rows.slice(0, query.limit) : rows;
   const last = pageRows.at(-1);
 
-  const { items } = postsFromRows(db, userId, pageRows, now);
+  const items = postsFromRows(db, userId, pageRows, now);
 
   const sortTimeOf = (row: PostRow): number | null => {
     const value = row.status === 'published' ? row.publishedAt : row.scheduledAt;
@@ -431,12 +429,7 @@ function tagFilterConditions(db: Db, userId: number, tagNames: string[]): SQL[] 
   return conditions;
 }
 
-function postsFromRows(
-  db: Db,
-  userId: number,
-  rows: PostRow[],
-  now: Date,
-): { items: Post[]; accountConnected: boolean } {
+function postsFromRows(db: Db, userId: number, rows: PostJoinRow[], now: Date): Post[] {
   const limit = postLimit(db, userId);
   const accountConnected = getConnectedAccount(db, userId) !== null;
   const postIds = rows.map((row) => row.id);
@@ -446,7 +439,7 @@ function postsFromRows(
   const items = rows.map((row) => {
     const mediaItems = media.get(row.id) ?? [];
     const post = toPost(
-      { username: null, missed: 0, ...row },
+      row,
       links.get(row.id) ?? [],
       mediaItems,
       limit,
@@ -461,7 +454,7 @@ function postsFromRows(
     );
     return { ...post, title: postListTitle(post.title, post.text) };
   });
-  return { items, accountConnected };
+  return items;
 }
 
 /** Posts in `[query.from, query.to]` grouped by calendar day in `timeZone`, ascending. */
@@ -493,7 +486,7 @@ export function calendarDays(
     .orderBy(asc(sortTime), asc(posts.id))
     .all();
 
-  const { items, accountConnected } = postsFromRows(db, userId, rows, now);
+  const items = postsFromRows(db, userId, rows, now);
 
   const byDay = new Map<string, CalendarPost[]>();
   for (const post of items) {
@@ -501,12 +494,7 @@ export function calendarDays(
     if (at === null) continue;
     const date = zonedParts(new Date(at), timeZone).date;
     const day = byDay.get(date) ?? [];
-    const missed = isMissed(post, now, accountConnected);
-    day.push({
-      ...post,
-      missed,
-      reason: attentionReason({ ...post, missed }, now),
-    });
+    day.push(post);
     byDay.set(date, day);
   }
 
@@ -548,29 +536,6 @@ export function getPostRow(db: Db, userId: number, id: number): PostRow | undefi
     .get();
 }
 
-function accountConnectedAtSql(userId: number | typeof posts.userId, at: SQL): SQL {
-  return sql`EXISTS (select 1 from x_accounts where x_accounts.user_id = ${userId} and x_accounts.connected_at <= ${at} and (x_accounts.disconnected_at is null or x_accounts.disconnected_at > ${at}))`;
-}
-
-/**
- * Scheduled posts whose time has already passed without Perch sending them:
- * drafts that were never promoted, or officials scheduled while the account
- * was disconnected.
- */
-export function missedSql(userId: number | typeof posts.userId, now: Date): SQL {
-  return sql`${posts.scheduledAt} IS NOT NULL
-    AND ${posts.scheduledAt} < ${now.getTime()}
-    AND (
-      ${posts.status} = 'draft'
-      OR (${posts.status} = 'official' AND NOT ${accountConnectedAtSql(userId, sql`${posts.scheduledAt}`)})
-    )`;
-}
-
-/** Issues: Missed or Failed Posts. A Draft due soon is not an Issue. */
-export function attentionSql(userId: number | typeof posts.userId, now: Date): SQL {
-  return or(missedSql(userId, now), eq(posts.status, 'failed'))!;
-}
-
 /** Official posts due to be sent at `now`, oldest schedule time first. */
 export function duePosts(db: Db, now: Date): PostRow[] {
   return db
@@ -596,8 +561,13 @@ export function upcomingPosts(
   options: { official?: boolean; limit: number },
 ): Post[] {
   const rows = db
-    .select()
+    .select({
+      ...getTableColumns(posts),
+      username: xAccounts.username,
+      missed: sql<number>`${missedSql(userId, now)}`,
+    })
     .from(posts)
+    .leftJoin(xAccounts, eq(xAccounts.id, posts.xAccountId))
     .where(
       and(
         eq(posts.userId, userId),
@@ -610,7 +580,7 @@ export function upcomingPosts(
     .orderBy(asc(posts.scheduledAt), asc(posts.id))
     .limit(options.limit)
     .all();
-  return postsFromRows(db, userId, rows, now).items;
+  return postsFromRows(db, userId, rows, now);
 }
 
 function resourceExists(db: Db, userId: number, resourceId: number): boolean {
@@ -848,17 +818,17 @@ export function unschedulePosts(
 export function dismissPosts(db: Db, userId: number, ids: number[], now: Date): PostStatusResponse {
   return {
     results: ids.map((id) => {
-      const post = getPost(db, userId, id, now);
-      if (post === null) {
+      const row = postJoinRow(db, userId, id, now);
+      if (row === undefined) {
         return statusResultError(id, 'not_found', `Post ${id} not found`);
       }
-      if (!needsAttention(post)) {
+      const { dismiss } = postState(row);
+      if (dismiss === null) {
         return statusResultError(id, 'invalid_status', `Post ${id} needs no attention`);
       }
-      const action = dismissAction(post.status);
-      const guard = and(eq(posts.id, id), eq(posts.userId, userId), eq(posts.status, post.status));
+      const guard = and(eq(posts.id, id), eq(posts.userId, userId), eq(posts.status, row.status));
       const updated =
-        action === 'demote'
+        dismiss === 'demote'
           ? db
               .update(posts)
               .set({

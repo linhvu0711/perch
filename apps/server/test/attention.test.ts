@@ -56,7 +56,7 @@ function setPost(
   sqlite.close();
 }
 
-/** The seven-post seed: missed draft, missed official, failed, due-soon draft, later draft, future official, untimed. */
+/** The seven-post seed: missed draft, missed official, failed, future draft, later draft, future official, untimed. */
 async function seedAttentionPosts(): Promise<void> {
   await createPost({ text: 'Old draft' });
   await createPost({ text: 'Early official', official: true });
@@ -112,33 +112,10 @@ describe('needs attention', () => {
     const body = (await response.json()) as PostList;
     expect(body.items.map((post) => post.id)).toEqual([5, 4, 6, 7]);
     expect(body.total).toBe(4);
-    expect(body.items.map((post) => post.reason)).toEqual([null, 'still a draft', null, null]);
+    expect(body.items.map((post) => post.reason)).toEqual([null, null, null, null]);
   });
 
-  test('a draft at the window edge is due soon but not an Issue', async () => {
-    // Given: a draft at now + 3 days and one just past it
-    connectTestAccount(server);
-    await createPost({ text: 'Edge' });
-    await createPost({ text: 'Beyond' });
-    setPost(1, { scheduledAt: new Date('2026-09-07T10:31:00Z') });
-    setPost(2, { scheduledAt: new Date('2026-09-07T10:31:00.001Z') });
-    server.clock.set(new Date('2026-09-04T10:31:00Z'));
-
-    // When
-    const response = await request('/api/posts?needs_attention=true');
-    const statusResponse = await request('/api/status');
-
-    // Then
-    const body = (await response.json()) as PostList;
-    expect(body.items).toEqual([]);
-    expect(body.total).toBe(0);
-    const status = (await statusResponse.json()) as Status;
-    expect(status.due_soon_count).toBe(1);
-    expect(status.missed_count).toBe(0);
-    expect(status.failed_count).toBe(0);
-  });
-
-  test('dismiss unschedules a missed draft, demotes a failed post, leaves a due-soon draft alone, deletes nothing', async () => {
+  test('dismiss unschedules a missed draft, demotes a failed post, leaves a future draft alone, deletes nothing', async () => {
     // Given: the seven-post seed, account connected, clock 2026-09-04T10:31Z
     connectTestAccount(server);
     await seedAttentionPosts();
@@ -195,7 +172,7 @@ describe('needs attention', () => {
     const fourth = await getPost(4);
     expect(fourth.status).toBe('draft');
     expect(fourth.scheduled_at).toBe('2026-09-06T09:00:00.000Z');
-    expect(fourth.reason).toBe('still a draft');
+    expect(fourth.reason).toBeNull();
   });
 
   test('dismiss reports unknown ids', async () => {
@@ -237,7 +214,7 @@ describe('needs attention', () => {
     expect(body.next_official?.id).toBe(6);
     expect(body.missed_count).toBe(2);
     expect(body.failed_count).toBe(1);
-    expect(body.due_soon_count).toBe(1);
+    expect(body).not.toHaveProperty('due_soon_count');
     expect(body.week_official_count).toBe(2);
     expect(body.week_draft_count).toBe(3);
     expect(body.month_cost_usd).toBe(0);
@@ -256,7 +233,6 @@ describe('needs attention', () => {
       next_official: null,
       missed_count: 0,
       failed_count: 0,
-      due_soon_count: 0,
       week_official_count: 0,
       week_draft_count: 0,
       month_cost_usd: 0,
