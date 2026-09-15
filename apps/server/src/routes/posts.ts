@@ -32,7 +32,6 @@ import { getSettings } from '../db/settings';
 import { tagPosts, untagPosts } from '../db/tags';
 import { notFound, validationHook } from '../errors';
 import { MediaAttachError } from '../media';
-import { mediaFileExists, removeMediaDir } from '../images';
 import { InFlightError, PostNotReadyError } from '../postLifecycle';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
@@ -51,7 +50,7 @@ export function postsRoutes(deps: AppDeps) {
           c.req.valid('query'),
           getSettings(deps.db, userId).timezone,
           deps.clock.now(),
-          mediaFileExists(deps.uploadDir),
+          deps.media.exists,
         ),
         200,
       );
@@ -64,7 +63,7 @@ export function postsRoutes(deps: AppDeps) {
         userId,
         body,
         deps.clock.now(),
-        mediaFileExists(deps.uploadDir),
+        deps.media.exists,
       );
       const imageIds = new Set(
         post.links.filter((link) => link.type === 'image').map((link) => link.resource_id),
@@ -76,7 +75,7 @@ export function postsRoutes(deps: AppDeps) {
         const failed = attached.results.filter((item) => !item.ok);
         if (failed.length > 0) {
           deletePosts(deps.db, userId, [post.id], (postId) =>
-            removeMediaDir(deps.uploadDir, userId, postId),
+            deps.media.removeAll(userId, postId),
           );
           throw new MediaAttachError(failed.map((item) => item.error.message));
         }
@@ -85,7 +84,7 @@ export function postsRoutes(deps: AppDeps) {
         const result = deps.lifecycle.promote(userId, [post.id]).results[0];
         if (result !== undefined && result.ok === false) {
           deletePosts(deps.db, userId, [post.id], (postId) =>
-            removeMediaDir(deps.uploadDir, userId, postId),
+            deps.media.removeAll(userId, postId),
           );
           throw new PostNotReadyError(
             result.error.errors ?? [{ path: 'status', message: result.error.message }],
@@ -96,7 +95,7 @@ export function postsRoutes(deps: AppDeps) {
           userId,
           post.id,
           deps.clock.now(),
-          mediaFileExists(deps.uploadDir),
+          deps.media.exists,
         );
         if (!fresh) throw notFound('Post', post.id);
         return c.json(fresh, 201);
@@ -106,7 +105,7 @@ export function postsRoutes(deps: AppDeps) {
         userId,
         post.id,
         deps.clock.now(),
-        mediaFileExists(deps.uploadDir),
+        deps.media.exists,
       );
       if (!created) throw new Error('post insert failed');
       return c.json(created, 201);
@@ -165,7 +164,7 @@ export function postsRoutes(deps: AppDeps) {
         c.get('user').id,
         id,
         deps.clock.now(),
-        mediaFileExists(deps.uploadDir),
+        deps.media.exists,
       );
       if (!post) throw notFound('Post', id);
       return c.json(post, 200);
@@ -189,7 +188,7 @@ export function postsRoutes(deps: AppDeps) {
           id,
           c.req.valid('json'),
           deps.clock.now(),
-          mediaFileExists(deps.uploadDir),
+          deps.media.exists,
         );
         if (!post) throw notFound('Post', id);
         return c.json(post, 200);
@@ -310,7 +309,7 @@ export function postsRoutes(deps: AppDeps) {
           deps.db,
           userId,
           c.req.valid('json').ids,
-          (postId) => removeMediaDir(deps.uploadDir, userId, postId),
+          (postId) => deps.media.removeAll(userId, postId),
           (id) => deps.lifecycle.isInFlight(id),
         ),
         200,

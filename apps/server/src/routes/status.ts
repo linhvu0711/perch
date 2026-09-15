@@ -3,7 +3,6 @@ import { Hono } from 'hono';
 import type { AppDeps, AppEnv } from '../app';
 import { getSettings } from '../db/settings';
 import { statusSnapshot } from '../db/status';
-import { mediaFileExists } from '../images';
 
 export function statusRoutes(deps: AppDeps) {
   return new Hono<AppEnv>().get('/', (c) => {
@@ -15,7 +14,7 @@ export function statusRoutes(deps: AppDeps) {
         user.id,
         settings.timezone,
         deps.clock.now(),
-        mediaFileExists(deps.uploadDir),
+        deps.media.exists,
       ),
       200,
     );

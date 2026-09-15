@@ -6,7 +6,6 @@ import type { AppDeps, AppEnv } from '../app';
 import { calendarDays } from '../db/posts';
 import { getSettings } from '../db/settings';
 import { validationHook } from '../errors';
-import { mediaFileExists } from '../images';
 
 export function calendarRoutes(deps: AppDeps) {
   return new Hono<AppEnv>().get(
@@ -21,7 +20,7 @@ export function calendarRoutes(deps: AppDeps) {
           c.req.valid('query'),
           getSettings(deps.db, userId).timezone,
           deps.clock.now(),
-          mediaFileExists(deps.uploadDir),
+          deps.media.exists,
         ),
         200,
       );

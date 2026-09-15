@@ -1,3 +1,7 @@
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+
 import {
   POST_MEDIA_MAX,
   type Post,
@@ -22,14 +26,7 @@ import {
 } from './db/posts';
 import { getResource } from './db/resources';
 import { DomainError } from './errors';
-import {
-  copyToR2,
-  inspectImage,
-  mediaFileExists,
-  readMedia,
-  removeMedia,
-  storeMedia,
-} from './images';
+import { copyToR2, inspectImage } from './images';
 import type { R2Client } from './r2/client';
 
 export class MediaAttachError extends DomainError {
@@ -59,6 +56,7 @@ export interface MediaService {
     postId: number,
   ): Promise<Array<{ position: number; mime: PostMedia['mime']; bytes: Uint8Array | null }>>;
   exists(rel: string): boolean;
+  removeAll(userId: number, postId: number): void;
 }
 
 export class MissingMediaPositionError extends DomainError {
@@ -72,6 +70,44 @@ export interface MediaFileInput {
   bytes: Uint8Array;
 }
 
+function dirFor(uploadDir: string, userId: number, postId: number): string {
+  return path.join(uploadDir, String(userId), 'posts', String(postId));
+}
+
+/** Writes a post-media copy under <uploadDir>/<userId>/posts/<postId>/ and returns the path relative to uploadDir. */
+async function store(
+  uploadDir: string,
+  userId: number,
+  postId: number,
+  bytes: Uint8Array,
+  ext: string,
+): Promise<string> {
+  const dir = dirFor(uploadDir, userId, postId);
+  fs.mkdirSync(dir, { recursive: true });
+  const name = `${crypto.randomUUID()}.${ext}`;
+  await Bun.write(path.join(dir, name), bytes);
+  return `${userId}/posts/${postId}/${name}`;
+}
+
+/** Reads bytes for a stored media path, or null when the file is gone. */
+async function read(uploadDir: string, rel: string): Promise<Uint8Array | null> {
+  const full = path.join(uploadDir, rel);
+  return fs.existsSync(full) ? Bun.file(full).bytes() : null;
+}
+
+/** Deletes one media file and removes the post's media directory when empty. */
+function remove(uploadDir: string, rel: string): void {
+  const full = path.join(uploadDir, rel);
+  fs.rmSync(full, { force: true });
+  const dir = path.dirname(full);
+  if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
+}
+
+/** Deletes a post's whole media directory. */
+function removeDir(uploadDir: string, userId: number, postId: number): void {
+  fs.rmSync(dirFor(uploadDir, userId, postId), { recursive: true, force: true });
+}
+
 export function createMediaService(deps: {
   db: Db;
   uploadDir: string;
@@ -79,7 +115,7 @@ export function createMediaService(deps: {
   clock: Clock;
   logError: (error: unknown) => void;
 }): MediaService {
-  const fileExists = mediaFileExists(deps.uploadDir);
+  const fileExists = (rel: string) => fs.existsSync(path.join(deps.uploadDir, rel));
 
   return {
     async attachFromResources(userId, postId, ids) {
@@ -112,7 +148,7 @@ export function createMediaService(deps: {
           });
           continue;
         }
-        const bytes = await readMedia(deps.uploadDir, resource.path);
+        const bytes = await read(deps.uploadDir, resource.path);
         if (!bytes) {
           results.push({
             id,
@@ -123,7 +159,7 @@ export function createMediaService(deps: {
         }
 
         const ext = resource.path.split('.').pop() ?? 'png';
-        const rel = await storeMedia(deps.uploadDir, userId, postId, bytes, ext);
+        const rel = await store(deps.uploadDir, userId, postId, bytes, ext);
         await copyToR2(deps.r2, rel, bytes, deps.logError);
         const media = insertMediaRow(
           deps.db,
@@ -164,7 +200,7 @@ export function createMediaService(deps: {
           results.push({ name: file.name, ok: false, error: result.error });
           continue;
         }
-        const rel = await storeMedia(deps.uploadDir, userId, postId, file.bytes, result.ext);
+        const rel = await store(deps.uploadDir, userId, postId, file.bytes, result.ext);
         await copyToR2(deps.r2, rel, file.bytes, deps.logError);
         const media = insertMediaRow(
           deps.db,
@@ -212,7 +248,7 @@ export function createMediaService(deps: {
       let cleanupError: unknown;
       for (const row of deleted) {
         try {
-          removeMedia(deps.uploadDir, row.path);
+          remove(deps.uploadDir, row.path);
         } catch (error) {
           cleanupError ??= error;
         }
@@ -227,12 +263,16 @@ export function createMediaService(deps: {
         media.push({
           position: row.position,
           mime: row.mime as PostMedia['mime'],
-          bytes: await readMedia(deps.uploadDir, row.path),
+          bytes: await read(deps.uploadDir, row.path),
         });
       }
       return media;
     },
 
     exists: fileExists,
+
+    removeAll(userId, postId) {
+      removeDir(deps.uploadDir, userId, postId);
+    },
   };
 }
