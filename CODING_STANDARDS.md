@@ -55,7 +55,7 @@ is only about how code is written.
 
 ## Tests
 
-- Runner is `bun test`. [bun]
+- Runner is `bun test`. [bun] `bun run test` at the root runs every workspace; bare `bun test` skips `apps/web`, whose tests need the DOM preload in `apps/web/bunfig.toml`, so `cd apps/web && bun test` runs them alone.
 - Tests live in a `test/` folder next to `src/` and are named `<topic>.test.ts`, or `<topic>.test.tsx` when they render.
 - A test drives Perch the way a client does and asserts on what a client can see: HTTP responses, rows the next request returns, files that exist, stdout, stderr, exit codes, rendered text, and the calls the fake X client received.
 - The seam is `createTestServer` in `apps/server/src/testing.ts`. Server tests send requests to the app in-process. CLI tests inject that app as `fetch` through `makeCtx` in `apps/cli/test/helpers.ts`. Web tests render a page inside `ApiProvider` with a client whose `fetch` is that app.

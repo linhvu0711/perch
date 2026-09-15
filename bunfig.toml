@@ -1,2 +1,5 @@
 [install]
 exact = true
+
+[test]
+pathIgnorePatterns = ["apps/web/**"]

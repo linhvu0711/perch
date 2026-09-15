@@ -1,4 +1,4 @@
-import type { Post, Resource } from '@perch/core';
+import type { Resource } from '@perch/core';
 import { IMAGE_BYTES_MAX, IMAGE_MIME_TYPES, POST_MEDIA_MAX } from '@perch/core';
 import {
   ArrowLeft,
@@ -23,6 +23,7 @@ import {
   useAttachFiles,
   useAttachMedia,
   useLinkResources,
+  usePost,
   useResource,
   useResources,
   useUnlinkResources,
@@ -51,12 +52,11 @@ function insertableText(resource: Resource): string {
 }
 
 export function ResourcesDrawer(props: {
-  post: Post | null;
+  postId: number;
   open: boolean;
   initialType?: 'all' | 'md' | 'image';
   onClose(): void;
   onInsertText(text: string): void;
-  ensurePostId?(): Promise<number | null>;
   onNavigate?(to: string): void;
 }): JSX.Element {
   const navigate = useNavigate();
@@ -97,8 +97,9 @@ export function ResourcesDrawer(props: {
   const items = resources.data?.pages.flatMap((page) => page.items) ?? [];
   const detail = useResource(viewId);
 
-  const linkedIds = new Set(props.post?.links.map((link) => link.resource_id) ?? []);
-  const mediaCount = props.post?.media.length ?? 0;
+  const post = usePost(props.postId).data;
+  const linkedIds = new Set(post?.links.map((link) => link.resource_id) ?? []);
+  const mediaCount = post?.media.length ?? 0;
 
   const act = (fn: () => Promise<unknown>, message: string) => {
     void fn()
@@ -108,8 +109,7 @@ export function ResourcesDrawer(props: {
 
   const toggleLink = (resource: Resource) => {
     void (async () => {
-      const postId = props.post?.id ?? (await props.ensurePostId?.());
-      if (postId === undefined || postId === null) return;
+      const postId = props.postId;
       if (linkedIds.has(resource.id)) {
         act(
           () =>
@@ -127,8 +127,7 @@ export function ResourcesDrawer(props: {
 
   const attach = (resource: Resource) => {
     void (async () => {
-      const postId = props.post?.id ?? (await props.ensurePostId?.());
-      if (postId === undefined || postId === null) return;
+      const postId = props.postId;
       try {
         const response = await attachMedia.mutateAsync({
           id: postId,
@@ -165,8 +164,7 @@ export function ResourcesDrawer(props: {
       }
       if (overflow) toast(`${POST_MEDIA_MAX} images max`, 'warn');
       if (files.length === 0) return;
-      const postId = props.post?.id ?? (await props.ensurePostId?.());
-      if (postId === undefined || postId === null) return;
+      const postId = props.postId;
       try {
         const response = await attachFiles.mutateAsync({ id: postId, files });
         const failed = response.results.filter((result) => !result.ok);
@@ -190,8 +188,8 @@ export function ResourcesDrawer(props: {
     if (text === '') return;
     props.onInsertText(text);
     void (async () => {
-      const postId = props.post?.id ?? (await props.ensurePostId?.());
-      if (postId !== undefined && postId !== null && !linkedIds.has(resource.id)) {
+      const postId = props.postId;
+      if (!linkedIds.has(resource.id)) {
         await linkResources
           .mutateAsync({ id: postId, resource_ids: [resource.id] })
           .catch((error: unknown) => toast(errorMessage(error), 'warn'));

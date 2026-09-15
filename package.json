@@ -15,7 +15,7 @@
     "start": "bun apps/server/src/index.ts",
     "start:local": "bun run build && bun run start",
     "build": "bun run --filter @perch/web build",
-    "test": "bun test",
+    "test": "bun test && bun run --filter @perch/web test",
     "typecheck": "bun run --filter '*' typecheck",
     "lint": "biome lint .",
     "format": "biome format --write .",

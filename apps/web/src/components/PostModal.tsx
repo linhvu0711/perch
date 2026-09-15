@@ -29,13 +29,12 @@ import { useNavigate, useParams } from 'react-router';
 
 import { ApiError, errorMessage } from '@/lib/api';
 import { formatSchedule } from '@/lib/format';
+import { usePostEditor } from '@/lib/postEditor';
 import {
   useAccount,
-  useCreatePost,
   useDeletePosts,
   useDemotePosts,
   useDetachMedia,
-  usePost,
   usePromotePosts,
   usePublishPost,
   useRetryPost,
@@ -45,7 +44,6 @@ import {
   useUnlinkResources,
   useUnschedulePosts,
   useUntagPosts,
-  useUpdatePost,
 } from '@/lib/queries';
 
 import { ConfirmDialog } from './ConfirmDialog';
@@ -95,12 +93,10 @@ export function PostModal(): JSX.Element | null {
   const invalidId = !isNew && parsedId === null;
 
   const queryClient = useQueryClient();
-  const postQuery = usePost(isNew || invalidId ? null : parsedId);
+  const editor = usePostEditor(isNew || invalidId ? null : parsedId);
   const account = useAccount();
   const settings = useSettings();
   const timeZone = settings.data?.timezone ?? DEFAULT_TIMEZONE;
-  const createPost = useCreatePost();
-  const updatePost = useUpdatePost();
   const deletePosts = useDeletePosts();
   const promotePosts = usePromotePosts();
   const demotePosts = useDemotePosts();
@@ -114,26 +110,15 @@ export function PostModal(): JSX.Element | null {
   const detachMedia = useDetachMedia();
   const modalRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const timerRef = useRef<number>(undefined);
-  const closedRef = useRef(false);
-  const savedRef = useRef(false);
-  const pendingRef = useRef<{ title?: string; text?: string }>({});
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerType, setDrawerType] = useState<'all' | 'image'>('all');
   const [confirm, setConfirm] = useState<'delete' | 'publish' | 'retry' | null>(null);
   const [confirmDetach, setConfirmDetach] = useState<PostMedia | null>(null);
   const [lightbox, setLightbox] = useState<PostMedia | null>(null);
-  const [drafts, setDrafts] = useState<{ title: string; text: string } | null>(null);
 
-  const post = postQuery.data;
+  const post = editor.post;
   const readOnly = post?.status === 'published';
   const currentId = post?.id;
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset when the post changes
-  useEffect(() => {
-    setDrafts(null);
-    savedRef.current = false;
-  }, [currentId]);
 
   useEffect(() => {
     if (invalidId) navigate('..', { replace: true });
@@ -147,96 +132,17 @@ export function PostModal(): JSX.Element | null {
   }, [queryClient]);
 
   useEffect(() => {
-    if (postQuery.error instanceof ApiError && postQuery.error.status === 404) {
+    if (editor.error instanceof ApiError && editor.error.status === 404) {
       toast('Post not found', 'warn');
       navigate('..', { replace: true });
     }
-  }, [navigate, postQuery.error]);
+  }, [navigate, editor.error]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: focus when the post changes
   useEffect(() => {
     const modal = modalRef.current;
     if (modal && !modal.contains(document.activeElement)) modal.focus();
   }, [currentId]);
-
-  const createRef = useRef<Promise<Post> | null>(null);
-
-  const ensureCreated = useCallback((): Promise<Post> => {
-    createRef.current ??= createPost
-      .mutateAsync({})
-      .then((created) => {
-        savedRef.current = true;
-        if (!closedRef.current) {
-          navigate(`/posts/${created.id}`, { replace: true });
-        }
-        return created;
-      })
-      .catch((error: unknown) => {
-        createRef.current = null;
-        throw error;
-      });
-    return createRef.current;
-  }, [createPost, navigate]);
-
-  const queueRef = useRef<Promise<boolean>>(Promise.resolve(true));
-
-  const flush = useCallback((): Promise<boolean> => {
-    queueRef.current = queueRef.current.then(async () => {
-      const patch = pendingRef.current;
-      const hasChanges = patch.title !== undefined || patch.text !== undefined;
-      pendingRef.current = {};
-      let id = currentId;
-      if (id === undefined) {
-        if (!hasChanges && createRef.current === null) return true;
-        try {
-          id = (await ensureCreated()).id;
-        } catch (error) {
-          pendingRef.current = { ...patch, ...pendingRef.current };
-          toast(errorMessage(error), 'warn');
-          return false;
-        }
-      }
-      if (!hasChanges) return true;
-      try {
-        await updatePost.mutateAsync({ id, patch });
-        savedRef.current = true;
-        return true;
-      } catch (error) {
-        pendingRef.current = { ...patch, ...pendingRef.current };
-        toast(errorMessage(error), 'warn');
-        return false;
-      }
-    });
-    return queueRef.current;
-  }, [currentId, ensureCreated, updatePost]);
-
-  const drain = useCallback(async (): Promise<boolean> => {
-    let ok = await flush();
-    while (
-      ok &&
-      (pendingRef.current.title !== undefined || pendingRef.current.text !== undefined)
-    ) {
-      ok = await flush();
-    }
-    return ok;
-  }, [flush]);
-
-  const requestClose = useCallback(() => {
-    closedRef.current = true;
-    if (timerRef.current !== undefined) window.clearTimeout(timerRef.current);
-    void (async () => {
-      const ok = await drain();
-      if (!ok) {
-        closedRef.current = false;
-        return;
-      }
-      if (savedRef.current) toast('Saved');
-      navigate('..');
-    })().catch((error: unknown) => {
-      closedRef.current = false;
-      toast(errorMessage(error), 'warn');
-    });
-  }, [drain, navigate]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -249,11 +155,11 @@ export function PostModal(): JSX.Element | null {
         setConfirmDetach(null);
         return;
       }
-      requestClose();
+      editor.close();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [confirm, confirmDetach, requestClose]);
+  }, [confirm, confirmDetach, editor]);
 
   const linkTitle = useCallback(
     (resourceId: number): string =>
@@ -285,40 +191,22 @@ export function PostModal(): JSX.Element | null {
     [linkTitle],
   );
 
-  const scheduleSave = useCallback(
-    (patch: { title?: string; text?: string }) => {
-      pendingRef.current = { ...pendingRef.current, ...patch };
-      if (timerRef.current !== undefined) window.clearTimeout(timerRef.current);
-      timerRef.current = window.setTimeout(() => void flush(), 600);
-    },
-    [flush],
-  );
-
-  const ensurePostId = useCallback(async (): Promise<number | null> => {
-    if (timerRef.current !== undefined) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = undefined;
-    }
-    await flush();
-    if (currentId !== undefined) return currentId;
-    try {
-      return (await ensureCreated()).id;
-    } catch (error) {
-      toast(errorMessage(error), 'warn');
-      return null;
-    }
-  }, [currentId, ensureCreated, flush]);
-
   const openResource = useCallback(
     (to: string) => {
-      if (timerRef.current !== undefined) window.clearTimeout(timerRef.current);
       void (async () => {
-        const ok = await drain();
-        if (ok) navigate(to);
+        const id = await editor.ensureId();
+        if (id !== null) navigate(to);
       })().catch((error: unknown) => toast(errorMessage(error), 'warn'));
     },
-    [drain, navigate],
+    [editor, navigate],
   );
+
+  async function openDrawer(type: 'all' | 'image') {
+    const id = await editor.ensureId();
+    if (id === null) return;
+    setDrawerType(type);
+    setDrawerOpen(true);
+  }
 
   async function confirmDelete() {
     if (currentId === undefined) return;
@@ -343,7 +231,7 @@ export function PostModal(): JSX.Element | null {
     // biome-ignore lint/a11y/noStaticElementInteractions: scrim click-to-close
     <div
       className="scrim"
-      onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
+      onMouseDown={(event) => event.target === event.currentTarget && editor.close()}
     >
       <div
         className="modal"
@@ -356,7 +244,7 @@ export function PostModal(): JSX.Element | null {
         <div className="mhead">
           <span className="id">{isNew ? 'new' : `#${parsedId}`}</span>
           <div className="right">
-            <IconButton label="Close (Esc)" icon={X} variant="ghost" onClick={requestClose} />
+            <IconButton label="Close (Esc)" icon={X} variant="ghost" onClick={editor.close} />
           </div>
         </div>
         <div className="mbody">
@@ -366,19 +254,19 @@ export function PostModal(): JSX.Element | null {
     </div>
   );
 
-  if (!isNew && postQuery.isPending) {
+  if (!isNew && editor.isPending) {
     return loadingShell(<div className="muted">Loading…</div>);
   }
-  if (!isNew && postQuery.isError) {
-    return loadingShell(<div className="muted">{errorMessage(postQuery.error)}</div>);
+  if (!isNew && editor.error !== null) {
+    return loadingShell(<div className="muted">{errorMessage(editor.error)}</div>);
   }
 
   const viewPost: Post = {
     ...(post ?? EMPTY_POST),
-    title: drafts?.title ?? post?.title ?? '',
-    text: drafts?.text ?? post?.text ?? '',
-    character_count: weightedLength(drafts?.text ?? post?.text ?? ''),
-    estimated_cost: estimateCost(drafts?.text ?? post?.text ?? ''),
+    title: editor.title,
+    text: editor.text,
+    character_count: weightedLength(editor.text),
+    estimated_cost: estimateCost(editor.text),
     limit: post?.limit ?? account.data?.char_limit ?? CHAR_LIMIT_DEFAULT,
   };
   const over = viewPost.character_count > viewPost.limit;
@@ -390,7 +278,7 @@ export function PostModal(): JSX.Element | null {
       {/* biome-ignore lint/a11y/noStaticElementInteractions: scrim click-to-close */}
       <div
         className="scrim"
-        onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
+        onMouseDown={(event) => event.target === event.currentTarget && editor.close()}
       >
         <div
           className="modal"
@@ -423,12 +311,11 @@ export function PostModal(): JSX.Element | null {
                   icon={ArrowUp}
                   variant="primary"
                   onClick={() => {
-                    if (currentId === undefined) return;
                     void (async () => {
-                      const ok = await drain();
-                      if (!ok) return;
+                      const id = await editor.ensureId();
+                      if (id === null) return;
                       try {
-                        const response = await promotePosts.mutateAsync([currentId]);
+                        const response = await promotePosts.mutateAsync([id]);
                         const result = response.results[0];
                         if (result !== undefined && result.ok) {
                           toast('Promoted');
@@ -448,10 +335,9 @@ export function PostModal(): JSX.Element | null {
                   icon={Send}
                   variant="default"
                   onClick={() => {
-                    if (currentId === undefined) return;
                     void (async () => {
-                      const ok = await drain();
-                      if (!ok) return;
+                      const id = await editor.ensureId();
+                      if (id === null) return;
                       const bad = readyChecks({
                         text: viewPost.text,
                         limit: viewPost.limit,
@@ -503,7 +389,7 @@ export function PostModal(): JSX.Element | null {
                   onClick={() => setConfirm('delete')}
                 />
               )}
-              <IconButton label="Close (Esc)" icon={X} variant="ghost" onClick={requestClose} />
+              <IconButton label="Close (Esc)" icon={X} variant="ghost" onClick={editor.close} />
             </div>
           </div>
           <div className="mbody">
@@ -541,13 +427,7 @@ export function PostModal(): JSX.Element | null {
                   placeholder="Title, only shown in Perch"
                   readOnly={readOnly}
                   value={viewPost.title}
-                  onChange={(event) => {
-                    setDrafts((prev) => ({
-                      title: event.target.value,
-                      text: prev?.text ?? post?.text ?? '',
-                    }));
-                    scheduleSave({ title: event.target.value });
-                  }}
+                  onChange={(event) => editor.setTitle(event.target.value)}
                 />
                 <textarea
                   ref={textareaRef}
@@ -556,13 +436,7 @@ export function PostModal(): JSX.Element | null {
                   placeholder="What's happening?"
                   readOnly={readOnly}
                   value={viewPost.text}
-                  onChange={(event) => {
-                    setDrafts((prev) => ({
-                      title: prev?.title ?? post?.title ?? '',
-                      text: event.target.value,
-                    }));
-                    scheduleSave({ text: event.target.value });
-                  }}
+                  onChange={(event) => editor.setText(event.target.value)}
                 />
               </div>
               <div className="field">
@@ -586,10 +460,7 @@ export function PostModal(): JSX.Element | null {
                           title="Add image"
                           aria-label="Add image"
                           disabled={readOnly}
-                          onClick={() => {
-                            setDrawerType('image');
-                            setDrawerOpen(true);
-                          }}
+                          onClick={() => void openDrawer('image')}
                         >
                           {index === viewPost.media.length && <Plus size={18} strokeWidth={1.75} />}
                         </button>
@@ -649,7 +520,7 @@ export function PostModal(): JSX.Element | null {
                   disabled={readOnly}
                   onSet={(at) => {
                     void (async () => {
-                      const postId = await ensurePostId();
+                      const postId = await editor.ensureId();
                       if (postId === null) return;
                       try {
                         await schedulePost.mutateAsync({ id: postId, at });
@@ -682,10 +553,7 @@ export function PostModal(): JSX.Element | null {
                       <IconButton
                         label="Browse resources"
                         icon={FolderOpen}
-                        onClick={() => {
-                          setDrawerType('all');
-                          setDrawerOpen(true);
-                        }}
+                        onClick={() => void openDrawer('all')}
                       />
                     </span>
                   )}
@@ -806,24 +674,21 @@ export function PostModal(): JSX.Element | null {
                 )}
               </div>
             </div>
-            <ResourcesDrawer
-              post={post ?? null}
-              open={drawerOpen}
-              initialType={drawerType}
-              ensurePostId={ensurePostId}
-              onClose={() => setDrawerOpen(false)}
-              onNavigate={openResource}
-              onInsertText={(inserted) => {
-                const text = viewPost.text;
-                const next = (text !== '' ? `${text}\n\n` : '') + inserted;
-                setDrafts((prev) => ({
-                  title: prev?.title ?? post?.title ?? '',
-                  text: next,
-                }));
-                scheduleSave({ text: next });
-                textareaRef.current?.focus();
-              }}
-            />
+            {parsedId !== null && (
+              <ResourcesDrawer
+                postId={parsedId}
+                open={drawerOpen}
+                initialType={drawerType}
+                onClose={() => setDrawerOpen(false)}
+                onNavigate={openResource}
+                onInsertText={(inserted) => {
+                  const text = editor.text;
+                  const next = (text !== '' ? `${text}\n\n` : '') + inserted;
+                  editor.setText(next);
+                  textareaRef.current?.focus();
+                }}
+              />
+            )}
           </div>
         </div>
       </div>
