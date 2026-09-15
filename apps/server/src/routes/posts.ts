@@ -27,16 +27,11 @@ import {
 import {
   createPost,
   deletePosts,
-  demotePosts,
-  dismissPosts,
   getPost,
   linkResources,
   listPosts,
   previewPost,
-  promotePosts,
-  schedulePost,
   unlinkResources,
-  unschedulePosts,
   updatePost,
 } from '../db/posts';
 import { getSettings } from '../db/settings';
@@ -51,6 +46,7 @@ import {
   removeMediaDir,
   storeMedia,
 } from '../images';
+import { PostNotReadyError } from '../postLifecycle';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -82,17 +78,36 @@ export function postsRoutes(deps: AppDeps) {
     })
     .post('/', zValidator('json', postCreateSchema, validationHook), async (c) => {
       const userId = c.get('user').id;
-      return c.json(
-        await createPost(
+      const body = c.req.valid('json');
+      const post = await createPost(
+        deps.db,
+        userId,
+        body,
+        deps.clock.now(),
+        mediaFiles(deps, userId),
+        mediaFileExists(deps.uploadDir),
+      );
+      if (body.official === true) {
+        const result = deps.lifecycle.promote(userId, [post.id]).results[0];
+        if (result !== undefined && result.ok === false) {
+          deletePosts(deps.db, userId, [post.id], (postId) =>
+            removeMediaDir(deps.uploadDir, userId, postId),
+          );
+          throw new PostNotReadyError(
+            result.error.errors ?? [{ path: 'status', message: result.error.message }],
+          );
+        }
+        const fresh = getPost(
           deps.db,
           userId,
-          c.req.valid('json'),
+          post.id,
           deps.clock.now(),
-          mediaFiles(deps, userId),
           mediaFileExists(deps.uploadDir),
-        ),
-        201,
-      );
+        );
+        if (!fresh) throw notFound('Post', post.id);
+        return c.json(fresh, 201);
+      }
+      return c.json(post, 201);
     })
     .post('/tags', zValidator('json', itemTagsBodySchema, validationHook), (c) => {
       const body = c.req.valid('json');
@@ -104,34 +119,16 @@ export function postsRoutes(deps: AppDeps) {
     })
     .post('/promote', zValidator('json', postIdsBodySchema, validationHook), (c) => {
       const userId = c.get('user').id;
-      return c.json(
-        promotePosts(
-          deps.db,
-          userId,
-          c.req.valid('json').ids,
-          mediaFileExists(deps.uploadDir),
-          deps.clock.now(),
-        ),
-        200,
-      );
+      return c.json(deps.lifecycle.promote(userId, c.req.valid('json').ids), 200);
     })
     .post('/demote', zValidator('json', postIdsBodySchema, validationHook), (c) => {
-      return c.json(
-        demotePosts(deps.db, c.get('user').id, c.req.valid('json').ids, deps.clock.now()),
-        200,
-      );
+      return c.json(deps.lifecycle.demote(c.get('user').id, c.req.valid('json').ids), 200);
     })
     .post('/unschedule', zValidator('json', postIdsBodySchema, validationHook), (c) => {
-      return c.json(
-        unschedulePosts(deps.db, c.get('user').id, c.req.valid('json').ids, deps.clock.now()),
-        200,
-      );
+      return c.json(deps.lifecycle.unschedule(c.get('user').id, c.req.valid('json').ids), 200);
     })
     .post('/dismiss', zValidator('json', postIdsBodySchema, validationHook), (c) => {
-      return c.json(
-        dismissPosts(deps.db, c.get('user').id, c.req.valid('json').ids, deps.clock.now()),
-        200,
-      );
+      return c.json(deps.lifecycle.dismiss(c.get('user').id, c.req.valid('json').ids), 200);
     })
     .post(
       '/:id/schedule',
@@ -140,15 +137,7 @@ export function postsRoutes(deps: AppDeps) {
       (c) => {
         const { id } = c.req.valid('param');
         const userId = c.get('user').id;
-        const post = schedulePost(
-          deps.db,
-          userId,
-          id,
-          c.req.valid('json'),
-          getSettings(deps.db, userId).timezone,
-          deps.clock.now(),
-          mediaFileExists(deps.uploadDir),
-        );
+        const post = deps.lifecycle.schedule(userId, id, c.req.valid('json'));
         if (!post) throw notFound('Post', id);
         return c.json(post, 200);
       },
@@ -156,14 +145,14 @@ export function postsRoutes(deps: AppDeps) {
     .post('/:id/publish', zValidator('param', idParamSchema, validationHook), async (c) => {
       const { id } = c.req.valid('param');
       const userId = c.get('user').id;
-      const post = await deps.publisher.publishNow(userId, id);
+      const post = await deps.lifecycle.publishNow(userId, id);
       if (!post) throw notFound('Post', id);
       return c.json(post, 200);
     })
     .post('/:id/retry', zValidator('param', idParamSchema, validationHook), async (c) => {
       const { id } = c.req.valid('param');
       const userId = c.get('user').id;
-      const post = await deps.publisher.retry(userId, id);
+      const post = await deps.lifecycle.retry(userId, id);
       if (!post) throw notFound('Post', id);
       return c.json(post, 200);
     })

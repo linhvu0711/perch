@@ -2,7 +2,6 @@ import {
   type CalendarPost,
   type CalendarQuery,
   type CalendarRange,
-  DEMOTE_FROM,
   dayBoundsUtc,
   effectiveCharLimit,
   estimateCost,
@@ -17,18 +16,12 @@ import {
   type PostMedia,
   type PostPatch,
   type PostPreview,
-  type PostScheduleBody,
   type PostStatus,
-  type PostStatusResponse,
-  PROMOTE_FROM,
-  parseScheduleTime,
   postCalendarTime,
   postListTitle,
   previewSegments,
-  promoteChecks,
   type Ready,
   readyChecks,
-  SCHEDULE_FROM,
   weightedLength,
   zonedParts,
 } from '@perch/core';
@@ -52,7 +45,7 @@ import {
 
 import { DomainError } from '../errors';
 import { decodePostCursor, encodePostCursor } from './cursor';
-import type { Db } from './index';
+import type { Db, Tx } from './index';
 import { type MediaFiles, mediaForPosts, mediaPathsForPosts } from './postMedia';
 import { accountConnectedAtSql, attentionSql, missedSql, postState } from './postState';
 import { postLinks, postMedia, posts, postTags, resources, xAccounts } from './schema';
@@ -84,31 +77,13 @@ export class MissingResourceError extends DomainError {
   }
 }
 
-export class PostNotReadyError extends DomainError {
-  constructor(errors: Array<{ path: string; message: string }>) {
-    super('validation', null, 'Post is not ready', errors);
-  }
-}
-
-export class PostStatusError extends DomainError {
-  constructor(postId: number, status: PostStatus) {
-    super('invalid_status', 'status', `Post ${postId} is ${status}`);
-  }
-}
-
-export class ScheduleTimeError extends DomainError {
-  constructor(message: string) {
-    super('validation', 'at', message);
-  }
-}
-
 export class TagExistsError extends DomainError {
   constructor(tagName: string) {
     super('validation', 'name', `Tag "${tagName}" already exists`);
   }
 }
 
-type PostRow = typeof posts.$inferSelect;
+export type PostRow = typeof posts.$inferSelect;
 type PostJoinRow = PostRow & { username: string | null; missed: number };
 
 function toPost(
@@ -151,7 +126,7 @@ function toPost(
   };
 }
 
-function postLimit(db: Db, userId: number): number {
+export function postLimit(db: Db, userId: number): number {
   return effectiveCharLimit(
     getSettings(db, userId).char_limit_override,
     getConnectedAccount(db, userId)?.subscriptionType ?? null,
@@ -206,15 +181,6 @@ export async function createPost(
   );
   if (imageSources.length > POST_MEDIA_MAX) throw new MediaLimitError('from');
 
-  if (input.official) {
-    const checks = promoteChecks({
-      text: input.text ?? '',
-      limit: postLimit(db, userId),
-      media: [],
-    });
-    if (checks.length > 0) throw new PostNotReadyError(checks);
-  }
-
   const row = db.transaction((tx) => {
     const inserted = tx
       .insert(posts)
@@ -260,19 +226,12 @@ export async function createPost(
     }
   }
 
-  if (input.official) {
-    db.update(posts)
-      .set({ status: 'official', updatedAt: now })
-      .where(and(eq(posts.id, row.id), eq(posts.userId, userId)))
-      .run();
-  }
-
   const post = getPost(db, userId, row.id, now, fileExists);
   if (!post) throw new Error('post insert failed');
   return post;
 }
 
-function postJoinRow(db: Db, userId: number, id: number, now: Date): PostJoinRow | undefined {
+export function postJoinRow(db: Db, userId: number, id: number, now: Date): PostJoinRow | undefined {
   return db
     .select({
       ...getTableColumns(posts),
@@ -566,6 +525,42 @@ export function getPostRow(db: Db, userId: number, id: number): PostRow | undefi
     .get();
 }
 
+export type PostRowPatch = Partial<
+  Pick<
+    PostRow,
+    | 'status'
+    | 'scheduledAt'
+    | 'nextAttemptAt'
+    | 'lastError'
+    | 'retryCount'
+    | 'publishedAt'
+    | 'xAccountId'
+    | 'xPostId'
+  >
+>;
+
+export function patchPostRow(
+  db: Db | Tx,
+  userId: number,
+  id: number,
+  patch: PostRowPatch,
+  now: Date,
+  fromStatus?: PostStatus,
+): boolean {
+  const guard =
+    fromStatus === undefined
+      ? and(eq(posts.id, id), eq(posts.userId, userId))
+      : and(eq(posts.id, id), eq(posts.userId, userId), eq(posts.status, fromStatus));
+  return (
+    db
+      .update(posts)
+      .set({ ...patch, updatedAt: now })
+      .where(guard)
+      .returning({ id: posts.id })
+      .all().length === 1
+  );
+}
+
 /** Official posts due to be sent at `now`, oldest schedule time first. */
 export function duePosts(db: Db, now: Date): PostRow[] {
   return db
@@ -701,193 +696,6 @@ export function deletePosts(
         removeMediaDir?.(id);
       } catch {
         // leave the directory; the post row is already gone
-      }
-      return { id, ok: true as const };
-    }),
-  };
-}
-
-function statusResultError(
-  id: number,
-  code: string,
-  message: string,
-  errors?: Array<{ path: string; message: string }>,
-): { id: number; ok: false; error: { code: string; message: string; errors?: typeof errors } } {
-  return { id, ok: false, error: { code, message, ...(errors ? { errors } : {}) } };
-}
-
-export function promotePosts(
-  db: Db,
-  userId: number,
-  ids: number[],
-  fileExists: (path: string) => boolean,
-  now: Date,
-  commit = true,
-): PostStatusResponse {
-  return {
-    results: ids.map((id) => {
-      const row = getPostRow(db, userId, id);
-      if (!row) {
-        return statusResultError(id, 'not_found', `Post ${id} not found`);
-      }
-      if (!(PROMOTE_FROM as readonly string[]).includes(row.status)) {
-        return statusResultError(id, 'invalid_status', `Post ${id} is ${row.status}`);
-      }
-      const mediaRows = db
-        .select({ position: postMedia.position, path: postMedia.path })
-        .from(postMedia)
-        .where(eq(postMedia.postId, id))
-        .all();
-      const checks = promoteChecks({
-        text: row.text,
-        limit: postLimit(db, userId),
-        media: mediaRows.map((media) => ({
-          position: media.position,
-          present: fileExists(media.path),
-        })),
-      });
-      if (checks.length > 0) {
-        return statusResultError(id, 'validation', `Post ${id} is not ready`, checks);
-      }
-      if (!commit) return { id, ok: true as const };
-      db.update(posts)
-        .set({ status: 'official', updatedAt: now })
-        .where(and(eq(posts.id, id), eq(posts.userId, userId)))
-        .run();
-      return { id, ok: true as const };
-    }),
-  };
-}
-
-export function demotePosts(db: Db, userId: number, ids: number[], now: Date): PostStatusResponse {
-  return {
-    results: ids.map((id) => {
-      const row = getPostRow(db, userId, id);
-      if (!row) {
-        return statusResultError(id, 'not_found', `Post ${id} not found`);
-      }
-      if (!(DEMOTE_FROM as readonly string[]).includes(row.status)) {
-        return statusResultError(id, 'invalid_status', `Post ${id} is ${row.status}`);
-      }
-      db.update(posts)
-        .set({
-          status: 'draft',
-          lastError: null,
-          retryCount: 0,
-          nextAttemptAt: null,
-          updatedAt: now,
-        })
-        .where(and(eq(posts.id, id), eq(posts.userId, userId)))
-        .run();
-      return { id, ok: true as const };
-    }),
-  };
-}
-
-export function schedulePost(
-  db: Db,
-  userId: number,
-  id: number,
-  body: PostScheduleBody,
-  timeZone: string,
-  now: Date,
-  fileExists: (rel: string) => boolean,
-): Post | null {
-  const row = getPostRow(db, userId, id);
-  if (!row) return null;
-  if (row.status === 'published') throw new PostImmutableError(id);
-  if (!(SCHEDULE_FROM as readonly string[]).includes(row.status)) {
-    throw new PostStatusError(id, row.status);
-  }
-  const at = parseScheduleTime(body.at, timeZone, now);
-  if (at === null) throw new ScheduleTimeError('Unrecognised time');
-  if (at.getTime() < now.getTime() && body.force !== true) {
-    throw new ScheduleTimeError('Time is in the past');
-  }
-  db.update(posts)
-    .set({
-      scheduledAt: at,
-      nextAttemptAt: null,
-      lastError: null,
-      retryCount: 0,
-      updatedAt: now,
-    })
-    .where(and(eq(posts.id, id), eq(posts.userId, userId)))
-    .run();
-  return getPost(db, userId, id, now, fileExists);
-}
-
-export function unschedulePosts(
-  db: Db,
-  userId: number,
-  ids: number[],
-  now: Date,
-): PostStatusResponse {
-  return {
-    results: ids.map((id) => {
-      const row = getPostRow(db, userId, id);
-      if (!row) {
-        return statusResultError(id, 'not_found', `Post ${id} not found`);
-      }
-      if (!(SCHEDULE_FROM as readonly string[]).includes(row.status)) {
-        return statusResultError(id, 'invalid_status', `Post ${id} is ${row.status}`);
-      }
-      db.update(posts)
-        .set({
-          scheduledAt: null,
-          nextAttemptAt: null,
-          lastError: null,
-          retryCount: 0,
-          updatedAt: now,
-        })
-        .where(and(eq(posts.id, id), eq(posts.userId, userId)))
-        .run();
-      return { id, ok: true as const };
-    }),
-  };
-}
-
-export function dismissPosts(db: Db, userId: number, ids: number[], now: Date): PostStatusResponse {
-  return {
-    results: ids.map((id) => {
-      const row = postJoinRow(db, userId, id, now);
-      if (row === undefined) {
-        return statusResultError(id, 'not_found', `Post ${id} not found`);
-      }
-      const { dismiss } = postState(row);
-      if (dismiss === null) {
-        return statusResultError(id, 'invalid_status', `Post ${id} needs no attention`);
-      }
-      const guard = and(eq(posts.id, id), eq(posts.userId, userId), eq(posts.status, row.status));
-      const updated =
-        dismiss === 'demote'
-          ? db
-              .update(posts)
-              .set({
-                status: 'draft',
-                scheduledAt: null,
-                nextAttemptAt: null,
-                lastError: null,
-                retryCount: 0,
-                updatedAt: now,
-              })
-              .where(guard)
-              .returning({ id: posts.id })
-              .all().length
-          : db
-              .update(posts)
-              .set({
-                scheduledAt: null,
-                nextAttemptAt: null,
-                lastError: null,
-                retryCount: 0,
-                updatedAt: now,
-              })
-              .where(guard)
-              .returning({ id: posts.id })
-              .all().length;
-      if (updated === 0) {
-        return statusResultError(id, 'invalid_status', `Post ${id} changed; try again`);
       }
       return { id, ok: true as const };
     }),

@@ -438,6 +438,40 @@ describe('post status', () => {
     expect((await bad.json()).code).toBe('validation');
   });
 
+  test('creates official through promote and leaves nothing behind on a failed check', async () => {
+    // Given: nothing seeded
+    // When: creating an over-limit post as official
+    const created = await request('/api/posts', {
+      method: 'POST',
+      body: JSON.stringify({ text: 'x'.repeat(281), official: true }),
+    });
+    const list = await request('/api/posts');
+    const draft = await createPost({ text: 'x'.repeat(281) });
+    const promoted = await postStatus('/api/posts/promote', [draft.id]);
+
+    // Then: the create answers promote's 400 body, nothing is left behind
+    expect(created.status).toBe(400);
+    expect(await created.json()).toEqual({
+      code: 'validation',
+      message: 'Invalid request',
+      errors: [{ path: 'text', message: '281 of 280 characters' }],
+    });
+    expect(((await list.json()) as PostList).total).toBe(0);
+    expect(promoted).toEqual({
+      results: [
+        {
+          id: draft.id,
+          ok: false,
+          error: {
+            code: 'validation',
+            message: `Post ${draft.id} is not ready`,
+            errors: [{ path: 'text', message: '281 of 280 characters' }],
+          },
+        },
+      ],
+    });
+  });
+
   test('creates an official post when the checks pass', async () => {
     // Given: nothing
     // When: creating with official and real text

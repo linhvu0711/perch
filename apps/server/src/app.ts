@@ -18,8 +18,8 @@ import { statusRoutes } from './routes/status';
 import { tagsRoutes } from './routes/tags';
 import { xCallbackHandler } from './routes/xCallback';
 import { staticHandler } from './static';
+import type { PostLifecycle } from './postLifecycle';
 import type { XAccountService } from './x/accounts';
-import type { PublishService } from './x/publish';
 import type { TweetService } from './x/tweets';
 
 export type AppEnv = { Variables: { user: User } };
@@ -33,7 +33,7 @@ export interface AppDeps {
   clock: Clock;
   accounts: XAccountService;
   tweets: TweetService;
-  publisher: PublishService;
+  lifecycle: PostLifecycle;
   r2: R2Client | null;
   logError: (error: unknown) => void;
 }
