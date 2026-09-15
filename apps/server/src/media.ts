@@ -1,6 +1,7 @@
 import {
   POST_MEDIA_MAX,
   type Post,
+  type PostMedia,
   type PostMediaAttachResponse,
   type PostMediaDetachBody,
   type PostMediaFilesResponse,
@@ -54,6 +55,9 @@ export interface MediaService {
     files: MediaFileInput[],
   ): Promise<PostMediaFilesResponse | null>;
   detach(userId: number, postId: number, body: PostMediaDetachBody): Post | null;
+  readForSend(
+    postId: number,
+  ): Promise<Array<{ position: number; mime: PostMedia['mime']; bytes: Uint8Array | null }>>;
   exists(rel: string): boolean;
 }
 
@@ -215,6 +219,18 @@ export function createMediaService(deps: {
       }
       if (cleanupError !== undefined) throw cleanupError;
       return getPost(deps.db, userId, postId, deps.clock.now(), fileExists);
+    },
+
+    async readForSend(postId) {
+      const media = [];
+      for (const row of mediaRowsForPost(deps.db, postId)) {
+        media.push({
+          position: row.position,
+          mime: row.mime as PostMedia['mime'],
+          bytes: await readMedia(deps.uploadDir, row.path),
+        });
+      }
+      return media;
     },
 
     exists: fileExists,

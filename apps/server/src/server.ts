@@ -65,7 +65,7 @@ export async function buildServer(options: BuildServerOptions): Promise<PerchSer
     clock: options.clock,
     accounts,
     xClient: options.xClient,
-    uploadDir: options.uploadDir,
+    media,
   });
   const app = createApp({
     db,
