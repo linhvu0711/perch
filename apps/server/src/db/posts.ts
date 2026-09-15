@@ -103,7 +103,7 @@ export class ScheduleTimeError extends DomainError {
 }
 
 export class TagExistsError extends DomainError {
-  constructor(public tagName: string) {
+  constructor(tagName: string) {
     super('validation', 'name', `Tag "${tagName}" already exists`);
   }
 }

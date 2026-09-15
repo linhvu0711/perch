@@ -300,7 +300,7 @@ export function tagPosts(db: Db, userId: number, ids: number[], names: string[])
         return {
           id,
           ok: false as const,
-          error: { code: 'published', message: `Post ${id} is published` },
+          error: { code: 'invalid_status', message: `Post ${id} is published` },
         };
       }
       addPostTags(tx, userId, id, names);
@@ -329,7 +329,7 @@ export function untagPosts(
         return {
           id,
           ok: false as const,
-          error: { code: 'published', message: `Post ${id} is published` },
+          error: { code: 'invalid_status', message: `Post ${id} is published` },
         };
       }
       removePostTags(tx, userId, id, names);
