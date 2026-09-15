@@ -28,8 +28,8 @@ export interface CliContext {
 }
 
 export function realContext(env: Record<string, string | undefined>): CliContext;
-/** @deprecated argv is no longer part of the context; kept for existing callers. */
-export function realContext(argv: string[], env: Record<string, string | undefined>): CliContext;
+/** @deprecated Two-argument form kept for existing callers; the first argument is ignored. */
+export function realContext(args: string[], env: Record<string, string | undefined>): CliContext;
 export function realContext(
   a: string[] | Record<string, string | undefined>,
   b?: Record<string, string | undefined>,
