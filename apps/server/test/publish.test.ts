@@ -962,10 +962,7 @@ describe('in flight', () => {
       });
     }
     expect(firstResponse.status).toBe(200);
-    expect(server.xClient.calls.map((call) => call.name)).toEqual([
-      'uploadMedia',
-      'createPost',
-    ]);
+    expect(server.xClient.calls.map((call) => call.name)).toEqual(['uploadMedia', 'createPost']);
     expect(server.xClient.calls[1]?.args[1]).toEqual({
       text: 'Hello',
       mediaIds: ['media-1'],
