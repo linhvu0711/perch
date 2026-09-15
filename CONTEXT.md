@@ -85,7 +85,7 @@ A Post whose schedule time has passed while it was still a Draft (or its X Accou
 _Avoid_: Overdue, late, expired, blocked
 
 **Issues**:
-The set of Posts that were meant to go out but did not: Missed Posts and Failed Posts. Derived, never stored. Shown only on the Dashboard, with no cap. Drafts due soon are not Issues.
+The set of Posts that were meant to go out but did not: Missed Posts and Failed Posts. Derived, never stored. Shown only on the Dashboard, with no cap.
 _Avoid_: Needs attention, inbox, alerts, todo
 
 **Dismiss**:

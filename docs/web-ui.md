@@ -36,7 +36,7 @@ Greeting + date/time in the configured zone. Banner if no X account is connected
 
 Four stat cards: next official post · issues (count, amber if > 0) · scheduled next 7 days · cost this month.
 
-**Issues** = missed posts + failed posts (drafts due soon are not Issues). Shown after Next 3 days. Each row: date/time, title or first line, reason in gray, status pill, and a **dismiss** (check icon). Dismiss clears the time (missed) or demotes to draft (failed). Never deletes. No cap, no "See all".
+**Issues** = missed posts + failed posts. Shown after Next 3 days. Each row: date/time, title or first line, reason in gray, status pill, and a **dismiss** (check icon). Dismiss clears the time (missed) or demotes to draft (failed). Never deletes. No cap, no "See all".
 
 **Next 3 days**: every post with a time until end of day +3.
 
@@ -44,7 +44,7 @@ Four stat cards: next official post · issues (count, amber if > 0) · scheduled
 
 ### Posts `/posts`
 
-Header: title, `+` new post. Filters: status tabs as icons (all, drafts, official, published, needs attention; active icon takes the status color), scheduled filter as 3 icons (any, scheduled, unscheduled), tag dropdown, search. Rows: date/time (mono), **title** bold + first line of text muted, image count, tags, status pill. Sorted by time desc, untimed at the end.
+Header: title, `+` new post. Filters: status tabs as icons (all, draft, official, published, failed, missed; active icon takes the status color), scheduled filter as 3 icons (any, scheduled, unscheduled), tag dropdown, search. Rows: date/time (mono), **title** bold + first line of text muted, image count, tags, status pill. Sorted by time desc, untimed at the end.
 
 ### Post modal
 
@@ -58,7 +58,7 @@ Header by status:
 
 | status | banner | actions |
 |---|---|---|
-| draft | amber if missed or due soon | delete · promote (↑) · publish now (→) |
+| draft | amber if missed | delete · promote (↑) · publish now (→) |
 | official | — | delete · demote (↓) · publish now (→) |
 | failed | red with error + tries | delete · demote (↓) · retry (⟳) |
 | published | info: read-only | delete · open on X |
