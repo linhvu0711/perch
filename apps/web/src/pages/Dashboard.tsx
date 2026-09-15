@@ -310,7 +310,7 @@ export function Dashboard() {
                 </>
               )}
             </div>
-            <div className="note">
+            <div className="note" style={{ marginTop: 8 }}>
               Publish {formatUsd(X_COSTS_USD.publish)} · publish with a link{' '}
               {formatUsd(X_COSTS_USD.publishWithUrl)} · save a tweet{' '}
               {formatUsd(X_COSTS_USD.saveTweet)} · connect {formatUsd(X_COSTS_USD.getMe)} · image
