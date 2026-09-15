@@ -149,6 +149,25 @@ describe('exit numbers', () => {
     expect(unknown.out()).toBe('');
   });
 
+  test('exits 1 for a failed batch with the results on stdout', async () => {
+    // Given
+    const { ctx, out, err } = makeCtx(server);
+
+    // When: deleting a tag the server does not know
+    const code = await runCli(['tag', 'delete', 'ghost', '--yes', '--json'], ctx);
+
+    // Then
+    expect(code).toBe(1);
+    expect(JSON.parse(out())).toEqual([
+      {
+        name: 'ghost',
+        ok: false,
+        error: { code: 'not_found', message: 'Tag "ghost" not found' },
+      },
+    ]);
+    expect(err()).toBe('');
+  });
+
   test('the entry file prints Error: and exits 2 on a bad env', () => {
     // Given: a real process with an invalid PERCH_SERVER_URL
     const result = Bun.spawnSync([process.execPath, 'src/index.ts', 'auth', 'status'], {
