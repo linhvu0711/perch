@@ -432,8 +432,8 @@ describe('post status', () => {
     expect(scheduledBody.items.map((post) => post.id).sort()).toEqual([3, 4]);
     expect(scheduledBody.total).toBe(2);
     const unscheduledBody = (await unscheduled.json()) as PostList;
-    expect(unscheduledBody.items.map((post) => post.id).sort()).toEqual([1, 2, 5]);
-    expect(unscheduledBody.total).toBe(3);
+    expect(unscheduledBody.items.map((post) => post.id).sort()).toEqual([1, 2]);
+    expect(unscheduledBody.total).toBe(2);
     expect(bad.status).toBe(400);
     expect((await bad.json()).code).toBe('validation');
   });

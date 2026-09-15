@@ -48,6 +48,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lt,
   lte,
   not,
   or,
@@ -333,8 +334,11 @@ export function listPosts(
     filterConditions.push(sql`${sortTime} <= ${dayBoundsUtc(query.to, timeZone).end.getTime()}`);
   }
   if (query.scheduled !== undefined) {
+    const waiting = inArray(posts.status, ['draft', 'official']);
     filterConditions.push(
-      query.scheduled ? isNotNull(posts.scheduledAt) : isNull(posts.scheduledAt),
+      query.scheduled
+        ? and(waiting, gte(posts.scheduledAt, now))!
+        : and(waiting, or(isNull(posts.scheduledAt), lt(posts.scheduledAt, now)))!,
     );
   }
   if (query.missed !== undefined) {
