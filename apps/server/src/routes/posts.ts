@@ -68,9 +68,7 @@ export function postsRoutes(deps: AppDeps) {
         try {
           attached = await deps.media.attachFromResources(userId, post.id, sources);
         } catch (error) {
-          deletePosts(deps.db, userId, [post.id], (postId) =>
-            deps.media.removeAll(userId, postId),
-          );
+          deletePosts(deps.db, userId, [post.id], (postId) => deps.media.removeAll(userId, postId));
           throw error;
         }
         if (!attached) throw new Error('post insert failed');

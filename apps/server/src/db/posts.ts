@@ -263,28 +263,6 @@ function mediaForPosts(
   return result;
 }
 
-function mediaPathsForPosts(
-  db: Db,
-  postIds: number[],
-): Map<number, Array<{ position: number; path: string }>> {
-  const result = new Map<number, Array<{ position: number; path: string }>>();
-  if (postIds.length === 0) return result;
-
-  const rows = db
-    .select({ postId: postMedia.postId, position: postMedia.position, path: postMedia.path })
-    .from(postMedia)
-    .where(inArray(postMedia.postId, postIds))
-    .orderBy(asc(postMedia.postId), asc(postMedia.position))
-    .all();
-
-  for (const row of rows) {
-    const list = result.get(row.postId) ?? [];
-    list.push({ position: row.position, path: row.path });
-    result.set(row.postId, list);
-  }
-  return result;
-}
-
 export function mediaRowsForPost(db: Db, postId: number): PostMediaRow[] {
   return db
     .select()
