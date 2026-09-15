@@ -72,6 +72,43 @@ async function seedTimedPosts(): Promise<void> {
   sqlite.close();
 }
 
+function setPost(
+  id: number,
+  values: Partial<{
+    status: 'draft' | 'official' | 'published' | 'failed';
+    lastError: string | null;
+    retryCount: number;
+    scheduledAt: Date | null;
+    publishedAt: Date | null;
+  }>,
+): void {
+  const { db, sqlite } = openDb(path.join(server.dir, 'perch.db'));
+  db.update(posts).set(values).where(eq(posts.id, id)).run();
+  sqlite.close();
+}
+
+/** Posts 1-5: published 1; failed 2 (Sep 4 09:00); missed draft 3 (Sep 4 09:00); future official 4 (Sep 10); untimed draft 5. */
+async function seedFilterPosts(): Promise<void> {
+  await createPost({ text: 'Published' });
+  await createPost({ text: 'Failed', official: true });
+  await createPost({ text: 'Missed draft' });
+  await createPost({ text: 'Future official', official: true });
+  await createPost({ text: 'Untimed draft' });
+
+  setPost(1, {
+    status: 'published',
+    publishedAt: new Date('2026-09-03T09:00:00Z'),
+    scheduledAt: null,
+  });
+  setPost(2, {
+    status: 'failed',
+    lastError: 'Service Unavailable',
+    scheduledAt: new Date('2026-09-04T09:00:00Z'),
+  });
+  setPost(3, { scheduledAt: new Date('2026-09-04T09:00:00Z') });
+  setPost(4, { scheduledAt: new Date('2026-09-10T09:00:00Z') });
+}
+
 describe('posts', () => {
   test('creates a draft and gets it with count, limit, Cost, links, and empty media', async () => {
     await createNote('# Idea\n\ntext');
@@ -174,6 +211,68 @@ describe('posts', () => {
     expect(result.items.map((item) => item.id)).toEqual([4, 5, 3, 2, 1]);
     expect(result.total).toBe(5);
     expect(result.next_cursor).toBeNull();
+  });
+
+  test('unscheduled excludes published', async () => {
+    // Given: seeded posts; clock 2026-09-04T10:00:00Z
+    await seedFilterPosts();
+
+    // When
+    const result = await list('?scheduled=false');
+
+    // Then
+    expect(result.items.map((post) => post.id).sort()).toEqual([3, 5]);
+    expect(result.total).toBe(2);
+  });
+
+  test('scheduled excludes failed', async () => {
+    // Given
+    await seedFilterPosts();
+
+    // When
+    const result = await list('?scheduled=true');
+
+    // Then
+    expect(result.items.map((post) => post.id)).toEqual([4]);
+    expect(result.total).toBe(1);
+  });
+
+  test('missed draft is unscheduled', async () => {
+    // Given
+    await seedFilterPosts();
+
+    // When
+    const result = await list('?scheduled=false');
+
+    // Then
+    expect(result.items.find((post) => post.id === 3)).toMatchObject({
+      id: 3,
+      status: 'draft',
+      missed: true,
+    });
+  });
+
+  test('future official is scheduled', async () => {
+    // Given
+    await seedFilterPosts();
+
+    // When
+    const result = await list('?scheduled=true');
+
+    // Then
+    expect(result.items[0]).toMatchObject({ id: 4, status: 'official', missed: false });
+  });
+
+  test('any time lists every post', async () => {
+    // Given
+    await seedFilterPosts();
+
+    // When
+    const result = await list();
+
+    // Then
+    expect(result.items.map((post) => post.id).sort()).toEqual([1, 2, 3, 4, 5]);
+    expect(result.total).toBe(5);
   });
 
   test('filters by status, search, date range, and resource', async () => {
