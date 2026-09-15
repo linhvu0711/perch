@@ -73,4 +73,3 @@ export type XAccount = z.infer<typeof xAccountSchema>;
 export type AccountStatus = z.infer<typeof accountStatusSchema>;
 export type ConnectStart = z.infer<typeof connectStartSchema>;
 export type Counts = z.infer<typeof countsSchema>;
-export type ApiError = z.infer<typeof apiErrorSchema>;
