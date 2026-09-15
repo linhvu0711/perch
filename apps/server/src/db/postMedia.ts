@@ -95,6 +95,26 @@ export function mediaRowsForPost(db: Db, postId: number): PostMediaRow[] {
     .all();
 }
 
+export function mediaRowForPost(
+  db: Db,
+  userId: number,
+  postId: number,
+  mediaId: number,
+): PostMediaRow | undefined {
+  return db
+    .select({ media: postMedia })
+    .from(postMedia)
+    .innerJoin(posts, eq(postMedia.postId, posts.id))
+    .where(
+      and(
+        eq(postMedia.postId, postId),
+        eq(postMedia.id, mediaId),
+        eq(posts.userId, userId),
+      ),
+    )
+    .get()?.media;
+}
+
 function insertMediaRow(
   db: Db,
   postId: number,

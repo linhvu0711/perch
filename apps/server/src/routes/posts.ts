@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 
 import { zValidator } from '@hono/zod-validator';
@@ -14,7 +13,6 @@ import {
   postPatchSchema,
   postScheduleBodySchema,
 } from '@perch/core';
-import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -23,6 +21,7 @@ import {
   attachFromFiles,
   attachFromResources,
   detachMedia,
+  mediaRowForPost,
   type MediaFiles,
 } from '../db/postMedia';
 import {
@@ -40,7 +39,6 @@ import {
   unschedulePosts,
   updatePost,
 } from '../db/posts';
-import { postMedia, posts } from '../db/schema';
 import { getSettings } from '../db/settings';
 import { tagPosts, untagPosts } from '../db/tags';
 import { notFound, validationHook } from '../errors';
@@ -111,7 +109,7 @@ export function postsRoutes(deps: AppDeps) {
           deps.db,
           userId,
           c.req.valid('json').ids,
-          (rel) => fs.existsSync(path.join(deps.uploadDir, rel)),
+          mediaFileExists(deps.uploadDir),
           deps.clock.now(),
         ),
         200,
@@ -282,20 +280,8 @@ export function postsRoutes(deps: AppDeps) {
       ),
       (c) => {
         const { id, mediaId } = c.req.valid('param');
-        const row = deps.db
-          .select({ media: postMedia })
-          .from(postMedia)
-          .innerJoin(posts, eq(postMedia.postId, posts.id))
-          .where(
-            and(
-              eq(postMedia.postId, id),
-              eq(postMedia.id, mediaId),
-              eq(posts.userId, c.get('user').id),
-            ),
-          )
-          .get();
-        if (!row) throw notFound('Post', id);
-        const mediaRow = row.media;
+        const mediaRow = mediaRowForPost(deps.db, c.get('user').id, id, mediaId);
+        if (!mediaRow) throw notFound('Post', id);
         return new Response(Bun.file(path.join(deps.uploadDir, mediaRow.path)), {
           headers: {
             'Content-Type': mediaRow.mime,
