@@ -79,6 +79,30 @@ describe('tweet resources', () => {
     expect(calls.at(-1)?.args).toEqual(['access-1', '1']);
   });
 
+  test('refuses a body on a tweet', async () => {
+    // Given: a connected account and a saved tweet resource
+    await connect();
+    await request('/api/resources/tweets', {
+      method: 'POST',
+      body: JSON.stringify({ urls: ['https://x.com/perchtester/status/1'] }),
+    });
+
+    // When
+    const response = await request('/api/resources/1', {
+      method: 'PATCH',
+      body: JSON.stringify({ body: 'x' }),
+    });
+
+    // Then
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      code: 'validation',
+      message: 'Invalid request',
+      errors: [{ path: 'body', message: 'Only notes have a body' }],
+    });
+    expect(await (await request('/api/resources/1')).json()).toMatchObject({ text: 'hello' });
+  });
+
   test('requires a connected X account', async () => {
     // Given: no connected account
     // When

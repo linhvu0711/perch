@@ -72,6 +72,7 @@ export function createXAccountService(deps: {
   clock: Clock;
   xClient: XClient;
   xOAuth: XOAuthConfig | null;
+  logError: (error: unknown) => void;
 }): XAccountService {
   const states = createStateStore(deps.clock);
   const inFlightRefreshes = new Map<number, Promise<void>>();
@@ -118,7 +119,7 @@ export function createXAccountService(deps: {
         });
         me = await deps.xClient.getMe(tokens.accessToken);
       } catch (error) {
-        console.error(error);
+        deps.logError(error);
         return { ok: false, reason: 'failed' };
       }
 
@@ -144,12 +145,12 @@ export function createXAccountService(deps: {
         try {
           await deps.xClient.revokeToken(replaced.refreshToken);
         } catch (error) {
-          console.error(error);
+          deps.logError(error);
         }
         try {
           await deps.xClient.revokeToken(replaced.accessToken);
         } catch (error) {
-          console.error(error);
+          deps.logError(error);
         }
       }
 
@@ -206,12 +207,12 @@ export function createXAccountService(deps: {
       try {
         await deps.xClient.revokeToken(refreshToken);
       } catch (error) {
-        console.error(error);
+        deps.logError(error);
       }
       try {
         await deps.xClient.revokeToken(accessToken);
       } catch (error) {
-        console.error(error);
+        deps.logError(error);
       }
       disconnectAccount(deps.db, row.id, deps.clock.now());
       return this.status(userId);
@@ -230,7 +231,7 @@ export function createXAccountService(deps: {
           markReconnectRequired(deps.db, row.id);
           return;
         }
-        console.error(error);
+        deps.logError(error);
       }
     })().finally(() => inFlightRefreshes.delete(row.id));
     inFlightRefreshes.set(row.id, pending);

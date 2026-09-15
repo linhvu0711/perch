@@ -289,6 +289,32 @@ describe('resource edit', () => {
     ).toBe(2);
     expect(JSON.parse(both.err()).code).toBe('bad_args');
   });
+
+  test('refuses a body on a tweet', async () => {
+    // Given: a connected account and a tweet resource
+    await connect();
+    const add = makeCtx(server);
+    expect(
+      await runCli(
+        ['resource', 'add', 'tweet', 'https://x.com/perchtester/status/1', '--json'],
+        add.ctx,
+      ),
+    ).toBe(0);
+    const bodyFile = write('body.md', 'x');
+
+    // When
+    const edit = makeCtx(server);
+    const code = await runCli(['resource', 'edit', '1', '--content', bodyFile, '--json'], edit.ctx);
+
+    // Then
+    expect(code).toBe(1);
+    expect(JSON.parse(edit.err())).toEqual({
+      code: 'validation',
+      message: 'Invalid request',
+      errors: [{ path: 'body', message: 'Only notes have a body' }],
+    });
+    expect(edit.out()).toBe('');
+  });
 });
 
 describe('resource delete', () => {

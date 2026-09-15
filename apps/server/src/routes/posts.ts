@@ -250,7 +250,7 @@ export function postsRoutes(deps: AppDeps) {
         refuseInFlight(id);
         const post = deps.media.detach(userId, id, c.req.valid('json'));
         if (!post) throw notFound('Post', id);
-        return c.json({ media: post.media }, 200);
+        return c.json(post, 200);
       },
     )
     .post(

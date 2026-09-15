@@ -42,6 +42,12 @@ export class InvalidCursorError extends DomainError {
   }
 }
 
+export class BodyOnlyForNotesError extends DomainError {
+  constructor() {
+    super('validation', 'body', 'Only notes have a body');
+  }
+}
+
 type ResourceRow = typeof resources.$inferSelect;
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -329,7 +335,7 @@ export function updateResource(
 
   if (!current) return null;
   if (patch.body !== undefined && current.type !== 'md') {
-    throw new Error('body is only valid for notes');
+    throw new BodyOnlyForNotesError();
   }
 
   db.update(resources)

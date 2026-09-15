@@ -322,13 +322,25 @@ describe('post attach and detach', () => {
 
     const detach = makeCtx(server);
     expect(await runCli(['post', 'detach', '1', '--media', '1', '--json'], detach.ctx)).toBe(0);
-    expect(JSON.parse(detach.out())).toEqual([
+    const detachedPost = JSON.parse(detach.out());
+    expect(detachedPost.id).toBe(1);
+    expect(detachedPost.media).toEqual([
       { id: 2, position: 1, mime: 'image/png', bytes: 73, from_resource_id: null, present: true },
     ]);
 
+    const table = makeCtx(server, { isTTY: true });
+    expect(await runCli(['post', 'detach', '1', '--all'], table.ctx)).toBe(0);
+    expect(table.out()).toContain('2 / 280');
+    expect(table.out().startsWith('[')).toBe(false);
+
+    const reattach = makeCtx(server);
+    expect(await runCli(['post', 'attach', '1', '--file', png, '--json'], reattach.ctx)).toBe(0);
+
     const detachAll = makeCtx(server);
     expect(await runCli(['post', 'detach', '1', '--all', '--json'], detachAll.ctx)).toBe(0);
-    expect(JSON.parse(detachAll.out())).toEqual([]);
+    const emptiedPost = JSON.parse(detachAll.out());
+    expect(emptiedPost.id).toBe(1);
+    expect(emptiedPost.media).toEqual([]);
   });
 
   test('show prints a missing Media file in the ready column and present in json', async () => {
