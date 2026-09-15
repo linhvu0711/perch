@@ -17,7 +17,6 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppDeps, AppEnv } from '../app';
-import { detachMedia, type MediaFiles } from '../db/postMedia';
 import {
   createPost,
   deletePosts,
@@ -33,20 +32,10 @@ import { getSettings } from '../db/settings';
 import { tagPosts, untagPosts } from '../db/tags';
 import { notFound, validationHook } from '../errors';
 import { MediaAttachError } from '../media';
-import { copyToR2, mediaFileExists, readMedia, removeMedia, removeMediaDir, storeMedia } from '../images';
+import { mediaFileExists, removeMediaDir } from '../images';
 import { InFlightError, PostNotReadyError } from '../postLifecycle';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
-
-const mediaFiles = (deps: AppDeps, userId: number): MediaFiles => ({
-  read: (rel) => readMedia(deps.uploadDir, rel),
-  store: async (postId, bytes, ext) => {
-    const rel = await storeMedia(deps.uploadDir, userId, postId, bytes, ext);
-    await copyToR2(deps.r2, rel, bytes, deps.logError);
-    return rel;
-  },
-  remove: (rel) => removeMedia(deps.uploadDir, rel),
-});
 
 export function postsRoutes(deps: AppDeps) {
   function refuseInFlight(id: number): void {
@@ -277,14 +266,7 @@ export function postsRoutes(deps: AppDeps) {
         const { id } = c.req.valid('param');
         const userId = c.get('user').id;
         refuseInFlight(id);
-        const post = detachMedia(
-          deps.db,
-          userId,
-          id,
-          c.req.valid('json'),
-          (rel) => removeMedia(deps.uploadDir, rel),
-          mediaFileExists(deps.uploadDir),
-        );
+        const post = deps.media.detach(userId, id, c.req.valid('json'));
         if (!post) throw notFound('Post', id);
         return c.json({ media: post.media }, 200);
       },

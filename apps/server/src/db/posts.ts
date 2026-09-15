@@ -330,6 +330,21 @@ export function insertPostLink(db: Db, postId: number, resourceId: number): void
   db.insert(postLinks).values({ postId, resourceId }).onConflictDoNothing().run();
 }
 
+/** Deletes the given media rows and renumbers the kept rows from 1, in one transaction. */
+export function removeMediaRows(db: Db, deletedIds: number[], kept: PostMediaRow[]): void {
+  db.transaction((tx) => {
+    if (deletedIds.length > 0) {
+      tx.delete(postMedia).where(inArray(postMedia.id, deletedIds)).run();
+    }
+    kept.forEach((row, index) => {
+      const target = index + 1;
+      if (row.position !== target) {
+        tx.update(postMedia).set({ position: target }).where(eq(postMedia.id, row.id)).run();
+      }
+    });
+  });
+}
+
 export function getPost(
   db: Db,
   userId: number,

@@ -1,22 +1,34 @@
 import {
   POST_MEDIA_MAX,
+  type Post,
   type PostMediaAttachResponse,
+  type PostMediaDetachBody,
   type PostMediaFilesResponse,
 } from '@perch/core';
 
 import type { Clock } from './clock';
 import type { Db } from './db';
 import {
+  getPost,
   getPostRow,
   insertMediaRow,
   insertPostLink,
   MediaLimitError,
+  type PostMediaRow,
   mediaRowsForPost,
   PostImmutableError,
+  removeMediaRows,
 } from './db/posts';
 import { getResource } from './db/resources';
 import { DomainError } from './errors';
-import { copyToR2, inspectImage, mediaFileExists, readMedia, storeMedia } from './images';
+import {
+  copyToR2,
+  inspectImage,
+  mediaFileExists,
+  readMedia,
+  removeMedia,
+  storeMedia,
+} from './images';
 import type { R2Client } from './r2/client';
 
 export class MediaAttachError extends DomainError {
@@ -41,7 +53,14 @@ export interface MediaService {
     postId: number,
     files: MediaFileInput[],
   ): Promise<PostMediaFilesResponse | null>;
+  detach(userId: number, postId: number, body: PostMediaDetachBody): Post | null;
   exists(rel: string): boolean;
+}
+
+export class MissingMediaPositionError extends DomainError {
+  constructor(_postId: number, position: number) {
+    super('validation', 'positions', `No media at position ${position}`);
+  }
 }
 
 export interface MediaFileInput {
@@ -153,6 +172,49 @@ export function createMediaService(deps: {
         results.push({ name: file.name, ok: true, media });
       }
       return { results };
+    },
+
+    detach(userId, postId, body) {
+      const postRow = getPostRow(deps.db, userId, postId);
+      if (!postRow) return null;
+      if (postRow.status === 'published') throw new PostImmutableError(postId);
+
+      const rows = mediaRowsForPost(deps.db, postId);
+      let deleted: PostMediaRow[];
+      let kept: PostMediaRow[];
+      if ('all' in body) {
+        deleted = rows;
+        kept = [];
+      } else {
+        const byPosition = new Map(rows.map((row) => [row.position, row]));
+        const picked = new Set<number>();
+        deleted = [];
+        for (const position of body.positions) {
+          const row = byPosition.get(position);
+          if (!row || picked.has(position)) {
+            throw new MissingMediaPositionError(postId, position);
+          }
+          picked.add(position);
+          deleted.push(row);
+        }
+        kept = rows.filter((row) => !picked.has(row.position));
+      }
+
+      removeMediaRows(
+        deps.db,
+        deleted.map((row) => row.id),
+        kept,
+      );
+      let cleanupError: unknown;
+      for (const row of deleted) {
+        try {
+          removeMedia(deps.uploadDir, row.path);
+        } catch (error) {
+          cleanupError ??= error;
+        }
+      }
+      if (cleanupError !== undefined) throw cleanupError;
+      return getPost(deps.db, userId, postId, deps.clock.now(), fileExists);
     },
 
     exists: fileExists,
