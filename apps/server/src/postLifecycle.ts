@@ -116,7 +116,6 @@ export function createPostLifecycle(deps: {
     account: XAccountRow,
     accessToken: string,
     now: Date,
-    fromStatus: PostStatus,
   ): Promise<SendResult> {
     try {
       const mediaIds: string[] = [];
@@ -154,7 +153,6 @@ export function createPostLifecycle(deps: {
             lastError: null,
           },
           now,
-          fromStatus,
         );
         logApiCall(tx, row.userId, {
           endpoint: X_ENDPOINTS.createPost,
@@ -325,7 +323,7 @@ export function createPostLifecycle(deps: {
         if (row.status === 'draft') {
           patchPostRow(deps.db, userId, id, { status: 'official' }, now);
         }
-        const sent = await send(row, account, accessToken, now, 'official');
+        const sent = await send(row, account, accessToken, now);
         if (!sent.ok) {
           patchPostRow(
             deps.db,
@@ -355,7 +353,7 @@ export function createPostLifecycle(deps: {
       try {
         const { account, accessToken } = await deps.accounts.accessTokenFor(userId);
         const now = deps.clock.now();
-        const sent = await send(row, account, accessToken, now, 'failed');
+        const sent = await send(row, account, accessToken, now);
         if (!sent.ok) {
           patchPostRow(
             deps.db,
@@ -389,7 +387,7 @@ export function createPostLifecycle(deps: {
             if (error instanceof DomainError) continue;
             throw error;
           }
-          const sent = await send(row, account, accessToken, now, 'official');
+          const sent = await send(row, account, accessToken, now);
           if (!sent.ok) {
             const failedAttempts = row.retryCount + 1;
             const next = nextAttemptAt(row.scheduledAt ?? now, failedAttempts);

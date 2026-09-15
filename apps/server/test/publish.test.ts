@@ -640,6 +640,37 @@ describe('scheduler tick', () => {
     expect(server.xClient.calls.filter((call) => call.name === 'createPost')).toHaveLength(1);
     expect((await getPost(1)).status).toBe('published');
   });
+
+  test('a due post that changed under the tick is still recorded published and not rescheduled', async () => {
+    // Given: a connected account, a due official post, and a send held on a gate
+    connectTestAccount(server);
+    await createPost({ text: 'One', official: true });
+    setPost(1, { scheduledAt: new Date('2026-09-04T10:30:00Z') });
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+
+    // When: the row changes under the tick's send before the gate opens, then a later tick runs
+    const first = server.tick(new Date('2026-09-04T10:31:00Z'));
+    while (!server.xClient.calls.some((call) => call.name === 'createPost')) {
+      await Promise.resolve();
+    }
+    setPost(1, { status: 'draft' });
+    release();
+    await first;
+    await server.tick(new Date('2026-09-04T10:32:00Z'));
+
+    // Then: the post is published with the returned id and the second tick sent nothing
+    expect(await getPost(1)).toMatchObject({
+      status: 'published',
+      x_post_id: '2',
+      retry_count: 0,
+      last_error: null,
+      scheduled_at: null,
+    });
+    expect(server.xClient.calls.filter((call) => call.name === 'createPost')).toHaveLength(1);
+  });
 });
 
 describe('missed', () => {
@@ -800,6 +831,42 @@ describe('retry', () => {
       errors: [{ path: 'status', message: 'Post 1 is official' }],
     });
     expect(server.xClient.calls).toEqual([]);
+  });
+
+  test('a failed post that changed under the retry is still recorded published', async () => {
+    // Given: a connected account, a failed post, and a retry held on a gate
+    connectTestAccount(server);
+    await createPost({ text: 'Hello' });
+    setPost(1, {
+      status: 'failed',
+      lastError: 'old',
+      retryCount: 4,
+      scheduledAt: new Date('2026-09-04T10:30:00Z'),
+    });
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+
+    // When: the row changes under the retry before the gate opens
+    const first = request('/api/posts/1/retry', { method: 'POST' });
+    while (!server.xClient.calls.some((call) => call.name === 'createPost')) {
+      await Promise.resolve();
+    }
+    setPost(1, { status: 'draft' });
+    release();
+    const response = await first;
+
+    // Then: X already accepted the post, so it is published with the returned id
+    expect(response.status).toBe(200);
+    expect(await getPost(1)).toMatchObject({
+      status: 'published',
+      x_post_id: '2',
+      last_error: null,
+      scheduled_at: null,
+      retry_count: 4,
+    });
+    expect(server.xClient.calls.map((call) => call.name)).toEqual(['createPost']);
   });
 });
 
@@ -1033,7 +1100,7 @@ describe('in flight', () => {
     expect((await getPost(2)).status).toBe('draft');
   });
 
-  test('a post that changed under the send is not marked published', async () => {
+  test('a post that changed under the send is still recorded published', async () => {
     // Given: a connected account and post 1 being sent on a held gate
     connectTestAccount(server);
     await createPost({ text: 'Hello', official: true });
@@ -1051,18 +1118,54 @@ describe('in flight', () => {
     release();
     const response = await first;
 
-    // Then: the send reports failure and the post is not published
-    expect(response.status).toBe(502);
-    expect(await response.json()).toEqual({
-      code: 'publish_failed',
-      message: 'Post 1 changed during send',
+    // Then: X already accepted the post, so it is published with the returned id
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      id: 1,
+      status: 'published',
+      x_post_id: '2',
+      retry_count: 0,
+      last_error: null,
+      scheduled_at: null,
     });
     expect(await getPost(1)).toMatchObject({
-      status: 'failed',
-      last_error: 'Post 1 changed during send',
-      x_post_id: null,
-      retry_count: 1,
+      id: 1,
+      status: 'published',
+      x_post_id: '2',
+      retry_count: 0,
+      last_error: null,
+      scheduled_at: null,
     });
-    expect(await monthCostUsd()).toBe(0.015);
+    expect(await monthCostUsd()).toBeCloseTo(0.015);
+  });
+
+  test('a post accepted by X is not sent again', async () => {
+    // Given: a connected account and post 1 published through a send whose row changed
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const first = request('/api/posts/1/publish', { method: 'POST' });
+    while (!server.xClient.calls.some((call) => call.name === 'createPost')) {
+      await Promise.resolve();
+    }
+    setPost(1, { status: 'draft' });
+    release();
+    const firstResponse = await first;
+    expect(firstResponse.status).toBe(200);
+
+    // When: retrying it
+    const response = await request('/api/posts/1/retry', { method: 'POST' });
+
+    // Then: published is terminal for sending and X saw the post exactly once
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      code: 'validation',
+      message: 'Invalid request',
+      errors: [{ path: 'status', message: 'Post 1 is published' }],
+    });
+    expect(server.xClient.calls.filter((call) => call.name === 'createPost')).toHaveLength(1);
   });
 });
