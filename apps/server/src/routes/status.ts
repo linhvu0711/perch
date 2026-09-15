@@ -3,11 +3,21 @@ import { Hono } from 'hono';
 import type { AppDeps, AppEnv } from '../app';
 import { getSettings } from '../db/settings';
 import { statusSnapshot } from '../db/status';
+import { mediaFileExists } from '../images';
 
 export function statusRoutes(deps: AppDeps) {
   return new Hono<AppEnv>().get('/', (c) => {
     const user = c.get('user');
     const settings = getSettings(deps.db, user.id);
-    return c.json(statusSnapshot(deps.db, user.id, settings.timezone, deps.clock.now()), 200);
+    return c.json(
+      statusSnapshot(
+        deps.db,
+        user.id,
+        settings.timezone,
+        deps.clock.now(),
+        mediaFileExists(deps.uploadDir),
+      ),
+      200,
+    );
   });
 }

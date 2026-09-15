@@ -14,7 +14,7 @@ import { getPost, MediaLimitError, PostImmutableError } from './posts';
 import { postLinks, postMedia, posts, resources } from './schema';
 
 export class MissingMediaPositionError extends DomainError {
-  constructor(postId: number, position: number) {
+  constructor(_postId: number, position: number) {
     super('validation', 'positions', `No media at position ${position}`);
   }
 }
@@ -56,6 +56,28 @@ export function mediaForPosts(db: Db, postIds: number[]): Map<number, PostMedia[
   return result;
 }
 
+export function mediaPathsForPosts(
+  db: Db,
+  postIds: number[],
+): Map<number, Array<{ position: number; path: string }>> {
+  const result = new Map<number, Array<{ position: number; path: string }>>();
+  if (postIds.length === 0) return result;
+
+  const rows = db
+    .select({ postId: postMedia.postId, position: postMedia.position, path: postMedia.path })
+    .from(postMedia)
+    .where(inArray(postMedia.postId, postIds))
+    .orderBy(asc(postMedia.postId), asc(postMedia.position))
+    .all();
+
+  for (const row of rows) {
+    const list = result.get(row.postId) ?? [];
+    list.push({ position: row.position, path: row.path });
+    result.set(row.postId, list);
+  }
+  return result;
+}
+
 function getPostRow(db: Db, userId: number, postId: number) {
   return db
     .select()
@@ -71,6 +93,20 @@ export function mediaRowsForPost(db: Db, postId: number): PostMediaRow[] {
     .where(eq(postMedia.postId, postId))
     .orderBy(asc(postMedia.position))
     .all();
+}
+
+export function mediaRowForPost(
+  db: Db,
+  userId: number,
+  postId: number,
+  mediaId: number,
+): PostMediaRow | undefined {
+  return db
+    .select({ media: postMedia })
+    .from(postMedia)
+    .innerJoin(posts, eq(postMedia.postId, posts.id))
+    .where(and(eq(postMedia.postId, postId), eq(postMedia.id, mediaId), eq(posts.userId, userId)))
+    .get()?.media;
 }
 
 function insertMediaRow(
@@ -210,6 +246,7 @@ export function detachMedia(
   postId: number,
   body: PostMediaDetachBody,
   remove: (rel: string) => void,
+  fileExists: (rel: string) => boolean,
 ): Post | null {
   const postRow = getPostRow(db, userId, postId);
   if (!postRow) return null;
@@ -257,5 +294,5 @@ export function detachMedia(
     }
   }
   if (cleanupError !== undefined) throw cleanupError;
-  return getPost(db, userId, postId, new Date());
+  return getPost(db, userId, postId, new Date(), fileExists);
 }

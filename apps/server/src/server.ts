@@ -6,12 +6,12 @@ import type { Hono } from 'hono';
 import { type AppEnv, createApp } from './app';
 import type { Clock } from './clock';
 import { migrateDb, openDb, seedDb } from './db';
+import { createPostLifecycle } from './postLifecycle';
 import type { R2Client } from './r2/client';
 import { createTick } from './scheduler';
 import { createXAccountService } from './x/accounts';
 import type { XClient } from './x/client';
 import type { XOAuthConfig } from './x/oauth';
-import { createPublishService } from './x/publish';
 import { createTweetService } from './x/tweets';
 
 export interface BuildServerOptions {
@@ -52,7 +52,7 @@ export async function buildServer(options: BuildServerOptions): Promise<PerchSer
     accounts,
     xClient: options.xClient,
   });
-  const publisher = createPublishService({
+  const lifecycle = createPostLifecycle({
     db,
     clock: options.clock,
     accounts,
@@ -68,17 +68,11 @@ export async function buildServer(options: BuildServerOptions): Promise<PerchSer
     clock: options.clock,
     accounts,
     tweets,
-    publisher,
+    lifecycle,
     r2: options.r2,
     logError: options.logError,
   });
-  const tick = createTick({
-    db,
-    clock: options.clock,
-    xClient: options.xClient,
-    accounts,
-    publisher,
-  });
+  const tick = createTick({ accounts, lifecycle });
 
   return {
     app,

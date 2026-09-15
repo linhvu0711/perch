@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import fs from 'node:fs';
 import path from 'node:path';
-import type { Post } from '@perch/core';
-import { eq } from 'drizzle-orm';
+import { type Post, X_ENDPOINTS } from '@perch/core';
+import { asc, eq } from 'drizzle-orm';
 
 import { openDb } from '../src/db';
-import { posts, xAccounts } from '../src/db/schema';
+import { apiCalls, posts, xAccounts } from '../src/db/schema';
 import {
   connectTestAccount,
   createTestServer,
@@ -61,6 +62,10 @@ function setPost(
   const { db, sqlite } = openDb(path.join(server.dir, 'perch.db'));
   db.update(posts).set(values).where(eq(posts.id, id)).run();
   sqlite.close();
+}
+
+function mediaDir(postId: number): string {
+  return path.join(server.dir, 'uploads', '1', 'posts', String(postId));
 }
 
 async function attachPng(postId: number): Promise<void> {
@@ -290,6 +295,64 @@ describe('publish', () => {
       errors: [{ path: 'text', message: 'Text is empty' }],
     });
     expect((await getPost(1)).status).toBe('draft');
+  });
+
+  test('runs the promote checks once', async () => {
+    // Given: a connected account and a draft with one image
+    connectTestAccount(server);
+    await createPost({ text: 'Hello' });
+    await attachPng(1);
+    const exists = spyOn(fs, 'existsSync');
+
+    // When: publishing it now
+    const response = await request('/api/posts/1/publish', { method: 'POST' });
+    const mediaStats = exists.mock.calls.filter(([file]) =>
+      String(file).startsWith(mediaDir(1)),
+    ).length;
+    exists.mockRestore();
+
+    // Then: the media file was stat'ed once for the check, once for the send, once for ready
+    expect(response.status).toBe(200);
+    expect(mediaStats).toBe(3);
+  });
+
+  test('logs one api_calls row per billed X call for a publish with two media', async () => {
+    // Given: a connected account and an official post with two images
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    await attachPng(1);
+    await attachPng(1);
+
+    // When: publishing it now
+    const response = await request('/api/posts/1/publish', { method: 'POST' });
+
+    // Then: one api_calls row per billed X call, in call order
+    expect(response.status).toBe(200);
+    expect(server.xClient.calls.map((call) => call.name)).toEqual([
+      'uploadMedia',
+      'uploadMedia',
+      'createPost',
+    ]);
+    const { db, sqlite } = openDb(path.join(server.dir, 'perch.db'));
+    const rows = db
+      .select({ endpoint: apiCalls.endpoint, costUsd: apiCalls.costUsd, postId: apiCalls.postId })
+      .from(apiCalls)
+      .orderBy(asc(apiCalls.id))
+      .all();
+    sqlite.close();
+    expect(rows).toEqual([
+      { endpoint: 'POST /2/media/upload', costUsd: 0, postId: 1 },
+      { endpoint: 'POST /2/media/upload', costUsd: 0, postId: 1 },
+      { endpoint: 'POST /2/tweets', costUsd: 0.015, postId: 1 },
+    ]);
+    expect(rows.map((row) => row.endpoint)).toEqual(
+      server.xClient.calls.map(
+        (call) =>
+          ({ uploadMedia: X_ENDPOINTS.uploadMedia, createPost: X_ENDPOINTS.createPost })[
+            call.name as 'uploadMedia' | 'createPost'
+          ],
+      ),
+    );
   });
 
   test('does not send a post that is already being sent', async () => {

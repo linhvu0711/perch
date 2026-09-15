@@ -97,6 +97,10 @@ export async function storeMedia(
   return `${userId}/posts/${postId}/${name}`;
 }
 
+export function mediaFileExists(uploadDir: string): (rel: string) => boolean {
+  return (rel) => fs.existsSync(path.join(uploadDir, rel));
+}
+
 /** Reads bytes for a stored media path, or null when the file is gone. */
 export async function readMedia(uploadDir: string, rel: string): Promise<Uint8Array | null> {
   const full = path.join(uploadDir, rel);

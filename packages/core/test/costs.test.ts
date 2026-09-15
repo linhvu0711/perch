@@ -12,7 +12,7 @@ describe('costKindOf', () => {
     expect(costKindOf('POST /2/media/upload')).toBe('publish');
     expect(costKindOf('GET /2/tweets/:id')).toBe('save_tweet');
     expect(costKindOf('GET /2/users/me')).toBe('connect');
-    expect(() => costKindOf('GET /2/nope')).toThrow();
+    expect(costKindOf('GET /2/nope')).toBeNull();
   });
 });
 

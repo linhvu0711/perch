@@ -13,23 +13,30 @@ function countWhere(db: Db, condition: SQL): number {
 }
 
 /** The one-call picture behind the Dashboard and `perch status`. */
-export function statusSnapshot(db: Db, userId: number, timeZone: string, now: Date): Status {
+export function statusSnapshot(
+  db: Db,
+  userId: number,
+  timeZone: string,
+  now: Date,
+  fileExists: (rel: string) => boolean,
+): Status {
   const account = getConnectedAccount(db, userId);
   const week = and(
     eq(posts.userId, userId),
     inArray(posts.status, ['draft', 'official']),
     gte(posts.scheduledAt, now),
     lt(posts.scheduledAt, new Date(now.getTime() + STATUS_WEEK_MS)),
-  )!;
+  ) as SQL;
   return {
     timezone: timeZone,
     account: account !== null ? toXAccount(account) : null,
-    next_due: upcomingPosts(db, userId, now, { limit: STATUS_NEXT_DUE }),
-    next_official: upcomingPosts(db, userId, now, { official: true, limit: 1 })[0] ?? null,
-    missed_count: countWhere(db, and(eq(posts.userId, userId), missedSql(userId, now))!),
-    failed_count: countWhere(db, and(eq(posts.userId, userId), eq(posts.status, 'failed'))!),
-    week_official_count: countWhere(db, and(week, eq(posts.status, 'official'))!),
-    week_draft_count: countWhere(db, and(week, eq(posts.status, 'draft'))!),
+    next_due: upcomingPosts(db, userId, now, { limit: STATUS_NEXT_DUE }, fileExists),
+    next_official:
+      upcomingPosts(db, userId, now, { official: true, limit: 1 }, fileExists)[0] ?? null,
+    missed_count: countWhere(db, and(eq(posts.userId, userId), missedSql(userId, now)) as SQL),
+    failed_count: countWhere(db, and(eq(posts.userId, userId), eq(posts.status, 'failed')) as SQL),
+    week_official_count: countWhere(db, and(week, eq(posts.status, 'official')) as SQL),
+    week_draft_count: countWhere(db, and(week, eq(posts.status, 'draft')) as SQL),
     month_cost_usd: monthCostUsd(db, userId, timeZone, now),
   };
 }

@@ -19,31 +19,6 @@ export function nextAttemptAt(scheduledAt: Date, failedAttempts: number): Date |
   return new Date(scheduledAt.getTime() + delay);
 }
 
-/** Checks a post must pass to be promoted, in order; an empty list means ready. */
-export function promoteChecks(input: {
-  text: string;
-  limit: number;
-  media: Array<{ position: number; present: boolean }>;
-}): Array<{ path: string; message: string }> {
-  const checks: Array<{ path: string; message: string }> = [];
-  if (input.text.trim() === '') {
-    checks.push({ path: 'text', message: 'Text is empty' });
-  }
-  const length = weightedLength(input.text);
-  if (length > input.limit) {
-    checks.push({ path: 'text', message: `${length} of ${input.limit} characters` });
-  }
-  if (input.media.length > POST_MEDIA_MAX) {
-    checks.push({ path: 'media', message: `${input.media.length} of ${POST_MEDIA_MAX} media` });
-  }
-  for (const media of input.media) {
-    if (!media.present) {
-      checks.push({ path: 'media', message: `Media ${media.position} file is missing` });
-    }
-  }
-  return checks;
-}
-
 export const readyCheckSchema = z.object({
   code: z.enum(['text', 'limit', 'media', 'account']),
   ok: z.boolean(),
@@ -57,31 +32,75 @@ export const readySchema = z.object({
 });
 export type Ready = z.infer<typeof readySchema>;
 
-/** The "Ready to publish?" checklist shown next to a post. */
-export function readyChecks(input: {
+export interface PostChecksInput {
   text: string;
   limit: number;
-  mediaCount: number;
+  media: Array<{ position: number; present: boolean }>;
   accountConnected: boolean;
-}): Ready {
+}
+
+type PostCheck = ReadyCheck & { path: 'text' | 'media' | 'account'; message: string };
+
+function postChecks(input: PostChecksInput): PostCheck[] {
   const length = weightedLength(input.text);
-  const checks: ReadyCheck[] = [
-    { code: 'text', ok: input.text.trim() !== '', label: 'Text is not empty' },
+  const checks: PostCheck[] = [
+    {
+      code: 'text',
+      path: 'text',
+      ok: input.text.trim() !== '',
+      label: 'Text is not empty',
+      message: 'Text is empty',
+    },
     {
       code: 'limit',
+      path: 'text',
       ok: length <= input.limit,
       label: `${length.toLocaleString('en-US')} of ${input.limit.toLocaleString('en-US')} characters`,
+      message: `${length} of ${input.limit} characters`,
     },
     {
       code: 'media',
-      ok: input.mediaCount <= POST_MEDIA_MAX,
-      label: `${input.mediaCount} of ${POST_MEDIA_MAX} images`,
-    },
-    {
-      code: 'account',
-      ok: input.accountConnected,
-      label: input.accountConnected ? 'X account connected' : 'No X account connected',
+      path: 'media',
+      ok: input.media.length <= POST_MEDIA_MAX,
+      label: `${input.media.length} of ${POST_MEDIA_MAX} images`,
+      message: `${input.media.length} of ${POST_MEDIA_MAX} media`,
     },
   ];
-  return { ok: checks.every((check) => check.ok), checks };
+  for (const media of input.media) {
+    if (media.present === false) {
+      checks.push({
+        code: 'media',
+        path: 'media',
+        ok: false,
+        label: `Media ${media.position} file is missing`,
+        message: `Media ${media.position} file is missing`,
+      });
+    }
+  }
+  checks.push({
+    code: 'account',
+    path: 'account',
+    ok: input.accountConnected,
+    label: input.accountConnected ? 'X account connected' : 'No X account connected',
+    message: 'No X account connected',
+  });
+  return checks;
+}
+
+/** Checks a post must pass to be promoted, in order; an empty list means ready. */
+export function promoteChecks(
+  input: Omit<PostChecksInput, 'accountConnected'>,
+): Array<{ path: string; message: string }> {
+  return postChecks({ ...input, accountConnected: true })
+    .filter((row) => !row.ok)
+    .map(({ path, message }) => ({ path, message }));
+}
+
+/** The "Ready to publish?" checklist shown next to a post. */
+export function readyChecks(input: PostChecksInput): Ready {
+  const rows = postChecks(input);
+  return {
+    ok: rows.every((row) => row.ok),
+    checks: rows.map(({ code, ok, label }) => ({ code, ok, label })),
+  };
 }

@@ -228,7 +228,6 @@ export function PostModal(): JSX.Element | null {
   }
 
   const loadingShell = (body: JSX.Element) => (
-    // biome-ignore lint/a11y/noStaticElementInteractions: scrim click-to-close
     <div
       className="scrim"
       onMouseDown={(event) => event.target === event.currentTarget && editor.close()}
@@ -275,7 +274,6 @@ export function PostModal(): JSX.Element | null {
 
   return (
     <>
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: scrim click-to-close */}
       <div
         className="scrim"
         onMouseDown={(event) => event.target === event.currentTarget && editor.close()}
@@ -317,7 +315,7 @@ export function PostModal(): JSX.Element | null {
                       try {
                         const response = await promotePosts.mutateAsync([id]);
                         const result = response.results[0];
-                        if (result !== undefined && result.ok) {
+                        if (result?.ok) {
                           toast('Promoted');
                         } else if (result !== undefined) {
                           toast(result.error.errors?.[0]?.message ?? result.error.message, 'warn');
@@ -341,7 +339,10 @@ export function PostModal(): JSX.Element | null {
                       const bad = readyChecks({
                         text: viewPost.text,
                         limit: viewPost.limit,
-                        mediaCount: viewPost.media.length,
+                        media: viewPost.media.map((item) => ({
+                          position: item.position,
+                          present: true,
+                        })),
                         accountConnected: account.data?.account != null,
                       }).checks.find((check) => !check.ok);
                       if (bad) {
@@ -440,7 +441,6 @@ export function PostModal(): JSX.Element | null {
                 />
               </div>
               <div className="field">
-                {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the links list */}
                 {/* biome-ignore lint/a11y/noLabelWithoutControl: section label for the slot grid */}
                 <label>
                   Images{' '}
@@ -644,7 +644,10 @@ export function PostModal(): JSX.Element | null {
                     {readyChecks({
                       text: viewPost.text,
                       limit: viewPost.limit,
-                      mediaCount: viewPost.media.length,
+                      media: viewPost.media.map((item) => ({
+                        position: item.position,
+                        present: true,
+                      })),
                       accountConnected: account.data?.account != null,
                     }).checks.map((check) => (
                       <li key={check.code} className={check.ok ? 'ok' : 'bad'}>

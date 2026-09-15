@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 
 import { zValidator } from '@hono/zod-validator';
@@ -14,7 +13,6 @@ import {
   postPatchSchema,
   postScheduleBodySchema,
 } from '@perch/core';
-import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -24,34 +22,31 @@ import {
   attachFromResources,
   detachMedia,
   type MediaFiles,
+  mediaRowForPost,
 } from '../db/postMedia';
 import {
   createPost,
   deletePosts,
-  demotePosts,
-  dismissPosts,
   getPost,
   linkResources,
   listPosts,
   previewPost,
-  promotePosts,
-  schedulePost,
   unlinkResources,
-  unschedulePosts,
   updatePost,
 } from '../db/posts';
-import { postMedia, posts } from '../db/schema';
 import { getSettings } from '../db/settings';
 import { tagPosts, untagPosts } from '../db/tags';
 import { notFound, validationHook } from '../errors';
 import {
   copyToR2,
   inspectImage,
+  mediaFileExists,
   readMedia,
   removeMedia,
   removeMediaDir,
   storeMedia,
 } from '../images';
+import { PostNotReadyError } from '../postLifecycle';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -76,22 +71,43 @@ export function postsRoutes(deps: AppDeps) {
           c.req.valid('query'),
           getSettings(deps.db, userId).timezone,
           deps.clock.now(),
+          mediaFileExists(deps.uploadDir),
         ),
         200,
       );
     })
     .post('/', zValidator('json', postCreateSchema, validationHook), async (c) => {
       const userId = c.get('user').id;
-      return c.json(
-        await createPost(
+      const body = c.req.valid('json');
+      const post = await createPost(
+        deps.db,
+        userId,
+        body,
+        deps.clock.now(),
+        mediaFiles(deps, userId),
+        mediaFileExists(deps.uploadDir),
+      );
+      if (body.official === true) {
+        const result = deps.lifecycle.promote(userId, [post.id]).results[0];
+        if (result !== undefined && result.ok === false) {
+          deletePosts(deps.db, userId, [post.id], (postId) =>
+            removeMediaDir(deps.uploadDir, userId, postId),
+          );
+          throw new PostNotReadyError(
+            result.error.errors ?? [{ path: 'status', message: result.error.message }],
+          );
+        }
+        const fresh = getPost(
           deps.db,
           userId,
-          c.req.valid('json'),
+          post.id,
           deps.clock.now(),
-          mediaFiles(deps, userId),
-        ),
-        201,
-      );
+          mediaFileExists(deps.uploadDir),
+        );
+        if (!fresh) throw notFound('Post', post.id);
+        return c.json(fresh, 201);
+      }
+      return c.json(post, 201);
     })
     .post('/tags', zValidator('json', itemTagsBodySchema, validationHook), (c) => {
       const body = c.req.valid('json');
@@ -103,34 +119,16 @@ export function postsRoutes(deps: AppDeps) {
     })
     .post('/promote', zValidator('json', postIdsBodySchema, validationHook), (c) => {
       const userId = c.get('user').id;
-      return c.json(
-        promotePosts(
-          deps.db,
-          userId,
-          c.req.valid('json').ids,
-          (rel) => fs.existsSync(path.join(deps.uploadDir, rel)),
-          deps.clock.now(),
-        ),
-        200,
-      );
+      return c.json(deps.lifecycle.promote(userId, c.req.valid('json').ids), 200);
     })
     .post('/demote', zValidator('json', postIdsBodySchema, validationHook), (c) => {
-      return c.json(
-        demotePosts(deps.db, c.get('user').id, c.req.valid('json').ids, deps.clock.now()),
-        200,
-      );
+      return c.json(deps.lifecycle.demote(c.get('user').id, c.req.valid('json').ids), 200);
     })
     .post('/unschedule', zValidator('json', postIdsBodySchema, validationHook), (c) => {
-      return c.json(
-        unschedulePosts(deps.db, c.get('user').id, c.req.valid('json').ids, deps.clock.now()),
-        200,
-      );
+      return c.json(deps.lifecycle.unschedule(c.get('user').id, c.req.valid('json').ids), 200);
     })
     .post('/dismiss', zValidator('json', postIdsBodySchema, validationHook), (c) => {
-      return c.json(
-        dismissPosts(deps.db, c.get('user').id, c.req.valid('json').ids, deps.clock.now()),
-        200,
-      );
+      return c.json(deps.lifecycle.dismiss(c.get('user').id, c.req.valid('json').ids), 200);
     })
     .post(
       '/:id/schedule',
@@ -139,14 +137,7 @@ export function postsRoutes(deps: AppDeps) {
       (c) => {
         const { id } = c.req.valid('param');
         const userId = c.get('user').id;
-        const post = schedulePost(
-          deps.db,
-          userId,
-          id,
-          c.req.valid('json'),
-          getSettings(deps.db, userId).timezone,
-          deps.clock.now(),
-        );
+        const post = deps.lifecycle.schedule(userId, id, c.req.valid('json'));
         if (!post) throw notFound('Post', id);
         return c.json(post, 200);
       },
@@ -154,20 +145,26 @@ export function postsRoutes(deps: AppDeps) {
     .post('/:id/publish', zValidator('param', idParamSchema, validationHook), async (c) => {
       const { id } = c.req.valid('param');
       const userId = c.get('user').id;
-      const post = await deps.publisher.publishNow(userId, id);
+      const post = await deps.lifecycle.publishNow(userId, id);
       if (!post) throw notFound('Post', id);
       return c.json(post, 200);
     })
     .post('/:id/retry', zValidator('param', idParamSchema, validationHook), async (c) => {
       const { id } = c.req.valid('param');
       const userId = c.get('user').id;
-      const post = await deps.publisher.retry(userId, id);
+      const post = await deps.lifecycle.retry(userId, id);
       if (!post) throw notFound('Post', id);
       return c.json(post, 200);
     })
     .get('/:id', zValidator('param', idParamSchema, validationHook), (c) => {
       const { id } = c.req.valid('param');
-      const post = getPost(deps.db, c.get('user').id, id, deps.clock.now());
+      const post = getPost(
+        deps.db,
+        c.get('user').id,
+        id,
+        deps.clock.now(),
+        mediaFileExists(deps.uploadDir),
+      );
       if (!post) throw notFound('Post', id);
       return c.json(post, 200);
     })
@@ -189,6 +186,7 @@ export function postsRoutes(deps: AppDeps) {
           id,
           c.req.valid('json'),
           deps.clock.now(),
+          mediaFileExists(deps.uploadDir),
         );
         if (!post) throw notFound('Post', id);
         return c.json(post, 200);
@@ -271,20 +269,8 @@ export function postsRoutes(deps: AppDeps) {
       ),
       (c) => {
         const { id, mediaId } = c.req.valid('param');
-        const row = deps.db
-          .select({ media: postMedia })
-          .from(postMedia)
-          .innerJoin(posts, eq(postMedia.postId, posts.id))
-          .where(
-            and(
-              eq(postMedia.postId, id),
-              eq(postMedia.id, mediaId),
-              eq(posts.userId, c.get('user').id),
-            ),
-          )
-          .get();
-        if (!row) throw notFound('Post', id);
-        const mediaRow = row.media;
+        const mediaRow = mediaRowForPost(deps.db, c.get('user').id, id, mediaId);
+        if (!mediaRow) throw notFound('Post', id);
         return new Response(Bun.file(path.join(deps.uploadDir, mediaRow.path)), {
           headers: {
             'Content-Type': mediaRow.mime,
@@ -300,8 +286,13 @@ export function postsRoutes(deps: AppDeps) {
       (c) => {
         const { id } = c.req.valid('param');
         const userId = c.get('user').id;
-        const post = detachMedia(deps.db, userId, id, c.req.valid('json'), (rel) =>
-          removeMedia(deps.uploadDir, rel),
+        const post = detachMedia(
+          deps.db,
+          userId,
+          id,
+          c.req.valid('json'),
+          (rel) => removeMedia(deps.uploadDir, rel),
+          mediaFileExists(deps.uploadDir),
         );
         if (!post) throw notFound('Post', id);
         return c.json({ media: post.media }, 200);

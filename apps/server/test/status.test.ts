@@ -438,6 +438,40 @@ describe('post status', () => {
     expect((await bad.json()).code).toBe('validation');
   });
 
+  test('creates official through promote and leaves nothing behind on a failed check', async () => {
+    // Given: nothing seeded
+    // When: creating an over-limit post as official
+    const created = await request('/api/posts', {
+      method: 'POST',
+      body: JSON.stringify({ text: 'x'.repeat(281), official: true }),
+    });
+    const list = await request('/api/posts');
+    const draft = await createPost({ text: 'x'.repeat(281) });
+    const promoted = await postStatus('/api/posts/promote', [draft.id]);
+
+    // Then: the create answers promote's 400 body, nothing is left behind
+    expect(created.status).toBe(400);
+    expect(await created.json()).toEqual({
+      code: 'validation',
+      message: 'Invalid request',
+      errors: [{ path: 'text', message: '281 of 280 characters' }],
+    });
+    expect(((await list.json()) as PostList).total).toBe(0);
+    expect(promoted).toEqual({
+      results: [
+        {
+          id: draft.id,
+          ok: false,
+          error: {
+            code: 'validation',
+            message: `Post ${draft.id} is not ready`,
+            errors: [{ path: 'text', message: '281 of 280 characters' }],
+          },
+        },
+      ],
+    });
+  });
+
   test('creates an official post when the checks pass', async () => {
     // Given: nothing
     // When: creating with official and real text
@@ -481,6 +515,32 @@ describe('post status', () => {
     expect(post.status).toBe('official');
     expect(post.media.map((media) => media.position)).toEqual([1]);
     expect(fs.readdirSync(mediaDir(post.id))).toHaveLength(1);
+  });
+
+  test('get shows a missing media file in the ready checklist', async () => {
+    // Given: a draft with one image whose file is deleted, and an account connected
+    await uploadImage('a.png');
+    await createPost({ text: 'Hello', from: [1] });
+    connectAccount();
+    const files = fs.readdirSync(mediaDir(1));
+    for (const file of files) {
+      fs.unlinkSync(path.join(mediaDir(1), file));
+    }
+
+    // When
+    const post = await getPost(1);
+
+    // Then: the checklist names the missing file
+    expect(post.ready).toEqual({
+      ok: false,
+      checks: [
+        { code: 'text', ok: true, label: 'Text is not empty' },
+        { code: 'limit', ok: true, label: '5 of 25,000 characters' },
+        { code: 'media', ok: true, label: '1 of 4 images' },
+        { code: 'media', ok: false, label: 'Media 1 file is missing' },
+        { code: 'account', ok: true, label: 'X account connected' },
+      ],
+    });
   });
 
   test('get carries the ready checklist', async () => {

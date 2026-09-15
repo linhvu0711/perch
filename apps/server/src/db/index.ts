@@ -8,6 +8,7 @@ import { migrate } from 'drizzle-orm/bun-sqlite/migrator';
 import * as schema from './schema';
 
 export type Db = BunSQLiteDatabase<typeof schema>;
+export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 export function openDb(dbPath: string): { db: Db; sqlite: Database } {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
