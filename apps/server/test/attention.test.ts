@@ -56,7 +56,7 @@ function setPost(
   sqlite.close();
 }
 
-/** The seven-post seed: missed draft, missed official, failed, due-soon draft, later draft, future official, untimed. */
+/** The seven-post seed: missed draft, missed official, failed, future draft, later draft, future official, untimed. */
 async function seedAttentionPosts(): Promise<void> {
   await createPost({ text: 'Old draft' });
   await createPost({ text: 'Early official', official: true });
@@ -112,7 +112,7 @@ describe('needs attention', () => {
     const body = (await response.json()) as PostList;
     expect(body.items.map((post) => post.id)).toEqual([5, 4, 6, 7]);
     expect(body.total).toBe(4);
-    expect(body.items.map((post) => post.reason)).toEqual([null, 'still a draft', null, null]);
+    expect(body.items.map((post) => post.reason)).toEqual([null, null, null, null]);
   });
 
   test('a draft at the window edge is due soon but not an Issue', async () => {
@@ -138,7 +138,7 @@ describe('needs attention', () => {
     expect(status.failed_count).toBe(0);
   });
 
-  test('dismiss unschedules a missed draft, demotes a failed post, leaves a due-soon draft alone, deletes nothing', async () => {
+  test('dismiss unschedules a missed draft, demotes a failed post, leaves a future draft alone, deletes nothing', async () => {
     // Given: the seven-post seed, account connected, clock 2026-09-04T10:31Z
     connectTestAccount(server);
     await seedAttentionPosts();
@@ -195,7 +195,7 @@ describe('needs attention', () => {
     const fourth = await getPost(4);
     expect(fourth.status).toBe('draft');
     expect(fourth.scheduled_at).toBe('2026-09-06T09:00:00.000Z');
-    expect(fourth.reason).toBe('still a draft');
+    expect(fourth.reason).toBeNull();
   });
 
   test('dismiss reports unknown ids', async () => {

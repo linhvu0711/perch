@@ -3,7 +3,8 @@ import { and, count, eq, gte, inArray, lt, lte, type SQL } from 'drizzle-orm';
 
 import { monthCostUsd } from './apiCalls';
 import type { Db } from './index';
-import { missedSql, upcomingPosts } from './posts';
+import { upcomingPosts } from './posts';
+import { missedSql } from './postState';
 import { posts } from './schema';
 import { getConnectedAccount, toXAccount } from './xAccounts';
 
