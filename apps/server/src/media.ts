@@ -1,4 +1,8 @@
-import { POST_MEDIA_MAX, type PostMediaAttachResponse } from '@perch/core';
+import {
+  POST_MEDIA_MAX,
+  type PostMediaAttachResponse,
+  type PostMediaFilesResponse,
+} from '@perch/core';
 
 import type { Clock } from './clock';
 import type { Db } from './db';
@@ -12,7 +16,7 @@ import {
 } from './db/posts';
 import { getResource } from './db/resources';
 import { DomainError } from './errors';
-import { copyToR2, mediaFileExists, readMedia, storeMedia } from './images';
+import { copyToR2, inspectImage, mediaFileExists, readMedia, storeMedia } from './images';
 import type { R2Client } from './r2/client';
 
 export class MediaAttachError extends DomainError {
@@ -32,6 +36,11 @@ export interface MediaService {
     postId: number,
     ids: number[],
   ): Promise<PostMediaAttachResponse | null>;
+  attachFromFiles(
+    userId: number,
+    postId: number,
+    files: MediaFileInput[],
+  ): Promise<PostMediaFilesResponse | null>;
   exists(rel: string): boolean;
 }
 
@@ -102,6 +111,46 @@ export function createMediaService(deps: {
         );
         insertPostLink(deps.db, postId, id);
         results.push({ id, ok: true, media });
+      }
+      return { results };
+    },
+
+    async attachFromFiles(userId, postId, files) {
+      const postRow = getPostRow(deps.db, userId, postId);
+      if (!postRow) return null;
+      if (postRow.status === 'published') throw new PostImmutableError(postId);
+
+      const inspected: Array<{
+        file: MediaFileInput;
+        result: Awaited<ReturnType<typeof inspectImage>>;
+      }> = [];
+      for (const file of files) {
+        inspected.push({ file, result: await inspectImage(file.bytes) });
+      }
+
+      const valid = inspected.filter(({ result }) => result.ok);
+      const existing = mediaRowsForPost(deps.db, postId);
+      if (existing.length + valid.length > POST_MEDIA_MAX) {
+        throw new MediaLimitError('files');
+      }
+
+      let next = existing.length + 1;
+      const results: PostMediaFilesResponse['results'] = [];
+      for (const { file, result } of inspected) {
+        if (!result.ok) {
+          results.push({ name: file.name, ok: false, error: result.error });
+          continue;
+        }
+        const rel = await storeMedia(deps.uploadDir, userId, postId, file.bytes, result.ext);
+        await copyToR2(deps.r2, rel, file.bytes, deps.logError);
+        const media = insertMediaRow(
+          deps.db,
+          postId,
+          next++,
+          { path: rel, mime: result.mime, bytes: file.bytes.length },
+          null,
+        );
+        results.push({ name: file.name, ok: true, media });
       }
       return { results };
     },

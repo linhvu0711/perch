@@ -17,7 +17,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppDeps, AppEnv } from '../app';
-import { attachFromFiles, detachMedia, type MediaFiles } from '../db/postMedia';
+import { detachMedia, type MediaFiles } from '../db/postMedia';
 import {
   createPost,
   deletePosts,
@@ -33,15 +33,7 @@ import { getSettings } from '../db/settings';
 import { tagPosts, untagPosts } from '../db/tags';
 import { notFound, validationHook } from '../errors';
 import { MediaAttachError } from '../media';
-import {
-  copyToR2,
-  inspectImage,
-  mediaFileExists,
-  readMedia,
-  removeMedia,
-  removeMediaDir,
-  storeMedia,
-} from '../images';
+import { copyToR2, mediaFileExists, readMedia, removeMedia, removeMediaDir, storeMedia } from '../images';
 import { InFlightError, PostNotReadyError } from '../postLifecycle';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
@@ -249,37 +241,13 @@ export function postsRoutes(deps: AppDeps) {
         const files = Array.isArray(formFiles) ? formFiles : [formFiles];
 
         const inputs = [];
-        const results: Array<
-          | { name: string; ok: true }
-          | { name: string; ok: false; error: { code: string; message: string } }
-        > = [];
         for (const file of files) {
-          const bytes = await file.bytes();
-          const inspected = await inspectImage(bytes);
-          if (!inspected.ok) {
-            results.push({ name: file.name, ok: false, error: inspected.error });
-            continue;
-          }
-          inputs.push({ name: file.name, bytes, mime: inspected.mime, ext: inspected.ext });
-          results.push({ name: file.name, ok: true });
+          inputs.push({ name: file.name, bytes: await file.bytes() });
         }
 
-        const response = await attachFromFiles(
-          deps.db,
-          userId,
-          id,
-          inputs,
-          mediaFiles(deps, userId),
-        );
+        const response = await deps.media.attachFromFiles(userId, id, inputs);
         if (!response) throw notFound('Post', id);
-        let index = 0;
-        const merged = results.map((result) => {
-          if (!result.ok) return result;
-          const attached = response.results[index];
-          index += 1;
-          return attached ?? result;
-        });
-        return c.json({ results: merged }, 200);
+        return c.json(response, 200);
       },
     )
     .get(
