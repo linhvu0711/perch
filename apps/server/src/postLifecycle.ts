@@ -200,6 +200,9 @@ export function createPostLifecycle(deps: {
           if (!row) {
             return statusResultError(id, 'not_found', `Post ${id} not found`);
           }
+          if (inFlight.has(id)) {
+            return statusResultError(id, 'in_flight', `Post ${id} is being sent`);
+          }
           if (!(DEMOTE_FROM as readonly string[]).includes(row.status)) {
             return statusResultError(id, 'invalid_status', `Post ${id} is ${row.status}`);
           }
@@ -218,6 +221,7 @@ export function createPostLifecycle(deps: {
     schedule(userId, id, body) {
       const row = getPostRow(deps.db, userId, id);
       if (!row) return null;
+      if (inFlight.has(id)) throw new InFlightError(id);
       if (row.status === 'published') throw new PostImmutableError(id);
       if (!(SCHEDULE_FROM as readonly string[]).includes(row.status)) {
         throw new PostStatusError(id, row.status);
@@ -246,6 +250,9 @@ export function createPostLifecycle(deps: {
           if (!row) {
             return statusResultError(id, 'not_found', `Post ${id} not found`);
           }
+          if (inFlight.has(id)) {
+            return statusResultError(id, 'in_flight', `Post ${id} is being sent`);
+          }
           if (!(SCHEDULE_FROM as readonly string[]).includes(row.status)) {
             return statusResultError(id, 'invalid_status', `Post ${id} is ${row.status}`);
           }
@@ -268,6 +275,9 @@ export function createPostLifecycle(deps: {
           const row = postJoinRow(deps.db, userId, id, now);
           if (row === undefined) {
             return statusResultError(id, 'not_found', `Post ${id} not found`);
+          }
+          if (inFlight.has(id)) {
+            return statusResultError(id, 'in_flight', `Post ${id} is being sent`);
           }
           const { dismiss } = postState(row);
           if (dismiss === null) {

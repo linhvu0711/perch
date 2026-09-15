@@ -972,4 +972,67 @@ describe('in flight', () => {
     });
     expect((await getPost(1)).media).toHaveLength(1);
   });
+
+  test('refuses demote, unschedule, dismiss, and schedule while the post is being sent', async () => {
+    // Given: a connected account, post 1 being sent on a held gate, and post 2
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    await createPost({ text: 'Two', official: true });
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+
+    // When: a publish holds the send and status changes arrive before it answers
+    const first = request('/api/posts/1/publish', { method: 'POST' });
+    const demote = await request('/api/posts/demote', {
+      method: 'POST',
+      body: JSON.stringify({ ids: [1, 2] }),
+    });
+    const unschedule = await request('/api/posts/unschedule', {
+      method: 'POST',
+      body: JSON.stringify({ ids: [1] }),
+    });
+    const dismiss = await request('/api/posts/dismiss', {
+      method: 'POST',
+      body: JSON.stringify({ ids: [1] }),
+    });
+    const schedule = await request('/api/posts/1/schedule', {
+      method: 'POST',
+      body: JSON.stringify({ at: '2026-09-05 10:00' }),
+    });
+    release();
+    const firstResponse = await first;
+
+    // Then: id 1 is refused everywhere, id 2 demotes, and post 1 ends published
+    expect(await demote.json()).toEqual({
+      results: [
+        {
+          id: 1,
+          ok: false,
+          error: { code: 'in_flight', message: 'Post 1 is being sent' },
+        },
+        { id: 2, ok: true },
+      ],
+    });
+    for (const response of [unschedule, dismiss]) {
+      expect(await response.json()).toEqual({
+        results: [
+          {
+            id: 1,
+            ok: false,
+            error: { code: 'in_flight', message: 'Post 1 is being sent' },
+          },
+        ],
+      });
+    }
+    expect(schedule.status).toBe(409);
+    expect(await schedule.json()).toEqual({
+      code: 'in_flight',
+      message: 'Post 1 is being sent',
+    });
+    expect(firstResponse.status).toBe(200);
+    expect(await getPost(1)).toMatchObject({ status: 'published', scheduled_at: null });
+    expect((await getPost(2)).status).toBe('draft');
+  });
 });
