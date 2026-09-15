@@ -20,9 +20,37 @@ import {
   toXAccount,
   type XAccountRow,
 } from '../db/xAccounts';
-import { ApiError } from '../errors';
+import { DomainError } from '../errors';
 import { type XClient, XError, type XMe, type XTokens } from './client';
 import { buildAuthorizeUrl, createPkce, createStateStore, type XOAuthConfig } from './oauth';
+
+export class NotConfiguredError extends DomainError {
+  constructor() {
+    super(
+      'not_configured',
+      null,
+      'X OAuth is not configured. Set PERCH_X_CLIENT_ID and PERCH_X_CLIENT_SECRET.',
+    );
+  }
+}
+
+export class NoAccountError extends DomainError {
+  constructor() {
+    super('not_found', null, 'No X account connected');
+  }
+}
+
+export class ReconnectRequiredError extends DomainError {
+  constructor() {
+    super('reconnect_required', null, 'X account needs to be reconnected');
+  }
+}
+
+export class TokenRefreshFailedError extends DomainError {
+  constructor() {
+    super('token_refresh_failed', null, 'X token refresh failed');
+  }
+}
 
 export interface XAccountService {
   status(userId: number): AccountStatus;
@@ -60,11 +88,7 @@ export function createXAccountService(deps: {
 
     startConnect(userId) {
       if (!deps.xOAuth) {
-        throw new ApiError(
-          503,
-          'not_configured',
-          'X OAuth is not configured. Set PERCH_X_CLIENT_ID and PERCH_X_CLIENT_SECRET.',
-        );
+        throw new NotConfiguredError();
       }
       const pkce = createPkce();
       const state = states.put({
@@ -142,19 +166,19 @@ export function createXAccountService(deps: {
     async accessTokenFor(userId) {
       let row = getConnectedAccount(deps.db, userId);
       if (!row) {
-        throw new ApiError(404, 'not_found', 'No X account connected');
+        throw new NoAccountError();
       }
       if (row.reconnectRequired) {
-        throw new ApiError(409, 'reconnect_required', 'X account needs to be reconnected');
+        throw new ReconnectRequiredError();
       }
       if (row.expiresAt.getTime() <= deps.clock.now().getTime() + REFRESH_MARGIN_MS) {
         await refreshRow(row);
         const fresh = getConnectedAccount(deps.db, userId);
         if (!fresh || fresh.reconnectRequired) {
-          throw new ApiError(409, 'reconnect_required', 'X account needs to be reconnected');
+          throw new ReconnectRequiredError();
         }
         if (fresh.expiresAt.getTime() <= deps.clock.now().getTime() + REFRESH_MARGIN_MS) {
-          throw new ApiError(503, 'token_refresh_failed', 'X token refresh failed');
+          throw new TokenRefreshFailedError();
         }
         row = fresh;
       }
@@ -164,7 +188,7 @@ export function createXAccountService(deps: {
     async disconnect(userId) {
       const row = getConnectedAccount(deps.db, userId);
       if (!row) {
-        throw new ApiError(404, 'not_found', 'No X account connected');
+        throw new NoAccountError();
       }
       let refreshToken = row.refreshToken;
       let accessToken = row.accessToken;
@@ -174,7 +198,7 @@ export function createXAccountService(deps: {
           refreshToken = fresh.account.refreshToken;
           accessToken = fresh.accessToken;
         } catch (error) {
-          if (!(error instanceof ApiError && error.code === 'token_refresh_failed')) {
+          if (!(error instanceof TokenRefreshFailedError)) {
             throw error;
           }
         }

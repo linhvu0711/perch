@@ -319,6 +319,23 @@ describe('account', () => {
     expect(server.xClient.calls.filter((c) => c.name === 'revokeToken')).toHaveLength(0);
   });
 
+  test('disconnects when the token refresh fails', async () => {
+    // Given: a connected account whose refresh endpoint is down, inside the refresh margin
+    await connect();
+    server.xClient.refreshError = new XError('http', 500, 'Internal Server Error');
+    server.clock.set(new Date('2026-09-04T11:55:00Z'));
+
+    // When
+    const res = await request('/api/account/disconnect', { method: 'POST' });
+
+    // Then
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ account: null, char_limit: 280 });
+    expect(
+      server.xClient.calls.filter((c) => c.name === 'revokeToken').map((c) => c.args[0]),
+    ).toEqual(['refresh-1', 'access-1']);
+  });
+
   test('coalesces concurrent refreshes into one call', async () => {
     await connect();
     server.clock.set(new Date('2026-09-04T11:55:00Z'));

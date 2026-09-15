@@ -16,13 +16,32 @@ import type { Clock } from '../clock';
 import type { Db } from '../db';
 import { logApiCall } from '../db/apiCalls';
 import { mediaRowsForPost } from '../db/postMedia';
-import { duePosts, getPost, getPostRow, PostStatusError, promotePosts } from '../db/posts';
+import {
+  duePosts,
+  getPost,
+  getPostRow,
+  PostNotReadyError,
+  PostStatusError,
+  promotePosts,
+} from '../db/posts';
 import { posts } from '../db/schema';
 import type { XAccountRow } from '../db/xAccounts';
-import { ApiError } from '../errors';
+import { DomainError } from '../errors';
 import { readMedia } from '../images';
 import type { XAccountService } from './accounts';
 import type { XClient } from './client';
+
+export class InFlightError extends DomainError {
+  constructor(postId: number) {
+    super('in_flight', null, `Post ${postId} is being sent`);
+  }
+}
+
+export class PublishFailedError extends DomainError {
+  constructor(message: string) {
+    super('publish_failed', null, message);
+  }
+}
 
 export interface PublishService {
   publishNow(userId: number, id: number): Promise<Post | null>;
@@ -106,7 +125,7 @@ export function createPublishService(deps: {
         throw new PostStatusError(id, row.status);
       }
       if (inFlight.has(id)) {
-        throw new ApiError(409, 'in_flight', `Post ${id} is being sent`);
+        throw new InFlightError(id);
       }
       inFlight.add(id);
       try {
@@ -115,10 +134,7 @@ export function createPublishService(deps: {
           const { results } = promotePosts(deps.db, userId, [id], fileExists, now, false);
           const result = results[0];
           if (result && result.ok === false) {
-            throw new ApiError(
-              400,
-              'validation',
-              'Invalid request',
+            throw new PostNotReadyError(
               result.error.errors ?? [{ path: 'status', message: result.error.message }],
             );
           }
@@ -139,7 +155,7 @@ export function createPublishService(deps: {
             })
             .where(and(eq(posts.id, id), eq(posts.userId, userId)))
             .run();
-          throw new ApiError(502, 'publish_failed', sent.message);
+          throw new PublishFailedError(sent.message);
         }
         return getPost(deps.db, userId, id, now);
       } finally {
@@ -154,7 +170,7 @@ export function createPublishService(deps: {
         throw new PostStatusError(id, row.status);
       }
       if (inFlight.has(id)) {
-        throw new ApiError(409, 'in_flight', `Post ${id} is being sent`);
+        throw new InFlightError(id);
       }
       inFlight.add(id);
       try {
@@ -171,7 +187,7 @@ export function createPublishService(deps: {
             })
             .where(and(eq(posts.id, id), eq(posts.userId, userId)))
             .run();
-          throw new ApiError(502, 'publish_failed', sent.message);
+          throw new PublishFailedError(sent.message);
         }
         return getPost(deps.db, userId, id, now);
       } finally {
@@ -189,7 +205,7 @@ export function createPublishService(deps: {
           try {
             ({ account, accessToken } = await deps.accounts.accessTokenFor(row.userId));
           } catch (error) {
-            if (error instanceof ApiError) continue;
+            if (error instanceof DomainError) continue;
             throw error;
           }
           const sent = await send(row, account, accessToken, now);
