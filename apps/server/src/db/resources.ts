@@ -29,13 +29,18 @@ import {
   sql,
 } from 'drizzle-orm';
 
+import { DomainError } from '../errors';
 import { decodeCursor, encodeCursor } from './cursor';
 import type { Db } from './index';
 import { postLinks, resources, resourceTags } from './schema';
 import { getSettings } from './settings';
 import { addResourceTags, tagIdsByName, tagsForResources } from './tags';
 
-export class InvalidCursorError extends Error {}
+export class InvalidCursorError extends DomainError {
+  constructor() {
+    super('validation', 'cursor', 'Invalid cursor');
+  }
+}
 
 type ResourceRow = typeof resources.$inferSelect;
 
@@ -265,28 +270,35 @@ export function createImage(
     tags?: string[];
   },
   now: Date,
+  removeFile?: (path: string) => void,
 ): Resource {
-  const row = db.transaction((tx) => {
-    const inserted = tx
-      .insert(resources)
-      .values({
-        userId,
-        type: 'image',
-        title: input.title,
-        notes: input.notes ?? '',
-        createdAt: now,
-        imagePath: input.path,
-        imageMime: input.mime,
-        imageBytes: input.bytes,
-        imageWidth: input.width,
-        imageHeight: input.height,
-      })
-      .returning()
-      .get();
-    if (!inserted) throw new Error('resource insert failed');
-    if (input.tags !== undefined) addResourceTags(tx, userId, inserted.id, input.tags);
-    return inserted;
-  });
+  let row;
+  try {
+    row = db.transaction((tx) => {
+      const inserted = tx
+        .insert(resources)
+        .values({
+          userId,
+          type: 'image',
+          title: input.title,
+          notes: input.notes ?? '',
+          createdAt: now,
+          imagePath: input.path,
+          imageMime: input.mime,
+          imageBytes: input.bytes,
+          imageWidth: input.width,
+          imageHeight: input.height,
+        })
+        .returning()
+        .get();
+      if (!inserted) throw new Error('resource insert failed');
+      if (input.tags !== undefined) addResourceTags(tx, userId, inserted.id, input.tags);
+      return inserted;
+    });
+  } catch (error) {
+    removeFile?.(input.path);
+    throw error;
+  }
 
   return toResource(row, 0, tagsForResources(db, userId, [row.id]).get(row.id) ?? []);
 }
