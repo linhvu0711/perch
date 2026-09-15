@@ -764,6 +764,31 @@ describe('post media', () => {
     expect(mediaFiles(1)).toEqual(filesBefore);
   });
 
+  test('removes a file whose write rejects after it was created', async () => {
+    // Given: a post and a Bun.write that writes three bytes to the destination, then rejects
+    await createPost({ text: 'Hi' });
+    const realWrite = Bun.write;
+    const write = spyOn(Bun, 'write');
+    write.mockImplementation(async (destination, data) => {
+      await realWrite(destination, new Uint8Array(3));
+      throw new Error('ENOSPC');
+    });
+
+    // When: attaching one file
+    const form = new FormData();
+    form.append(
+      'files',
+      new File([PNG_3X2.slice().buffer as ArrayBuffer], 'a.png', { type: 'image/png' }),
+    );
+    const response = await request('/api/posts/1/media/files', { method: 'POST', body: form });
+    write.mockRestore();
+
+    // Then: the request fails and the partial file is gone
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ code: 'internal', message: 'Internal error' });
+    expect(mediaFiles(1)).toEqual([]);
+  });
+
   test('rolls back post create when the media copy throws', async () => {
     // Given: one image resource and a regular file where the media directory must be created
     const [imageId] = await uploadImages({ name: 'a.png', bytes: PNG_3X2 });

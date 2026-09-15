@@ -82,12 +82,15 @@ async function store(
   postId: number,
   bytes: Uint8Array,
   ext: string,
+  rels: string[],
 ): Promise<string> {
   const dir = dirFor(uploadDir, userId, postId);
   fs.mkdirSync(dir, { recursive: true });
   const name = `${crypto.randomUUID()}.${ext}`;
+  const rel = `${userId}/posts/${postId}/${name}`;
+  rels.push(rel);
   await Bun.write(path.join(dir, name), bytes);
-  return `${userId}/posts/${postId}/${name}`;
+  return rel;
 }
 
 /** Reads bytes for a stored media path, or null when the file is gone. */
@@ -196,9 +199,8 @@ export function createMediaService(deps: {
           }
 
           const ext = resource.path.split('.').pop() ?? 'png';
-          const rel = await store(deps.uploadDir, userId, postId, bytes, ext);
+          const rel = await store(deps.uploadDir, userId, postId, bytes, ext, rels);
           await copyToR2(deps.r2, rel, bytes, deps.logError);
-          rels.push(rel);
           written.push({
             index,
             id,
@@ -266,9 +268,15 @@ export function createMediaService(deps: {
             results[index] = { name: file.name, ok: false, error: result.error };
             continue;
           }
-          const rel = await store(deps.uploadDir, userId, postId, file.bytes, result.ext);
+          const rel = await store(
+            deps.uploadDir,
+            userId,
+            postId,
+            file.bytes,
+            result.ext,
+            rels,
+          );
           await copyToR2(deps.r2, rel, file.bytes, deps.logError);
-          rels.push(rel);
           written.push({
             index,
             name: file.name,
