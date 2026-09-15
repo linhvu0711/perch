@@ -4,6 +4,7 @@ import { authMiddleware, type User } from './auth';
 import type { Clock } from './clock';
 import type { Db } from './db';
 import { errorHandler, notFoundHandler } from './errors';
+import type { PostLifecycle } from './postLifecycle';
 import type { R2Client } from './r2/client';
 import { accountRoutes } from './routes/account';
 import { authRoutes } from './routes/auth';
@@ -18,7 +19,6 @@ import { statusRoutes } from './routes/status';
 import { tagsRoutes } from './routes/tags';
 import { xCallbackHandler } from './routes/xCallback';
 import { staticHandler } from './static';
-import type { PostLifecycle } from './postLifecycle';
 import type { XAccountService } from './x/accounts';
 import type { TweetService } from './x/tweets';
 

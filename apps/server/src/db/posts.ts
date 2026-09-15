@@ -93,7 +93,7 @@ function toPost(
   limit: number,
   tags: string[],
   ready: Ready,
-  now: Date,
+  _now: Date,
 ): Post {
   const scheduled_at = row.scheduledAt?.toISOString() ?? null;
   const { missed, reason } = postState(row);
@@ -209,9 +209,11 @@ export async function createPost(
   if (files) {
     let position = 1;
     for (const resource of imageSources) {
-      const bytes = await files.read(resource.imagePath!);
+      const imagePath = resource.imagePath;
+      if (imagePath === null) continue;
+      const bytes = await files.read(imagePath);
       if (!bytes) continue;
-      const ext = resource.imagePath!.split('.').pop() ?? 'png';
+      const ext = imagePath.split('.').pop() ?? 'png';
       const rel = await files.store(row.id, bytes, ext);
       db.insert(postMedia)
         .values({
@@ -231,7 +233,12 @@ export async function createPost(
   return post;
 }
 
-export function postJoinRow(db: Db, userId: number, id: number, now: Date): PostJoinRow | undefined {
+export function postJoinRow(
+  db: Db,
+  userId: number,
+  id: number,
+  now: Date,
+): PostJoinRow | undefined {
   return db
     .select({
       ...getTableColumns(posts),
@@ -295,7 +302,7 @@ export function listPosts(
       or(
         sql`${posts.title} LIKE ${pattern} ESCAPE '\\'`,
         sql`${posts.text} LIKE ${pattern} ESCAPE '\\'`,
-      )!,
+      ) as SQL,
     );
   }
   if (query.from !== undefined) {
@@ -310,8 +317,8 @@ export function listPosts(
     const waiting = inArray(posts.status, ['draft', 'official']);
     filterConditions.push(
       query.scheduled
-        ? and(waiting, gte(posts.scheduledAt, now))!
-        : and(waiting, or(isNull(posts.scheduledAt), lt(posts.scheduledAt, now)))!,
+        ? (and(waiting, gte(posts.scheduledAt, now)) as SQL)
+        : (and(waiting, or(isNull(posts.scheduledAt), lt(posts.scheduledAt, now))) as SQL),
     );
   }
   if (query.missed !== undefined) {
@@ -345,11 +352,11 @@ export function listPosts(
     pageConditions.push(
       key.time === null
         ? sql`${sortTime} IS NULL AND ${posts.id} < ${key.id}`
-        : or(
+        : (or(
             sql`${sortTime} < ${key.time}`,
             sql`${sortTime} = ${key.time} AND ${posts.id} < ${key.id}`,
             sql`${sortTime} IS NULL`,
-          )!,
+          ) as SQL),
     );
   }
 

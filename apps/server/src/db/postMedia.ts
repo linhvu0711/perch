@@ -14,7 +14,7 @@ import { getPost, MediaLimitError, PostImmutableError } from './posts';
 import { postLinks, postMedia, posts, resources } from './schema';
 
 export class MissingMediaPositionError extends DomainError {
-  constructor(postId: number, position: number) {
+  constructor(_postId: number, position: number) {
     super('validation', 'positions', `No media at position ${position}`);
   }
 }
@@ -105,13 +105,7 @@ export function mediaRowForPost(
     .select({ media: postMedia })
     .from(postMedia)
     .innerJoin(posts, eq(postMedia.postId, posts.id))
-    .where(
-      and(
-        eq(postMedia.postId, postId),
-        eq(postMedia.id, mediaId),
-        eq(posts.userId, userId),
-      ),
-    )
+    .where(and(eq(postMedia.postId, postId), eq(postMedia.id, mediaId), eq(posts.userId, userId)))
     .get()?.media;
 }
 

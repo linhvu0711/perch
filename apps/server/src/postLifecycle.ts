@@ -2,16 +2,16 @@ import {
   DEMOTE_FROM,
   estimateCost,
   nextAttemptAt,
-  parseScheduleTime,
   type Post,
   type PostScheduleBody,
   type PostStatus,
   type PostStatusResponse,
   PROMOTE_FROM,
   PUBLISH_FROM,
+  parseScheduleTime,
+  promoteChecks,
   RETRY_FROM,
   SCHEDULE_FROM,
-  promoteChecks,
   X_COSTS_USD,
   X_ENDPOINTS,
 } from '@perch/core';
@@ -25,11 +25,11 @@ import {
   duePosts,
   getPost,
   getPostRow,
+  PostImmutableError,
+  type PostRow,
   patchPostRow,
   postJoinRow,
   postLimit,
-  PostImmutableError,
-  type PostRow,
 } from './db/posts';
 import { getSettings } from './db/settings';
 import type { XAccountRow } from './db/xAccounts';
@@ -375,7 +375,7 @@ export function createPostLifecycle(deps: {
           const sent = await send(row, account, accessToken, now);
           if (!sent.ok) {
             const failedAttempts = row.retryCount + 1;
-            const next = nextAttemptAt(row.scheduledAt!, failedAttempts);
+            const next = nextAttemptAt(row.scheduledAt ?? now, failedAttempts);
             patchPostRow(
               deps.db,
               row.userId,

@@ -21,8 +21,8 @@ import {
   attachFromFiles,
   attachFromResources,
   detachMedia,
-  mediaRowForPost,
   type MediaFiles,
+  mediaRowForPost,
 } from '../db/postMedia';
 import {
   createPost,
