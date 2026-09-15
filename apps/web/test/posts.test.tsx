@@ -87,4 +87,34 @@ describe('posts page', () => {
     expect((await getPost(server, 1)).text).toBe('Hello world!');
     expect(document.querySelector('.toast')?.textContent).toBe('Saved');
   });
+
+  test('shows the server message when an edit is refused as in flight', async () => {
+    // Given: a Post, and the next PATCH is refused as in flight
+    await seedPost(server, { text: 'Hello world' });
+    let refused = true;
+    renderApp(server, '/posts/1', (_input, init) => {
+      if (refused && init?.method === 'PATCH') {
+        refused = false;
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ code: 'in_flight', message: 'Post 1 is being sent' }),
+            { status: 409, headers: { 'content-type': 'application/json' } },
+          ),
+        );
+      }
+      return null;
+    });
+    await screen.findByDisplayValue('Hello world');
+    // When: a save is refused
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Text'), { target: { value: 'Hello world!' } });
+    });
+    // Then: the toast shows the server message and the row kept its text
+    await waitFor(
+      () =>
+        expect(document.querySelector('.toast')?.textContent).toBe('Post 1 is being sent'),
+      { timeout: 2000 },
+    );
+    expect((await getPost(server, 1)).text).toBe('Hello world');
+  });
 });

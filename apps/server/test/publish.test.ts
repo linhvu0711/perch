@@ -802,3 +802,83 @@ describe('retry', () => {
     expect(server.xClient.calls).toEqual([]);
   });
 });
+
+describe('in flight', () => {
+  test('refuses an edit while the post is being sent and X gets the old text', async () => {
+    // Given: a connected account, an official post, and a send that waits on a gate
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+
+    // When: a publish holds the send and an edit arrives before it answers
+    const first = request('/api/posts/1/publish', { method: 'POST' });
+    const patch = await request('/api/posts/1', {
+      method: 'PATCH',
+      body: JSON.stringify({ text: 'Changed' }),
+    });
+    release();
+    const firstResponse = await first;
+
+    // Then: the edit is refused and X received the text the send started with
+    expect(patch.status).toBe(409);
+    expect(await patch.json()).toEqual({
+      code: 'in_flight',
+      message: 'Post 1 is being sent',
+    });
+    expect(firstResponse.status).toBe(200);
+    const created = server.xClient.calls.filter((call) => call.name === 'createPost');
+    expect(created).toHaveLength(1);
+    expect(created[0]?.args[1]).toEqual({ text: 'Hello' });
+    expect(await getPost(1)).toMatchObject({
+      text: 'Hello',
+      status: 'published',
+      x_post_id: '2',
+    });
+  });
+
+  test('edits and deletes work again after the send ends', async () => {
+    // Given: post 1 published through a released send, post 2 failed by X
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const first = request('/api/posts/1/publish', { method: 'POST' });
+    release();
+    const firstResponse = await first;
+    expect(firstResponse.status).toBe(200);
+    await createPost({ text: 'Two', official: true });
+    server.xClient.createPostError = new XError('http', 503, 'Service Unavailable');
+    const failed = await request('/api/posts/2/publish', { method: 'POST' });
+    expect(failed.status).toBe(502);
+
+    // When: editing and deleting after the sends ended
+    const patchPublished = await request('/api/posts/1', {
+      method: 'PATCH',
+      body: JSON.stringify({ text: 'Changed' }),
+    });
+    const del = await request('/api/posts', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids: [1] }),
+    });
+    const patchFailed = await request('/api/posts/2', {
+      method: 'PATCH',
+      body: JSON.stringify({ text: 'Changed' }),
+    });
+
+    // Then: the usual rules apply again
+    expect(patchPublished.status).toBe(400);
+    expect(await patchPublished.json()).toEqual({
+      code: 'validation',
+      message: 'Invalid request',
+      errors: [{ path: 'status', message: 'Post 1 is published' }],
+    });
+    expect(await del.json()).toEqual({ results: [{ id: 1, ok: true }] });
+    expect(patchFailed.status).toBe(200);
+    expect((await getPost(2)).text).toBe('Changed');
+  });
+});

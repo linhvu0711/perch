@@ -46,7 +46,7 @@ import {
   removeMediaDir,
   storeMedia,
 } from '../images';
-import { PostNotReadyError } from '../postLifecycle';
+import { InFlightError, PostNotReadyError } from '../postLifecycle';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -61,6 +61,9 @@ const mediaFiles = (deps: AppDeps, userId: number): MediaFiles => ({
 });
 
 export function postsRoutes(deps: AppDeps) {
+  function refuseInFlight(id: number): void {
+    if (deps.lifecycle.isInFlight(id)) throw new InFlightError(id);
+  }
   return new Hono<AppEnv>()
     .get('/', zValidator('query', postListQuerySchema, validationHook), (c) => {
       const userId = c.get('user').id;
@@ -180,6 +183,7 @@ export function postsRoutes(deps: AppDeps) {
       zValidator('json', postPatchSchema, validationHook),
       (c) => {
         const { id } = c.req.valid('param');
+        refuseInFlight(id);
         const post = updatePost(
           deps.db,
           c.get('user').id,

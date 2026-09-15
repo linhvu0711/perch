@@ -77,6 +77,7 @@ export interface PostLifecycle {
   publishNow(userId: number, id: number): Promise<Post | null>;
   retry(userId: number, id: number): Promise<Post | null>;
   sendDue(now: Date): Promise<void>;
+  isInFlight(id: number): boolean;
 }
 
 type SendResult = { ok: true } | { ok: false; message: string };
@@ -357,6 +358,10 @@ export function createPostLifecycle(deps: {
       } finally {
         inFlight.delete(id);
       }
+    },
+
+    isInFlight(id) {
+      return inFlight.has(id);
     },
 
     async sendDue(now) {
