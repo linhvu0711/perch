@@ -86,7 +86,7 @@ perch post delete <id>... [--yes]
 - `publish`: on a draft, runs the promote checks and promotes first; clears the schedule time; on success status becomes published and `x_account_id` is set. `post list --from/--to` filter on schedule time, or published time for published posts.
 - `retry`: only for failed posts; sends now. `publish` and `retry` print the post on success; when X rejects the send they print `{ code: 'publish_failed', message }` on stderr and exit 1.
 - `show` and `list --json` carry `x_post_url` and `missed`; the table shows `missed` in the status column.
-- `list --json` rows also carry `reason` (`null` outside needs attention); the table shows it in a `reason` column.
+- `list --json` rows also carry `reason` (`null` unless the Post is an Issue or a Draft due soon); the table shows it in a `reason` column.
 - `delete`: local only. Never deletes on X.
 
 ### Tags, calendar, cost
@@ -133,9 +133,9 @@ perch open resource <id>              open the resource in the web app
 
 `missed` is a flag, not a status: a draft (or a post whose X account is disconnected) whose schedule time has passed.
 
-**Needs attention** (`perch status`, web dashboard) = missed posts + failed posts + drafts whose schedule time is within the next 3 days. The last group exists because a draft is never sent; the user must promote it in time.
+**Issues** (`perch status`, web dashboard) = missed posts + failed posts. `--needs-attention` lists them. A draft due soon is not an Issue; `perch status --json` still reports `due_soon_count`.
 
-**Dismissing** is not a separate state. `unschedule` clears the time of a missed or due-soon draft, so it is a plain draft again. `demote` turns a failed post into a draft. There is no `dismissed` field.
+**Dismissing** is not a separate state. `unschedule` clears the time of a missed draft, so it is a plain draft again. `demote` turns a failed post into a draft. There is no `dismissed` field.
 
 ## Cost lines shown by `post show` / `post preview`
 

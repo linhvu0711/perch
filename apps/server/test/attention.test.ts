@@ -80,7 +80,7 @@ async function seedAttentionPosts(): Promise<void> {
 }
 
 describe('needs attention', () => {
-  test('lists the three groups with their reasons', async () => {
+  test('lists Missed and Failed with their reasons', async () => {
     // Given: the seven-post seed, account connected, now 2026-09-04T10:31Z
     connectTestAccount(server);
     await seedAttentionPosts();
@@ -91,17 +91,16 @@ describe('needs attention', () => {
     // Then
     expect(response.status).toBe(200);
     const body = (await response.json()) as PostList;
-    expect(body.items.map((post) => post.id)).toEqual([4, 3, 2, 1]);
-    expect(body.total).toBe(4);
+    expect(body.items.map((post) => post.id)).toEqual([3, 2, 1]);
+    expect(body.total).toBe(3);
     expect(body.items.map((post) => post.reason)).toEqual([
-      'still a draft',
       'publish failed: Service Unavailable',
       'time passed, no X account',
       'time passed, still a draft',
     ]);
   });
 
-  test('needs_attention=false keeps the rest, with null reasons', async () => {
+  test('needs_attention=false keeps the rest', async () => {
     // Given: the same seed
     connectTestAccount(server);
     await seedAttentionPosts();
@@ -111,12 +110,12 @@ describe('needs attention', () => {
 
     // Then
     const body = (await response.json()) as PostList;
-    expect(body.items.map((post) => post.id)).toEqual([5, 6, 7]);
-    expect(body.total).toBe(3);
-    expect(body.items.every((post) => post.reason === null)).toBe(true);
+    expect(body.items.map((post) => post.id)).toEqual([5, 4, 6, 7]);
+    expect(body.total).toBe(4);
+    expect(body.items.map((post) => post.reason)).toEqual([null, 'still a draft', null, null]);
   });
 
-  test('the window edges hold through the seam', async () => {
+  test('a draft at the window edge is due soon but not an Issue', async () => {
     // Given: a draft at now + 3 days and one just past it
     connectTestAccount(server);
     await createPost({ text: 'Edge' });
@@ -127,12 +126,16 @@ describe('needs attention', () => {
 
     // When
     const response = await request('/api/posts?needs_attention=true');
+    const statusResponse = await request('/api/status');
 
     // Then
     const body = (await response.json()) as PostList;
-    expect(body.items.map((post) => post.id)).toEqual([1]);
-    expect(body.total).toBe(1);
-    expect(body.items[0]?.reason).toBe('still a draft');
+    expect(body.items).toEqual([]);
+    expect(body.total).toBe(0);
+    const status = (await statusResponse.json()) as Status;
+    expect(status.due_soon_count).toBe(1);
+    expect(status.missed_count).toBe(0);
+    expect(status.failed_count).toBe(0);
   });
 
   test('dismiss unschedules a missed draft, demotes a failed post, deletes nothing', async () => {
