@@ -60,19 +60,26 @@ function postChecks(input: PostChecksInput): PostCheck[] {
     },
   ];
   const missing = input.media.filter((media) => !media.present).map((media) => media.position);
+  const countLabel = `${input.media.length} of ${POST_MEDIA_MAX} images`;
+  const countMessage = `${input.media.length} of ${POST_MEDIA_MAX} media`;
+  const overMax = input.media.length > POST_MEDIA_MAX;
   checks.push(
     {
       code: 'media',
       path: 'media',
-      ok: input.media.length <= POST_MEDIA_MAX && missing.length === 0,
+      ok: !overMax && missing.length === 0,
       label:
-        missing.length > 0
-          ? missingLabel(missing)
-          : `${input.media.length} of ${POST_MEDIA_MAX} images`,
+        missing.length === 0
+          ? countLabel
+          : overMax
+            ? `${countLabel}; ${missingLabel(missing)}`
+            : missingLabel(missing),
       message:
-        missing.length > 0
-          ? missingLabel(missing)
-          : `${input.media.length} of ${POST_MEDIA_MAX} media`,
+        missing.length === 0
+          ? countMessage
+          : overMax
+            ? `${countMessage}; ${missingLabel(missing)}`
+            : missingLabel(missing),
     },
     {
       code: 'account',
