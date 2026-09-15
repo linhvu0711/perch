@@ -49,7 +49,7 @@ Decisions from the design session on 2026-09-03. Big, hard-to-reverse ones have 
 | 30 | tweet resource rejects | media, article, retweet, reply, quote | 0007 |
 | 31 | dismiss a missed / failed post | no flag; missed → `unschedule` (plain draft), failed → `demote` (draft, error cleared) | 0005 |
 | 32 | post title | optional internal label; shown in lists and calendar; never sent to X | — |
-| 33 | needs attention | missed + failed + drafts scheduled within 3 days | 0005 |
+| 33 | issues | missed + failed | 0005 |
 | 34 | publish a draft | allowed: `publish` promotes first with the same checks, then sends | 0005 |
 | 35 | big lists | cursor paging on the server (`limit` + opaque `cursor`, `next_cursor` in JSON); web = "load more" on scroll for posts (50), resources (30), drawer (20); calendar loads one month/week, 3 per day then "+N more" opens the week; dropdowns load all and filter client-side; dashboard attention list caps at 10 with "See all" | — |
 | 36 | backups | Litestream → Cloudflare R2 for SQLite; images copied to the same bucket on upload | 0002 |

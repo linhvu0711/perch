@@ -7,7 +7,7 @@ The CLI is a thin client; every command is one or more HTTP calls to the server.
 
 - **IDs are integers**, separate per table. `perch post show 3` and `perch resource show 3` are different things.
 - **Output**: table when stdout is a terminal, JSON when piped. `--json` / `--table` force it.
-- **Errors**: stderr, non-zero exit. JSON object when in JSON mode.
+- **Errors**: stderr, non-zero exit. JSON object when in JSON mode. Exit 2 when the CLI rejects the command before any request (bad flag, argument, or value), 3 when the server answers unauthorized, 1 for every other failure.
 - **Batch**: arguments that are IDs or paths accept many (`delete 1 2 3`). Text, time, and content take one. In JSON mode a batch returns one result per item with per-item errors; one bad item does not stop the rest.
 - **Destructive commands** (`delete`) prompt unless `--yes`. In non-TTY mode they require `--yes`.
 - **Text input**: `--text "..."`, `--file <path>`, or `-` for stdin. `-e` opens `$EDITOR` (TTY only).
@@ -86,7 +86,7 @@ perch post delete <id>... [--yes]
 - `publish`: on a draft, runs the promote checks and promotes first; clears the schedule time; on success status becomes published and `x_account_id` is set. `post list --from/--to` filter on schedule time, or published time for published posts.
 - `retry`: only for failed posts; sends now. `publish` and `retry` print the post on success; when X rejects the send they print `{ code: 'publish_failed', message }` on stderr and exit 1.
 - `show` and `list --json` carry `x_post_url` and `missed`; the table shows `missed` in the status column.
-- `list --json` rows also carry `reason` (`null` unless the Post is an Issue or a Draft due soon); the table shows it in a `reason` column.
+- `list --json` rows also carry `reason` (`null` unless the Post is an Issue); the table shows it in a `reason` column.
 - `delete`: local only. Never deletes on X.
 
 ### Tags, calendar, cost
@@ -131,9 +131,9 @@ perch open resource <id>              open the resource in the web app
 | published | — | nothing; read-only |
 | failed | (kept) | nothing until `retry` |
 
-`missed` is a flag, not a status: a draft (or a post whose X account is disconnected) whose schedule time has passed.
+`missed` is a flag, not a status: a draft whose schedule time has passed, or an official post whose schedule time passed while no X account was connected at that time.
 
-**Issues** (`perch status`, web dashboard) = missed posts + failed posts. `--needs-attention` lists them. A draft due soon is not an Issue; `perch status --json` still reports `due_soon_count`.
+**Issues** (`perch status`, web dashboard) = missed posts + failed posts. `--needs-attention` lists them.
 
 **Dismissing** is not a separate state. `unschedule` clears the time of a missed draft, so it is a plain draft again. `demote` turns a failed post into a draft. There is no `dismissed` field.
 

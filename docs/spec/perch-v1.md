@@ -120,7 +120,7 @@ Build Perch v1: a single-user tool that keeps my Resources (Tweet Resources, Ima
 90. As a User, I want an "Issues" set made of Missed Posts and Failed Posts, so that I see everything that needs my hand in one place.
 91. As a User, I want each needs-attention row to state its reason in plain words, so that I know whether to Promote, retry, or reschedule.
 92. As a User, I want a dismiss action that clears the time of a Missed Post or Demotes a Failed Post to Draft, so that acknowledged items leave the list without a new "dismissed" flag and without deleting anything.
-93. As a User, I want the Post modal to show an amber banner when the Post is Missed or due soon and a red banner with the error and try count when Failed, so that the problem is visible while I edit.
+93. As a User, I want the Post modal to show an amber banner when the Post is Missed and a red banner with the error and try count when Failed, so that the problem is visible while I edit.
 94. As a User, I want `perch status` to print the connected account, the next 5 due Posts, Missed and Failed counts, and this month's Cost in one screen, so that an agent can orient itself in one call.
 
 ### Tags
@@ -247,10 +247,12 @@ All decisions below come from the design session and are recorded in the ADRs an
 - Dismiss is not a state. It is unschedule (for Missed Posts) or demote (for Failed Posts). This rule came out of the mockup prototype; the decision-bearing part is:
 
   ```
-  needsAttention(post, now) =
-    missed(post, now) || post.status == failed
+  needsAttention(post) =
+    missed(post) || post.status == failed
   dismiss(post) = status failed ? demote(post) : unschedule(post)
   ```
+
+  Missed and Issues are computed in SQL on the server, since Missed depends on which X Account was connected at the Schedule Time.
 
 **Scheduler**
 - A loop in the server process ticks every 30 seconds. Each tick, with an injected clock, it selects Posts whose Schedule Time is due: Drafts and Posts with no connected X Account are left as is (they read as Missed); Official Posts are Published. A failed attempt schedules retries at +1, +5, and +15 minutes from the original time by recording the retry count and next attempt; after the third retry the Post becomes Failed with the error text kept and the Schedule Time kept.
@@ -284,7 +286,7 @@ All decisions below come from the design session and are recorded in the ADRs an
 - Tags: shared across types, rename applies everywhere, delete removes from everything, counts are correct.
 - Calendar and cost: range query groups by day in the configured time zone; month summaries match the api_calls rows.
 - X Account: connect stores tokens and subscription type and sets the limit; a second connect disconnects the first; refresh persists a rotated token; disconnect revokes and keeps the row; Published Posts keep their account after disconnect.
-- Core package: weighted character counting (URLs 23, wide characters 2, limit boundaries), Cost estimation (mentions and hashtags are not URLs), time parsing in a time zone, needs-attention window edges.
+- Core package: weighted character counting (URLs 23, wide characters 2, limit boundaries), Cost estimation (mentions and hashtags are not URLs), time parsing in a time zone.
 
 ## Out of Scope
 

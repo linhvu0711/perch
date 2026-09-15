@@ -27,10 +27,11 @@ is only about how code is written.
 ## Layout
 
 - Bun workspaces: `apps/server`, `apps/web`, `apps/cli`, `packages/core`. A new module goes in the package that owns the behavior.
-- `packages/core` holds Zod schemas for every API type, the inferred types, and every rule that decides something: character limits, costs, list limits, title derivation, ready checks, needs-attention. It imports nothing from the apps.
+- `packages/core` holds Zod schemas for every API type, the inferred types, and every pure rule that decides something: character limits, costs, list limits, title derivation, ready and promote checks. It imports nothing from the apps.
+- A rule that needs X Account history, such as Missed and Issues, lives on the server in `apps/server/src/db/postState.ts`, as SQL. There is no TypeScript twin of it in core.
 - Web and CLI import deciding rules, constants, limits, and prices from `@perch/core`. They never re-implement one, not even as a placeholder or a number in UI copy.
   A hardcoded `280` or `$0.010` in a page is a second source of truth that drifts silently.
-- Server routes live in `apps/server/src/routes/`, database access in `apps/server/src/db/`, X access in `apps/server/src/x/`. Web pages live in `apps/web/src/pages/`, components in `apps/web/src/components/`, hooks and API in `apps/web/src/lib/`. CLI commands live in `apps/cli/src/commands/`.
+- Server routes live in `apps/server/src/routes/`, database access in `apps/server/src/db/`, X access in `apps/server/src/x/`. A module that needs both the database and XClient sits at the top of `apps/server/src/`: `postLifecycle.ts` owns every Post status change, `media.ts` owns Media files and their R2 copy. Web pages live in `apps/web/src/pages/`, components in `apps/web/src/components/`, hooks and API in `apps/web/src/lib/`. CLI commands live in `apps/cli/src/commands/`.
 - Web and CLI reach the server only through the HTTP API with Hono's typed RPC client. They import `type { AppType }` from `@perch/server` and nothing else from it, except `@perch/server/testing` in tests.
 - Imports are ordered node builtins, then packages, then relative paths, with a blank line between groups. [biome organizeImports]
 - Web imports its own files through the `@/` alias. Server, CLI, and core use relative paths.
@@ -38,8 +39,8 @@ is only about how code is written.
 
 ## Errors
 
-- Server routes throw `ApiError` with a status and a stable code. One `onError` handler in `apps/server/src/errors.ts` turns it into the error JSON. Routes do not catch, except to translate a lower-level error into an `ApiError`.
-- CLI commands throw `CliError` with an exit code. One catch in `apps/cli/src/cli.ts` maps it to stderr and the exit code.
+- Server modules throw a `DomainError` subclass with a stable code and a field path. One table in `apps/server/src/errors.ts` maps each code to a status, and one `onError` handler turns it into the error JSON. Routes never catch. `ApiError` is only for HTTP-level cases: auth and a route with no resource behind it.
+- CLI commands throw `CliError`. The exit number comes from the class, never from the call site: `UsageError` exits 2, `AuthError` exits 3, everything else exits 1. One catch in `apps/cli/src/cli.ts` maps it to stderr and the exit number.
 - Web handles errors where the action happens, with a toast or an inline message. There is no error boundary in v1.
 - Plain `throw new Error` is only for invariants that cannot happen. Anything a client can trigger gets a typed error.
 - A `catch` either rethrows, translates, or returns a documented fallback. It never swallows silently.
@@ -55,9 +56,9 @@ is only about how code is written.
 ## Tests
 
 - Runner is `bun test`. [bun]
-- Tests live in a `test/` folder next to `src/` and are named `<topic>.test.ts`. Web has no tests in v1.
-- A test drives Perch the way a client does and asserts on what a client can see: HTTP responses, rows the next request returns, files that exist, stdout, stderr, exit codes, and the calls the fake X client received.
-- The seam is `createTestServer` in `apps/server/src/testing.ts`. Server tests send requests to the app in-process. CLI tests inject that app as `fetch` through `makeCtx` in `apps/cli/test/helpers.ts`.
+- Tests live in a `test/` folder next to `src/` and are named `<topic>.test.ts`, or `<topic>.test.tsx` when they render.
+- A test drives Perch the way a client does and asserts on what a client can see: HTTP responses, rows the next request returns, files that exist, stdout, stderr, exit codes, rendered text, and the calls the fake X client received.
+- The seam is `createTestServer` in `apps/server/src/testing.ts`. Server tests send requests to the app in-process. CLI tests inject that app as `fetch` through `makeCtx` in `apps/cli/test/helpers.ts`. Web tests render a page inside `ApiProvider` with a client whose `fetch` is that app.
 - Pure modules in `packages/core` and adapters such as the real X client may be tested directly, with canned inputs.
 - Every test starts from an empty temp database and an empty temp upload directory, with an injected clock and a fake X client. A test never reads or writes `process.env`, `~/.perch`, the real clock, or the network.
   A test that uses `new Date()` or the real env passes on one machine and fails on the next.
@@ -116,7 +117,6 @@ is only about how code is written.
 
 ## Not covered
 
-- Web tests. Out of scope for v1 by the spec.
 - Structured logging and request ids. One process, one user; revisit when a second user exists.
 - A React error boundary. Revisit when a page can crash on render.
 - Commit hooks and CI. Recommended as separate issues.
