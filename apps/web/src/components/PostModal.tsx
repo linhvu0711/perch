@@ -341,7 +341,7 @@ export function PostModal(): JSX.Element | null {
                         limit: viewPost.limit,
                         media: viewPost.media.map((item) => ({
                           position: item.position,
-                          present: true,
+                          present: item.present,
                         })),
                         accountConnected: account.data?.account != null,
                       }).checks.find((check) => !check.ok);
@@ -646,7 +646,7 @@ export function PostModal(): JSX.Element | null {
                       limit: viewPost.limit,
                       media: viewPost.media.map((item) => ({
                         position: item.position,
-                        present: true,
+                        present: item.present,
                       })),
                       accountConnected: account.data?.account != null,
                     }).checks.map((check) => (

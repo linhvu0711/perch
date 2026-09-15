@@ -229,17 +229,22 @@ export function postJoinRow(
 
 export type PostMediaRow = typeof postMedia.$inferSelect;
 
-function toPostMedia(row: PostMediaRow): PostMedia {
+function toPostMedia(row: PostMediaRow, fileExists: (rel: string) => boolean): PostMedia {
   return {
     id: row.id,
     position: row.position,
     mime: row.mime as PostMedia['mime'],
     bytes: row.bytes,
     from_resource_id: row.fromResourceId,
+    present: fileExists(row.path),
   };
 }
 
-function mediaForPosts(db: Db, postIds: number[]): Map<number, PostMedia[]> {
+function mediaForPosts(
+  db: Db,
+  postIds: number[],
+  fileExists: (rel: string) => boolean,
+): Map<number, PostMedia[]> {
   const result = new Map<number, PostMedia[]>();
   if (postIds.length === 0) return result;
 
@@ -252,7 +257,7 @@ function mediaForPosts(db: Db, postIds: number[]): Map<number, PostMedia[]> {
 
   for (const row of rows) {
     const list = result.get(row.postId) ?? [];
-    list.push(toPostMedia(row));
+    list.push(toPostMedia(row, fileExists));
     result.set(row.postId, list);
   }
   return result;
@@ -309,6 +314,7 @@ export function insertMediaRow(
   position: number,
   file: { path: string; mime: PostMedia['mime']; bytes: number },
   fromResourceId: number | null,
+  fileExists: (rel: string) => boolean,
 ): PostMedia {
   const row = db
     .insert(postMedia)
@@ -323,7 +329,7 @@ export function insertMediaRow(
     .returning()
     .get();
   if (!row) throw new Error('post_media insert failed');
-  return toPostMedia(row);
+  return toPostMedia(row, fileExists);
 }
 
 export function insertPostLink(db: Db, postId: number, resourceId: number): void {
@@ -356,8 +362,7 @@ export function getPost(
   if (!row) return null;
 
   const limit = postLimit(db, userId);
-  const media = mediaForPosts(db, [row.id]).get(row.id) ?? [];
-  const mediaPaths = mediaPathsForPosts(db, [row.id]).get(row.id) ?? [];
+  const media = mediaForPosts(db, [row.id], fileExists).get(row.id) ?? [];
   return toPost(
     row,
     linksForPosts(db, [row.id]).get(row.id) ?? [],
@@ -367,10 +372,7 @@ export function getPost(
     readyChecks({
       text: row.text,
       limit,
-      media: mediaPaths.map(({ position, path }) => ({
-        position,
-        present: fileExists(path),
-      })),
+      media: media.map(({ position, present }) => ({ position, present })),
       accountConnected: getConnectedAccount(db, userId) !== null,
     }),
     now,
@@ -518,8 +520,7 @@ function postsFromRows(
   const accountConnected = getConnectedAccount(db, userId) !== null;
   const postIds = rows.map((row) => row.id);
   const links = linksForPosts(db, postIds);
-  const media = mediaForPosts(db, postIds);
-  const mediaPaths = mediaPathsForPosts(db, postIds);
+  const media = mediaForPosts(db, postIds, fileExists);
   const postTagsMap = tagsForPosts(db, userId, postIds);
   const items = rows.map((row) => {
     const mediaItems = media.get(row.id) ?? [];
@@ -532,10 +533,7 @@ function postsFromRows(
       readyChecks({
         text: row.text,
         limit,
-        media: (mediaPaths.get(row.id) ?? []).map(({ position, path }) => ({
-          position,
-          present: fileExists(path),
-        })),
+        media: mediaItems.map(({ position, present }) => ({ position, present })),
         accountConnected,
       }),
       now,

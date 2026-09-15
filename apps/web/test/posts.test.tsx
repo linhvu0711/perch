@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import fs from 'node:fs';
+import path from 'node:path';
 import { createTestServer, type TestServer } from '@perch/server/testing';
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 
-import { getPost, renderApp, seedPost } from './helpers';
+import { attachImage, getPost, renderApp, seedPost } from './helpers';
 
 let server: TestServer;
 
@@ -51,6 +53,34 @@ describe('posts page', () => {
     expect((await getPost(server, 1)).text).toBe('Hello world');
     expect(document.querySelector('.toast')?.textContent).toBe('Saved');
     expect(screen.getByTestId('location').textContent).toBe('/posts');
+  });
+
+  test('shows a missing Media file red and warns on Publish now', async () => {
+    // Given: a Post with one attached image whose file is deleted
+    await seedPost(server, { text: 'Hello' });
+    await attachImage(server, 1);
+    const dir = path.join(server.dir, 'uploads', '1', 'posts', '1');
+    for (const file of fs.readdirSync(dir)) {
+      fs.unlinkSync(path.join(dir, file));
+    }
+    renderApp(server, '/posts/1');
+    await screen.findByDisplayValue('Hello');
+    await screen.findByText('Media 1 file is missing');
+
+    // When: reading the row, then clicking Publish now
+    const row = screen.getByText('Media 1 file is missing').closest('li');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Publish now' }));
+    });
+
+    // Then
+    expect(row?.className).toBe('bad');
+    expect(screen.queryByText('1 of 4 images')).toBeNull();
+    await waitFor(
+      () => expect(document.querySelector('.toast')?.textContent).toBe('Media 1 file is missing'),
+      { timeout: 2000 },
+    );
+    expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
   test('keeps the patch and shows a toast when a save fails', async () => {

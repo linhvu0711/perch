@@ -167,6 +167,7 @@ export function createMediaService(deps: {
           next++,
           { path: rel, mime: resource.mime, bytes: bytes.length },
           id,
+          fileExists,
         );
         insertPostLink(deps.db, postId, id);
         results.push({ id, ok: true, media });
@@ -208,6 +209,7 @@ export function createMediaService(deps: {
           next++,
           { path: rel, mime: result.mime, bytes: file.bytes.length },
           null,
+          fileExists,
         );
         results.push({ name: file.name, ok: true, media });
       }

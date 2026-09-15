@@ -280,7 +280,14 @@ describe('post attach and detach', () => {
       {
         id: resourceId,
         ok: true,
-        media: { id: 1, position: 1, mime: 'image/png', bytes: 73, from_resource_id: resourceId },
+        media: {
+          id: 1,
+          position: 1,
+          mime: 'image/png',
+          bytes: 73,
+          from_resource_id: resourceId,
+          present: true,
+        },
       },
     ]);
 
@@ -290,7 +297,14 @@ describe('post attach and detach', () => {
       {
         name: 'pic.png',
         ok: true,
-        media: { id: 2, position: 2, mime: 'image/png', bytes: 73, from_resource_id: null },
+        media: {
+          id: 2,
+          position: 2,
+          mime: 'image/png',
+          bytes: 73,
+          from_resource_id: null,
+          present: true,
+        },
       },
     ]);
 
@@ -309,12 +323,41 @@ describe('post attach and detach', () => {
     const detach = makeCtx(server);
     expect(await runCli(['post', 'detach', '1', '--media', '1', '--json'], detach.ctx)).toBe(0);
     expect(JSON.parse(detach.out())).toEqual([
-      { id: 2, position: 1, mime: 'image/png', bytes: 73, from_resource_id: null },
+      { id: 2, position: 1, mime: 'image/png', bytes: 73, from_resource_id: null, present: true },
     ]);
 
     const detachAll = makeCtx(server);
     expect(await runCli(['post', 'detach', '1', '--all', '--json'], detachAll.ctx)).toBe(0);
     expect(JSON.parse(detachAll.out())).toEqual([]);
+  });
+
+  test('show prints a missing Media file in the ready column and present in json', async () => {
+    const { resourceId } = await attachFixtures();
+    const attach = makeCtx(server);
+    expect(
+      await runCli(['post', 'attach', '1', '--resource', String(resourceId), '--json'], attach.ctx),
+    ).toBe(0);
+    const dir = path.join(server.dir, 'uploads', '1', 'posts', '1');
+    for (const file of fs.readdirSync(dir)) {
+      fs.unlinkSync(path.join(dir, file));
+    }
+
+    const show = makeCtx(server, { isTTY: true });
+    await runCli(['post', 'show', '1'], show.ctx);
+    expect(show.out()).toContain('no Media 1 file is missing');
+
+    const json = makeCtx(server);
+    await runCli(['post', 'show', '1', '--json'], json.ctx);
+    expect((JSON.parse(json.out()) as { media: unknown[] }).media).toEqual([
+      {
+        id: 1,
+        position: 1,
+        mime: 'image/png',
+        bytes: 73,
+        from_resource_id: resourceId,
+        present: false,
+      },
+    ]);
   });
 
   test('reports a read_failed result for an unreadable file', async () => {

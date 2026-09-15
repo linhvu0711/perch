@@ -536,7 +536,6 @@ describe('post status', () => {
       checks: [
         { code: 'text', ok: true, label: 'Text is not empty' },
         { code: 'limit', ok: true, label: '5 of 25,000 characters' },
-        { code: 'media', ok: true, label: '1 of 4 images' },
         { code: 'media', ok: false, label: 'Media 1 file is missing' },
         { code: 'account', ok: true, label: 'X account connected' },
       ],
