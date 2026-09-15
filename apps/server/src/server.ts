@@ -6,6 +6,7 @@ import type { Hono } from 'hono';
 import { type AppEnv, createApp } from './app';
 import type { Clock } from './clock';
 import { migrateDb, openDb, seedDb } from './db';
+import { createMediaService } from './media';
 import { createPostLifecycle } from './postLifecycle';
 import type { R2Client } from './r2/client';
 import { createTick } from './scheduler';
@@ -52,6 +53,13 @@ export async function buildServer(options: BuildServerOptions): Promise<PerchSer
     accounts,
     xClient: options.xClient,
   });
+  const media = createMediaService({
+    db,
+    uploadDir: options.uploadDir,
+    r2: options.r2,
+    clock: options.clock,
+    logError: options.logError,
+  });
   const lifecycle = createPostLifecycle({
     db,
     clock: options.clock,
@@ -69,6 +77,7 @@ export async function buildServer(options: BuildServerOptions): Promise<PerchSer
     accounts,
     tweets,
     lifecycle,
+    media,
     r2: options.r2,
     logError: options.logError,
   });

@@ -4,6 +4,7 @@ import { authMiddleware, type User } from './auth';
 import type { Clock } from './clock';
 import type { Db } from './db';
 import { errorHandler, notFoundHandler } from './errors';
+import type { MediaService } from './media';
 import type { PostLifecycle } from './postLifecycle';
 import type { R2Client } from './r2/client';
 import { accountRoutes } from './routes/account';
@@ -34,6 +35,7 @@ export interface AppDeps {
   accounts: XAccountService;
   tweets: TweetService;
   lifecycle: PostLifecycle;
+  media: MediaService;
   r2: R2Client | null;
   logError: (error: unknown) => void;
 }

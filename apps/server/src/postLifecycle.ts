@@ -19,12 +19,12 @@ import {
 import type { Clock } from './clock';
 import type { Db } from './db';
 import { logApiCall } from './db/apiCalls';
-import { mediaRowsForPost } from './db/postMedia';
 import { postState } from './db/postState';
 import {
   duePosts,
   getPost,
   getPostRow,
+  mediaRowsForPost,
   PostImmutableError,
   type PostRow,
   patchPostRow,

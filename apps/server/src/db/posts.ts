@@ -46,7 +46,7 @@ import {
 import { DomainError } from '../errors';
 import { decodePostCursor, encodePostCursor } from './cursor';
 import type { Db, Tx } from './index';
-import { type MediaFiles, mediaForPosts, mediaPathsForPosts } from './postMedia';
+import type { MediaFiles } from './postMedia';
 import { accountConnectedAtSql, attentionSql, missedSql, postState } from './postState';
 import { postLinks, postMedia, posts, postTags, resources, xAccounts } from './schema';
 import { getSettings } from './settings';
@@ -249,6 +249,109 @@ export function postJoinRow(
     .leftJoin(xAccounts, eq(xAccounts.id, posts.xAccountId))
     .where(and(eq(posts.id, id), eq(posts.userId, userId)))
     .get();
+}
+
+export type PostMediaRow = typeof postMedia.$inferSelect;
+
+function toPostMedia(row: PostMediaRow): PostMedia {
+  return {
+    id: row.id,
+    position: row.position,
+    mime: row.mime as PostMedia['mime'],
+    bytes: row.bytes,
+    from_resource_id: row.fromResourceId,
+  };
+}
+
+function mediaForPosts(db: Db, postIds: number[]): Map<number, PostMedia[]> {
+  const result = new Map<number, PostMedia[]>();
+  if (postIds.length === 0) return result;
+
+  const rows = db
+    .select()
+    .from(postMedia)
+    .where(inArray(postMedia.postId, postIds))
+    .orderBy(asc(postMedia.postId), asc(postMedia.position))
+    .all();
+
+  for (const row of rows) {
+    const list = result.get(row.postId) ?? [];
+    list.push(toPostMedia(row));
+    result.set(row.postId, list);
+  }
+  return result;
+}
+
+function mediaPathsForPosts(
+  db: Db,
+  postIds: number[],
+): Map<number, Array<{ position: number; path: string }>> {
+  const result = new Map<number, Array<{ position: number; path: string }>>();
+  if (postIds.length === 0) return result;
+
+  const rows = db
+    .select({ postId: postMedia.postId, position: postMedia.position, path: postMedia.path })
+    .from(postMedia)
+    .where(inArray(postMedia.postId, postIds))
+    .orderBy(asc(postMedia.postId), asc(postMedia.position))
+    .all();
+
+  for (const row of rows) {
+    const list = result.get(row.postId) ?? [];
+    list.push({ position: row.position, path: row.path });
+    result.set(row.postId, list);
+  }
+  return result;
+}
+
+export function mediaRowsForPost(db: Db, postId: number): PostMediaRow[] {
+  return db
+    .select()
+    .from(postMedia)
+    .where(eq(postMedia.postId, postId))
+    .orderBy(asc(postMedia.position))
+    .all();
+}
+
+export function mediaRowForPost(
+  db: Db,
+  userId: number,
+  postId: number,
+  mediaId: number,
+): PostMediaRow | undefined {
+  return db
+    .select({ media: postMedia })
+    .from(postMedia)
+    .innerJoin(posts, eq(postMedia.postId, posts.id))
+    .where(and(eq(postMedia.postId, postId), eq(postMedia.id, mediaId), eq(posts.userId, userId)))
+    .get()?.media;
+}
+
+export function insertMediaRow(
+  db: Db,
+  postId: number,
+  position: number,
+  file: { path: string; mime: PostMedia['mime']; bytes: number },
+  fromResourceId: number | null,
+): PostMedia {
+  const row = db
+    .insert(postMedia)
+    .values({
+      postId,
+      position,
+      path: file.path,
+      mime: file.mime,
+      bytes: file.bytes,
+      fromResourceId,
+    })
+    .returning()
+    .get();
+  if (!row) throw new Error('post_media insert failed');
+  return toPostMedia(row);
+}
+
+export function insertPostLink(db: Db, postId: number, resourceId: number): void {
+  db.insert(postLinks).values({ postId, resourceId }).onConflictDoNothing().run();
 }
 
 export function getPost(

@@ -17,19 +17,14 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppDeps, AppEnv } from '../app';
-import {
-  attachFromFiles,
-  attachFromResources,
-  detachMedia,
-  type MediaFiles,
-  mediaRowForPost,
-} from '../db/postMedia';
+import { attachFromFiles, detachMedia, type MediaFiles } from '../db/postMedia';
 import {
   createPost,
   deletePosts,
   getPost,
   linkResources,
   listPosts,
+  mediaRowForPost,
   previewPost,
   unlinkResources,
   updatePost,
@@ -204,12 +199,10 @@ export function postsRoutes(deps: AppDeps) {
         const { id } = c.req.valid('param');
         const userId = c.get('user').id;
         refuseInFlight(id);
-        const result = await attachFromResources(
-          deps.db,
+        const result = await deps.media.attachFromResources(
           userId,
           id,
           c.req.valid('json').resource_ids,
-          mediaFiles(deps, userId),
         );
         if (!result) throw notFound('Post', id);
         return c.json(result, 200);
