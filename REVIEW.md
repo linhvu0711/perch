@@ -69,7 +69,7 @@ Skip anything a linter or formatter already enforces.
 
 When `CODING_STANDARDS.md` is missing, the code next to the diff is the
 standard and the smell list below is the floor. Say once in the review:
-"no CODING_STANDARDS.md; run /set-coding-standards".
+"no CODING_STANDARDS.md; write one first".
 
 Smell list (Fowler, _Refactoring_ ch.3). Each is a judgement call,
 labelled "possible", and a written repo rule always wins over it:

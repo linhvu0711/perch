@@ -5,6 +5,13 @@ rules live in `docs/spec/perch-v1.md` and `docs/cli.md`; vocabulary lives in
 `CONTEXT.md`; decisions that are hard to reverse live in `docs/adr/`. This file
 is only about how code is written.
 
+Where the other rules live:
+
+- CLI output, exit codes, and paging: `docs/cli.md`.
+- API contract, errors, cursor paging, batch results: `docs/spec/perch-v1.md` under "API contract (shape, not paths)".
+- Web behavior every page follows: `docs/web-ui.md` under "Rules that apply everywhere".
+- Invariants a review checks: `docs/adr/`, summarized in `REVIEW.md`.
+
 ## Stack
 
 - TypeScript everywhere. Bun is the runtime, package manager, test runner, and bundler.
@@ -32,14 +39,14 @@ is only about how code is written.
 - Web and CLI import deciding rules, constants, limits, and prices from `@perch/core`. They never re-implement one, not even as a placeholder or a number in UI copy.
   A hardcoded `280` or `$0.010` in a page is a second source of truth that drifts silently.
 - Server routes live in `apps/server/src/routes/`, database access in `apps/server/src/db/`, X access in `apps/server/src/x/`. A module that needs both the database and XClient sits at the top of `apps/server/src/`: `postLifecycle.ts` owns every Post status change, `media.ts` owns Media files and their R2 copy. Web pages live in `apps/web/src/pages/`, components in `apps/web/src/components/`, hooks and API in `apps/web/src/lib/`. CLI commands live in `apps/cli/src/commands/`.
-- Web and CLI reach the server only through the HTTP API with Hono's typed RPC client. They import `type { AppType }` from `@perch/server` and nothing else from it, except `@perch/server/testing` in tests.
+- Web and CLI reach the server only through the HTTP API with Hono's typed RPC client. They import `type { AppType }` from `@perch/server` and nothing else from it, except `@perch/server/testing` in tests. File uploads are the one exception: a multipart body goes through `fetch` on the same `/api` path, from `apps/web/src/lib/queries.ts` only.
 - Imports are ordered node builtins, then packages, then relative paths, with a blank line between groups. [biome organizeImports]
 - Web imports its own files through the `@/` alias. Server, CLI, and core use relative paths.
 - Type-only imports use `import type` or an inline `type` marker. [tsc verbatimModuleSyntax] [biome useImportType]
 
 ## Errors
 
-- Server modules throw a `DomainError` subclass with a stable code and a field path. One table in `apps/server/src/errors.ts` maps each code to a status, and one `onError` handler turns it into the error JSON. Routes never catch. `ApiError` is only for HTTP-level cases: auth and a route with no resource behind it.
+- Server modules throw a `DomainError` subclass with a stable code and a field path. One table in `apps/server/src/errors.ts` maps each code to a status, and one `onError` handler turns it into the error JSON. Routes never translate or swallow an error. A route may `catch`, undo its own partial write, and rethrow the same error. `ApiError` is only for HTTP-level cases: auth and a route with no resource behind it.
 - CLI commands throw `CliError`. The exit number comes from the class, never from the call site: `UsageError` exits 2, `AuthError` exits 3, everything else exits 1. One catch in `apps/cli/src/cli.ts` maps it to stderr and the exit number.
 - Web handles errors where the action happens, with a toast or an inline message. There is no error boundary in v1.
 - Plain `throw new Error` is only for invariants that cannot happen. Anything a client can trigger gets a typed error.
@@ -49,6 +56,7 @@ is only about how code is written.
 
 - No logging library in v1.
 - Server calls `console.*` only in the entry file at boot and in the error handler.
+- Background work, such as the Scheduler tick, token refresh, and best-effort cleanup at X, reports a failure through the injected `logError` function on its deps, never through `console`. The entry file supplies it.
 - CLI writes only to the injected `ctx.stdout` and `ctx.stderr`, never to `console`.
 - Web never logs.
 - Tokens, cookies, secrets, and env values are never logged. The error handler logs the message and stack, not request bodies or headers.
@@ -62,14 +70,14 @@ is only about how code is written.
 - Pure modules in `packages/core` and adapters such as the real X client may be tested directly, with canned inputs.
 - Every test starts from an empty temp database and an empty temp upload directory, with an injected clock and a fake X client. A test never reads or writes `process.env`, `~/.perch`, the real clock, or the network.
   A test that uses `new Date()` or the real env passes on one machine and fails on the next.
-- Every server route, every CLI command, and every rule in core has a test.
+- Every server route, every CLI command, and every rule in core has a test. A route or core rule exercised from another topic's test file counts as tested; the file name need not match.
 
 ## Commits
 
-- Conventional Commits. Type is one of `feat`, `fix`, `docs`, `test`, `chore`, `refactor`.
+- Conventional Commits. Type is one of `feat`, `fix`, `docs`, `test`, `chore`, `refactor`, `style`. `style` is for Biome-only changes.
 - Scope is the package when one package changes: `web`, `server`, `cli`, `core`. No scope when several change.
 - Subject is imperative and under 72 characters. A body explains why when the subject is not enough.
-- Branches are `<type>/<slug>`, for example `feat/note-resources`, `docs/grill-20-file-mirror`.
+- Branches are `<type>/<slug>`, for example `feat/note-resources`, `docs/grill-20-file-mirror`. A branch an agent made keeps the agent's name; the PR title still follows Conventional Commits.
 - Every change lands through a pull request against `main`, one topic per PR.
 
 ## Dependencies
@@ -82,7 +90,7 @@ is only about how code is written.
 
 ## Config and secrets
 
-- Each app reads env in its entry file only: `apps/server/src/index.ts` and `apps/cli/src/context.ts`. Env is parsed once through a Zod schema and passed in as typed options. Routes, commands, and core never touch `process.env`.
+- Each app reads env in its entry file only: `apps/server/src/index.ts` and `apps/cli/src/index.ts`. Env is parsed once through a Zod schema and passed in as typed options. Routes, commands, and core never touch `process.env`.
 - Every variable has a line in `.env.example` with its default. `.env` is never committed. [.gitignore]
 - Runtime data lives under `data/` and is never committed. [.gitignore]
 - The CLI keeps its config at `~/.perch/config.json`, written with mode `0600`.
@@ -90,11 +98,11 @@ is only about how code is written.
 
 ## API shape
 
-- Every route sits under `/api`. No version prefix.
-- Paths are lowercase plural nouns: `/api/resources`, `/api/resources/:id`.
+- API routes sit under `/api`. No version prefix. Two paths sit outside it and stay there: `/health` for the platform probe, and `/auth/x/callback` because X holds it.
+- Collections are lowercase plural nouns: `/api/resources`, `/api/resources/:id`. A Singleton is singular: `/api/account`, `/api/status`, `/api/auth`.
 - Request bodies, queries, and params are validated with `zValidator` and a schema from `@perch/core`. [@hono/zod-validator]
-- A successful response returns the resource itself, or a list as `{ items, total, next_cursor }`. Auth's `{ user }` and `{ ok: true }` are the two exceptions and stay as they are.
-- Errors, cursor paging, and batch results follow the contract in `docs/spec/perch-v1.md` under "API". Limits come from `@perch/core`.
+- A successful response returns the resource itself, or a list as `{ items, total, next_cursor }`. A Batch returns `{ results }` with HTTP 200, one result per input item. Auth's `{ user }` and `{ ok: true }` are the two other exceptions and stay as they are.
+- Errors, cursor paging, and batch results follow the contract in `docs/spec/perch-v1.md` under "API contract (shape, not paths)". Limits come from `@perch/core`.
 - Auth is one `getUser(request)` function in `apps/server/src/auth.ts`. Multi-user changes only that function.
 
 ## Formatting
@@ -110,8 +118,8 @@ is only about how code is written.
 
 - `strict` and `noUncheckedIndexedAccess` stay on. [tsc]
 - No `any`. No `@ts-ignore`. `@ts-expect-error` is allowed with a reason on the same line. [biome noExplicitAny]
-- `async`/`await` over `.then()` chains. A fire-and-forget promise is written `void promise.catch(...)`.
-- Database access goes through the Drizzle query builder. Raw SQL only for pragmas and the one `LIKE` search fragment.
+- `async`/`await` over `.then()` chains. A fire-and-forget promise is written `void promise.catch(...)`. In web, an event handler may chain one `.then()` on a mutation, written `void mutate().then(...)`, when the mutation handles its own error.
+- Database access goes through the Drizzle query builder for reads and writes. A `sql` fragment is allowed only inside `apps/server/src/db/`, and only for what the builder cannot say: search, sort keys, derived state. Never a full statement.
 - React components are functions. Server state lives in TanStack Query hooks in `apps/web/src/lib/queries.ts`. No fetch inside `useEffect`.
 - Modals are routes rendered over their list page.
 
