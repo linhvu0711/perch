@@ -1497,6 +1497,9 @@ textarea:focus-visible {
 .seg button[data-status="all"][aria-pressed="true"] svg {
   color: var(--indigo-text);
 }
+.filters .btn.sm svg {
+  color: var(--text-3);
+}
 
 /* post modal */
 .mbody {
