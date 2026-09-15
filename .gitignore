@@ -30,3 +30,6 @@ Thumbs.db
 .idea/
 .vscode/
 .zed/
+
+# Playwright MCP snapshots
+.playwright-mcp/

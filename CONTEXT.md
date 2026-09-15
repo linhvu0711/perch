@@ -127,3 +127,17 @@ _Avoid_: Publish date, due date, slot, send time
 **Cost**:
 The money X charges Perch for one call to the X API, estimated before a Publish and recorded after every call.
 _Avoid_: Price, fee, credits, spend (spend is a total of Costs)
+
+### API and server
+
+**Batch**:
+One request that carries many items and answers with one result per item, in `{ results }`, with HTTP 200 even when some items fail. One bad item never stops the rest.
+_Avoid_: Bulk, multi, array endpoint
+
+**Singleton**:
+An API resource with one row per User, such as the connected X Account or the status summary. Its path is singular.
+_Avoid_: Global, config endpoint
+
+**Background work**:
+Server work that runs outside a request: the Scheduler tick, X token refresh, and best-effort cleanup at X. It reports failures through the injected `logError`, since no request is there to answer.
+_Avoid_: Job, worker, cron, task queue
