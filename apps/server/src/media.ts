@@ -16,7 +16,6 @@ import type { Db } from './db';
 import {
   getPost,
   getPostRow,
-  insertMediaRow,
   insertMediaRows,
   MediaLimitError,
   mediaRowsForPost,
@@ -232,24 +231,52 @@ export function createMediaService(deps: {
         throw new MediaLimitError('files');
       }
 
-      let next = existing.length + 1;
       const results: PostMediaFilesResponse['results'] = [];
-      for (const { file, result } of inspected) {
-        if (!result.ok) {
-          results.push({ name: file.name, ok: false, error: result.error });
-          continue;
+      const written: Array<{
+        index: number;
+        name: string;
+        file: {
+          path: string;
+          mime: PostMedia['mime'];
+          bytes: number;
+          fromResourceId: number | null;
+        };
+      }> = [];
+      const rels: string[] = [];
+      try {
+        for (const [index, { file, result }] of inspected.entries()) {
+          if (!result.ok) {
+            results[index] = { name: file.name, ok: false, error: result.error };
+            continue;
+          }
+          const rel = await store(deps.uploadDir, userId, postId, file.bytes, result.ext);
+          await copyToR2(deps.r2, rel, file.bytes, deps.logError);
+          rels.push(rel);
+          written.push({
+            index,
+            name: file.name,
+            file: {
+              path: rel,
+              mime: result.mime,
+              bytes: file.bytes.length,
+              fromResourceId: null,
+            },
+          });
         }
-        const rel = await store(deps.uploadDir, userId, postId, file.bytes, result.ext);
-        await copyToR2(deps.r2, rel, file.bytes, deps.logError);
-        const media = insertMediaRow(
+        const inserted = insertMediaRows(
           deps.db,
           postId,
-          next++,
-          { path: rel, mime: result.mime, bytes: file.bytes.length },
-          null,
+          existing.length + 1,
+          written.map((item) => item.file),
           fileExists,
         );
-        results.push({ name: file.name, ok: true, media });
+        written.forEach((item, i) => {
+          const media = inserted[i];
+          if (media) results[item.index] = { name: item.name, ok: true, media };
+        });
+      } catch (error) {
+        discard(deps.uploadDir, rels, deps.logError);
+        throw error;
       }
       return { results };
     },

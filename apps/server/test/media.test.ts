@@ -720,6 +720,50 @@ describe('post media', () => {
     expect(mediaFiles(1)).toEqual(filesBefore);
   });
 
+  test('attaches nothing when the second file write throws', async () => {
+    // Given: a post with one media already attached by file
+    await createPost({ text: 'Hi' });
+    const first = new FormData();
+    first.append(
+      'files',
+      new File([PNG_3X2.slice().buffer as ArrayBuffer], 'a.png', { type: 'image/png' }),
+    );
+    expect(
+      (await request('/api/posts/1/media/files', { method: 'POST', body: first })).status,
+    ).toBe(200);
+    const filesBefore = mediaFiles(1);
+    let calls = 0;
+    const realMkdir = fs.mkdirSync.bind(fs);
+    const mkdir = spyOn(fs, 'mkdirSync');
+    mkdir.mockImplementation((...args) => {
+      calls += 1;
+      if (calls === 2) throw new Error('disk full');
+      return realMkdir(...args);
+    });
+
+    // When: attaching two more files and the second store throws
+    const form = new FormData();
+    form.append(
+      'files',
+      new File([PNG_3X2.slice().buffer as ArrayBuffer], 'b.png', { type: 'image/png' }),
+    );
+    form.append(
+      'files',
+      new File([PNG_3X2.slice().buffer as ArrayBuffer], 'c.png', { type: 'image/png' }),
+    );
+    const response = await request('/api/posts/1/media/files', { method: 'POST', body: form });
+    mkdir.mockRestore();
+
+    // Then: the request fails and the post keeps its one media and file
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ code: 'internal', message: 'Internal error' });
+    const post = await getPost(1);
+    expect(post.media).toEqual([
+      { id: 1, position: 1, mime: 'image/png', bytes: 73, from_resource_id: null, present: true },
+    ]);
+    expect(mediaFiles(1)).toEqual(filesBefore);
+  });
+
   test('deleting a post removes its media files', async () => {
     // Given: a post with media
     const ids = await uploadImages({ name: 'a.png', bytes: PNG_3X2 });
