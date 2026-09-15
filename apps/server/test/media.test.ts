@@ -443,7 +443,8 @@ describe('post media', () => {
 
     // Then: the file is gone and positions renumber to 1,2
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { media: Post['media'] };
+    const body = (await response.json()) as Post;
+    expect(body.id).toBe(1);
     expect(body.media.map((m) => m.position)).toEqual([1, 2]);
     const post = await getPost(1);
     expect(post.media.map((m) => [m.position, m.from_resource_id])).toEqual([
@@ -497,7 +498,7 @@ describe('post media', () => {
 
     // Then: the attach lands at position 3 and the next attach gets position 4
     expect(detach.status).toBe(200);
-    const detachBody = (await detach.json()) as { media: Post['media'] };
+    const detachBody = (await detach.json()) as Post;
     expect(detachBody.media.map((m) => m.position)).toEqual([1, 2]);
     expect(attach.status).toBe(200);
     expect((await getPost(1)).media.map((m) => m.position)).toEqual([1, 2, 3]);
@@ -635,9 +636,32 @@ describe('post media', () => {
 
     // Then: every row and file is gone
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ media: [] });
+    expect(await response.json()).toMatchObject({ id: 1, media: [] });
     expect((await getPost(1)).media).toEqual([]);
     expect(mediaFiles(1)).toHaveLength(0);
+  });
+
+  test('detach keeps its 404 and 400 answers', async () => {
+    // Given: no post 999
+
+    // When: detaching from a missing post, then with a bad body
+    const missing = await request('/api/posts/999/media', {
+      method: 'DELETE',
+      body: JSON.stringify({ positions: [1] }),
+    });
+    const bad = await request('/api/posts/999/media', {
+      method: 'DELETE',
+      body: JSON.stringify({}),
+    });
+
+    // Then: 404 not_found, then 400 validation
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({
+      code: 'not_found',
+      message: 'Post 999 not found',
+    });
+    expect(bad.status).toBe(400);
+    expect(await bad.json()).toMatchObject({ code: 'validation' });
   });
 
   test('reports a missing position', async () => {
@@ -836,7 +860,7 @@ describe('post media', () => {
       results: Array<{ ok: boolean; media?: { present: boolean } }>;
     };
     expect(fileBody.results[0]?.media?.present).toBe(true);
-    expect(await detached.json()).toEqual({
+    expect(await detached.json()).toMatchObject({
       media: [
         {
           id: 2,
@@ -1093,7 +1117,7 @@ describe('post media', () => {
 
     // Then: the row is gone, the kept media renumbers to 1, the error is logged, the file stays
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
+    expect(await response.json()).toMatchObject({
       media: [
         { id: 2, position: 1, mime: 'image/png', bytes: 73, from_resource_id: null, present: true },
       ],
