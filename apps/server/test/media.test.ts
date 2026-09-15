@@ -796,6 +796,50 @@ describe('post media', () => {
     expect(secondList.items[0]?.media).toHaveLength(1);
   });
 
+  test('detaches the rows and logs a file that will not delete', async () => {
+    // Given: a post with two media whose first file is now a non-empty directory
+    await createPost({ text: 'Hi' });
+    const first = new FormData();
+    first.append(
+      'files',
+      new File([PNG_3X2.slice().buffer as ArrayBuffer], 'a.png', { type: 'image/png' }),
+    );
+    expect(
+      (await request('/api/posts/1/media/files', { method: 'POST', body: first })).status,
+    ).toBe(200);
+    const [nameA] = mediaFiles(1);
+    if (nameA === undefined) throw new Error('media file missing');
+    const second = new FormData();
+    second.append(
+      'files',
+      new File([PNG_3X2.slice().buffer as ArrayBuffer], 'b.png', { type: 'image/png' }),
+    );
+    expect(
+      (await request('/api/posts/1/media/files', { method: 'POST', body: second })).status,
+    ).toBe(200);
+    const A = path.join(mediaDir(1), nameA);
+    fs.rmSync(A);
+    fs.mkdirSync(A);
+    fs.writeFileSync(path.join(A, 'x'), '');
+
+    // When: detaching position 1
+    const response = await request('/api/posts/1/media', {
+      method: 'DELETE',
+      body: JSON.stringify({ positions: [1] }),
+    });
+
+    // Then: the row is gone, the kept media renumbers to 1, the error is logged, the file stays
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      media: [
+        { id: 2, position: 1, mime: 'image/png', bytes: 73, from_resource_id: null, present: true },
+      ],
+    });
+    expect(server.errors).toHaveLength(1);
+    expect(fs.statSync(A).isDirectory()).toBe(true);
+    expect(fs.readdirSync(mediaDir(1))).toHaveLength(2);
+  });
+
   test('deleting a post removes its media files', async () => {
     // Given: a post with media
     const ids = await uploadImages({ name: 'a.png', bytes: PNG_3X2 });

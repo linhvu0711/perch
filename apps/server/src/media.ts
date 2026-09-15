@@ -312,15 +312,13 @@ export function createMediaService(deps: {
         deleted.map((row) => row.id),
         kept,
       );
-      let cleanupError: unknown;
       for (const row of deleted) {
         try {
           remove(deps.uploadDir, row.path);
         } catch (error) {
-          cleanupError ??= error;
+          deps.logError(error);
         }
       }
-      if (cleanupError !== undefined) throw cleanupError;
       return getPost(deps.db, userId, postId, deps.clock.now(), fileExists);
     },
 
