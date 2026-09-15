@@ -90,6 +90,10 @@ export async function copyToR2(
   try {
     await r2.put(`uploads/${rel}`, bytes);
   } catch (error) {
-    logError(error);
+    try {
+      logError(error);
+    } catch {
+      // a failed copy stays nonfatal even when the logger fails
+    }
   }
 }
