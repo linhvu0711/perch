@@ -18,18 +18,12 @@ import { z } from 'zod';
 
 import type { AppDeps, AppEnv } from '../app';
 import {
-  attachFromFiles,
-  attachFromResources,
-  detachMedia,
-  type MediaFiles,
-  mediaRowForPost,
-} from '../db/postMedia';
-import {
   createPost,
   deletePosts,
   getPost,
   linkResources,
   listPosts,
+  mediaRowForPost,
   previewPost,
   unlinkResources,
   updatePost,
@@ -37,28 +31,10 @@ import {
 import { getSettings } from '../db/settings';
 import { tagPosts, untagPosts } from '../db/tags';
 import { notFound, validationHook } from '../errors';
-import {
-  copyToR2,
-  inspectImage,
-  mediaFileExists,
-  readMedia,
-  removeMedia,
-  removeMediaDir,
-  storeMedia,
-} from '../images';
+import { MediaAttachError } from '../media';
 import { InFlightError, PostNotReadyError } from '../postLifecycle';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
-
-const mediaFiles = (deps: AppDeps, userId: number): MediaFiles => ({
-  read: (rel) => readMedia(deps.uploadDir, rel),
-  store: async (postId, bytes, ext) => {
-    const rel = await storeMedia(deps.uploadDir, userId, postId, bytes, ext);
-    await copyToR2(deps.r2, rel, bytes, deps.logError);
-    return rel;
-  },
-  remove: (rel) => removeMedia(deps.uploadDir, rel),
-});
 
 export function postsRoutes(deps: AppDeps) {
   function refuseInFlight(id: number): void {
@@ -74,7 +50,7 @@ export function postsRoutes(deps: AppDeps) {
           c.req.valid('query'),
           getSettings(deps.db, userId).timezone,
           deps.clock.now(),
-          mediaFileExists(deps.uploadDir),
+          deps.media.exists,
         ),
         200,
       );
@@ -82,35 +58,35 @@ export function postsRoutes(deps: AppDeps) {
     .post('/', zValidator('json', postCreateSchema, validationHook), async (c) => {
       const userId = c.get('user').id;
       const body = c.req.valid('json');
-      const post = await createPost(
-        deps.db,
-        userId,
-        body,
-        deps.clock.now(),
-        mediaFiles(deps, userId),
-        mediaFileExists(deps.uploadDir),
+      const post = createPost(deps.db, userId, body, deps.clock.now(), deps.media.exists);
+      const imageIds = new Set(
+        post.links.filter((link) => link.type === 'image').map((link) => link.resource_id),
       );
+      const sources = (body.from ?? []).filter((id) => imageIds.has(id));
+      if (sources.length > 0) {
+        const attached = await deps.media.attachFromResources(userId, post.id, sources);
+        if (!attached) throw new Error('post insert failed');
+        const failed = attached.results.filter((item) => !item.ok);
+        if (failed.length > 0) {
+          deletePosts(deps.db, userId, [post.id], (postId) => deps.media.removeAll(userId, postId));
+          throw new MediaAttachError(failed.map((item) => item.error.message));
+        }
+      }
       if (body.official === true) {
         const result = deps.lifecycle.promote(userId, [post.id]).results[0];
         if (result !== undefined && result.ok === false) {
-          deletePosts(deps.db, userId, [post.id], (postId) =>
-            removeMediaDir(deps.uploadDir, userId, postId),
-          );
+          deletePosts(deps.db, userId, [post.id], (postId) => deps.media.removeAll(userId, postId));
           throw new PostNotReadyError(
             result.error.errors ?? [{ path: 'status', message: result.error.message }],
           );
         }
-        const fresh = getPost(
-          deps.db,
-          userId,
-          post.id,
-          deps.clock.now(),
-          mediaFileExists(deps.uploadDir),
-        );
+        const fresh = getPost(deps.db, userId, post.id, deps.clock.now(), deps.media.exists);
         if (!fresh) throw notFound('Post', post.id);
         return c.json(fresh, 201);
       }
-      return c.json(post, 201);
+      const created = getPost(deps.db, userId, post.id, deps.clock.now(), deps.media.exists);
+      if (!created) throw new Error('post insert failed');
+      return c.json(created, 201);
     })
     .post('/tags', zValidator('json', itemTagsBodySchema, validationHook), (c) => {
       const body = c.req.valid('json');
@@ -161,13 +137,7 @@ export function postsRoutes(deps: AppDeps) {
     })
     .get('/:id', zValidator('param', idParamSchema, validationHook), (c) => {
       const { id } = c.req.valid('param');
-      const post = getPost(
-        deps.db,
-        c.get('user').id,
-        id,
-        deps.clock.now(),
-        mediaFileExists(deps.uploadDir),
-      );
+      const post = getPost(deps.db, c.get('user').id, id, deps.clock.now(), deps.media.exists);
       if (!post) throw notFound('Post', id);
       return c.json(post, 200);
     })
@@ -190,7 +160,7 @@ export function postsRoutes(deps: AppDeps) {
           id,
           c.req.valid('json'),
           deps.clock.now(),
-          mediaFileExists(deps.uploadDir),
+          deps.media.exists,
         );
         if (!post) throw notFound('Post', id);
         return c.json(post, 200);
@@ -204,12 +174,10 @@ export function postsRoutes(deps: AppDeps) {
         const { id } = c.req.valid('param');
         const userId = c.get('user').id;
         refuseInFlight(id);
-        const result = await attachFromResources(
-          deps.db,
+        const result = await deps.media.attachFromResources(
           userId,
           id,
           c.req.valid('json').resource_ids,
-          mediaFiles(deps, userId),
         );
         if (!result) throw notFound('Post', id);
         return c.json(result, 200);
@@ -233,37 +201,13 @@ export function postsRoutes(deps: AppDeps) {
         const files = Array.isArray(formFiles) ? formFiles : [formFiles];
 
         const inputs = [];
-        const results: Array<
-          | { name: string; ok: true }
-          | { name: string; ok: false; error: { code: string; message: string } }
-        > = [];
         for (const file of files) {
-          const bytes = await file.bytes();
-          const inspected = await inspectImage(bytes);
-          if (!inspected.ok) {
-            results.push({ name: file.name, ok: false, error: inspected.error });
-            continue;
-          }
-          inputs.push({ name: file.name, bytes, mime: inspected.mime, ext: inspected.ext });
-          results.push({ name: file.name, ok: true });
+          inputs.push({ name: file.name, bytes: await file.bytes() });
         }
 
-        const response = await attachFromFiles(
-          deps.db,
-          userId,
-          id,
-          inputs,
-          mediaFiles(deps, userId),
-        );
+        const response = await deps.media.attachFromFiles(userId, id, inputs);
         if (!response) throw notFound('Post', id);
-        let index = 0;
-        const merged = results.map((result) => {
-          if (!result.ok) return result;
-          const attached = response.results[index];
-          index += 1;
-          return attached ?? result;
-        });
-        return c.json({ results: merged }, 200);
+        return c.json(response, 200);
       },
     )
     .get(
@@ -293,14 +237,7 @@ export function postsRoutes(deps: AppDeps) {
         const { id } = c.req.valid('param');
         const userId = c.get('user').id;
         refuseInFlight(id);
-        const post = detachMedia(
-          deps.db,
-          userId,
-          id,
-          c.req.valid('json'),
-          (rel) => removeMedia(deps.uploadDir, rel),
-          mediaFileExists(deps.uploadDir),
-        );
+        const post = deps.media.detach(userId, id, c.req.valid('json'));
         if (!post) throw notFound('Post', id);
         return c.json({ media: post.media }, 200);
       },
@@ -344,7 +281,7 @@ export function postsRoutes(deps: AppDeps) {
           deps.db,
           userId,
           c.req.valid('json').ids,
-          (postId) => removeMediaDir(deps.uploadDir, userId, postId),
+          (postId) => deps.media.removeAll(userId, postId),
           (id) => deps.lifecycle.isInFlight(id),
         ),
         200,

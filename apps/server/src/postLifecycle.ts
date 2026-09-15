@@ -19,12 +19,12 @@ import {
 import type { Clock } from './clock';
 import type { Db } from './db';
 import { logApiCall } from './db/apiCalls';
-import { mediaRowsForPost } from './db/postMedia';
 import { postState } from './db/postState';
 import {
   duePosts,
   getPost,
   getPostRow,
+  mediaRowsForPost,
   PostImmutableError,
   type PostRow,
   patchPostRow,
@@ -34,7 +34,7 @@ import {
 import { getSettings } from './db/settings';
 import type { XAccountRow } from './db/xAccounts';
 import { DomainError } from './errors';
-import { mediaFileExists, readMedia } from './images';
+import type { MediaService } from './media';
 import type { XAccountService } from './x/accounts';
 import type { XClient } from './x/client';
 
@@ -96,9 +96,8 @@ export function createPostLifecycle(deps: {
   clock: Clock;
   xClient: XClient;
   accounts: XAccountService;
-  uploadDir: string;
+  media: MediaService;
 }): PostLifecycle {
-  const fileExists = mediaFileExists(deps.uploadDir);
   const inFlight = new Set<number>();
 
   function checksFor(userId: number, row: PostRow): Array<{ path: string; message: string }> {
@@ -107,7 +106,7 @@ export function createPostLifecycle(deps: {
       limit: postLimit(deps.db, userId),
       media: mediaRowsForPost(deps.db, row.id).map((media) => ({
         position: media.position,
-        present: fileExists(media.path),
+        present: deps.media.exists(media.path),
       })),
     });
   }
@@ -121,11 +120,10 @@ export function createPostLifecycle(deps: {
   ): Promise<SendResult> {
     try {
       const mediaIds: string[] = [];
-      for (const media of mediaRowsForPost(deps.db, row.id)) {
-        const bytes = await readMedia(deps.uploadDir, media.path);
-        if (!bytes) throw new Error(`Media ${media.position} file is missing`);
+      for (const media of await deps.media.readForSend(row.id)) {
+        if (!media.bytes) throw new Error(`Media ${media.position} file is missing`);
         const uploaded = await deps.xClient.uploadMedia(accessToken, {
-          bytes,
+          bytes: media.bytes,
           mediaType: media.mime,
         });
         logApiCall(deps.db, row.userId, {
@@ -243,7 +241,7 @@ export function createPostLifecycle(deps: {
         { scheduledAt: at, nextAttemptAt: null, lastError: null, retryCount: 0 },
         now,
       );
-      return getPost(deps.db, userId, id, now, fileExists);
+      return getPost(deps.db, userId, id, now, deps.media.exists);
     },
 
     unschedule(userId, ids) {
@@ -338,7 +336,7 @@ export function createPostLifecycle(deps: {
           );
           throw new PublishFailedError(sent.message);
         }
-        return getPost(deps.db, userId, id, now, fileExists);
+        return getPost(deps.db, userId, id, now, deps.media.exists);
       } finally {
         inFlight.delete(id);
       }
@@ -368,7 +366,7 @@ export function createPostLifecycle(deps: {
           );
           throw new PublishFailedError(sent.message);
         }
-        return getPost(deps.db, userId, id, now, fileExists);
+        return getPost(deps.db, userId, id, now, deps.media.exists);
       } finally {
         inFlight.delete(id);
       }

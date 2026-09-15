@@ -1,0 +1,278 @@
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+
+import {
+  POST_MEDIA_MAX,
+  type Post,
+  type PostMedia,
+  type PostMediaAttachResponse,
+  type PostMediaDetachBody,
+  type PostMediaFilesResponse,
+} from '@perch/core';
+
+import type { Clock } from './clock';
+import type { Db } from './db';
+import {
+  getPost,
+  getPostRow,
+  insertMediaRow,
+  insertPostLink,
+  MediaLimitError,
+  mediaRowsForPost,
+  PostImmutableError,
+  type PostMediaRow,
+  removeMediaRows,
+} from './db/posts';
+import { getResource } from './db/resources';
+import { DomainError } from './errors';
+import { copyToR2, inspectImage } from './images';
+import type { R2Client } from './r2/client';
+
+export class MediaAttachError extends DomainError {
+  constructor(messages: string[]) {
+    super(
+      'validation',
+      'from',
+      messages[0] ?? 'Attach failed',
+      messages.map((message) => ({ path: 'from', message })),
+    );
+  }
+}
+
+export interface MediaService {
+  attachFromResources(
+    userId: number,
+    postId: number,
+    ids: number[],
+  ): Promise<PostMediaAttachResponse | null>;
+  attachFromFiles(
+    userId: number,
+    postId: number,
+    files: MediaFileInput[],
+  ): Promise<PostMediaFilesResponse | null>;
+  detach(userId: number, postId: number, body: PostMediaDetachBody): Post | null;
+  readForSend(
+    postId: number,
+  ): Promise<Array<{ position: number; mime: PostMedia['mime']; bytes: Uint8Array | null }>>;
+  exists(rel: string): boolean;
+  removeAll(userId: number, postId: number): void;
+}
+
+export class MissingMediaPositionError extends DomainError {
+  constructor(_postId: number, position: number) {
+    super('validation', 'positions', `No media at position ${position}`);
+  }
+}
+
+export interface MediaFileInput {
+  name: string;
+  bytes: Uint8Array;
+}
+
+function dirFor(uploadDir: string, userId: number, postId: number): string {
+  return path.join(uploadDir, String(userId), 'posts', String(postId));
+}
+
+/** Writes a post-media copy under <uploadDir>/<userId>/posts/<postId>/ and returns the path relative to uploadDir. */
+async function store(
+  uploadDir: string,
+  userId: number,
+  postId: number,
+  bytes: Uint8Array,
+  ext: string,
+): Promise<string> {
+  const dir = dirFor(uploadDir, userId, postId);
+  fs.mkdirSync(dir, { recursive: true });
+  const name = `${crypto.randomUUID()}.${ext}`;
+  await Bun.write(path.join(dir, name), bytes);
+  return `${userId}/posts/${postId}/${name}`;
+}
+
+/** Reads bytes for a stored media path, or null when the file is gone. */
+async function read(uploadDir: string, rel: string): Promise<Uint8Array | null> {
+  const full = path.join(uploadDir, rel);
+  return fs.existsSync(full) ? Bun.file(full).bytes() : null;
+}
+
+/** Deletes one media file and removes the post's media directory when empty. */
+function remove(uploadDir: string, rel: string): void {
+  const full = path.join(uploadDir, rel);
+  fs.rmSync(full, { force: true });
+  const dir = path.dirname(full);
+  if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
+}
+
+/** Deletes a post's whole media directory. */
+function removeDir(uploadDir: string, userId: number, postId: number): void {
+  fs.rmSync(dirFor(uploadDir, userId, postId), { recursive: true, force: true });
+}
+
+export function createMediaService(deps: {
+  db: Db;
+  uploadDir: string;
+  r2: R2Client | null;
+  clock: Clock;
+  logError: (error: unknown) => void;
+}): MediaService {
+  const fileExists = (rel: string) => fs.existsSync(path.join(deps.uploadDir, rel));
+
+  return {
+    async attachFromResources(userId, postId, ids) {
+      const postRow = getPostRow(deps.db, userId, postId);
+      if (!postRow) return null;
+      if (postRow.status === 'published') throw new PostImmutableError(postId);
+
+      const existing = mediaRowsForPost(deps.db, postId);
+      if (existing.length + ids.length > POST_MEDIA_MAX) {
+        throw new MediaLimitError('resource_ids');
+      }
+
+      let next = existing.length + 1;
+      const results: PostMediaAttachResponse['results'] = [];
+      for (const id of ids) {
+        const resource = getResource(deps.db, userId, id);
+        if (!resource) {
+          results.push({
+            id,
+            ok: false,
+            error: { code: 'not_found', message: `Resource ${id} not found` },
+          });
+          continue;
+        }
+        if (resource.type !== 'image') {
+          results.push({
+            id,
+            ok: false,
+            error: { code: 'not_image', message: `Resource ${id} is not an image` },
+          });
+          continue;
+        }
+        const bytes = await read(deps.uploadDir, resource.path);
+        if (!bytes) {
+          results.push({
+            id,
+            ok: false,
+            error: { code: 'file_missing', message: 'Image file is missing' },
+          });
+          continue;
+        }
+
+        const ext = resource.path.split('.').pop() ?? 'png';
+        const rel = await store(deps.uploadDir, userId, postId, bytes, ext);
+        await copyToR2(deps.r2, rel, bytes, deps.logError);
+        const media = insertMediaRow(
+          deps.db,
+          postId,
+          next++,
+          { path: rel, mime: resource.mime, bytes: bytes.length },
+          id,
+        );
+        insertPostLink(deps.db, postId, id);
+        results.push({ id, ok: true, media });
+      }
+      return { results };
+    },
+
+    async attachFromFiles(userId, postId, files) {
+      const postRow = getPostRow(deps.db, userId, postId);
+      if (!postRow) return null;
+      if (postRow.status === 'published') throw new PostImmutableError(postId);
+
+      const inspected: Array<{
+        file: MediaFileInput;
+        result: Awaited<ReturnType<typeof inspectImage>>;
+      }> = [];
+      for (const file of files) {
+        inspected.push({ file, result: await inspectImage(file.bytes) });
+      }
+
+      const valid = inspected.filter(({ result }) => result.ok);
+      const existing = mediaRowsForPost(deps.db, postId);
+      if (existing.length + valid.length > POST_MEDIA_MAX) {
+        throw new MediaLimitError('files');
+      }
+
+      let next = existing.length + 1;
+      const results: PostMediaFilesResponse['results'] = [];
+      for (const { file, result } of inspected) {
+        if (!result.ok) {
+          results.push({ name: file.name, ok: false, error: result.error });
+          continue;
+        }
+        const rel = await store(deps.uploadDir, userId, postId, file.bytes, result.ext);
+        await copyToR2(deps.r2, rel, file.bytes, deps.logError);
+        const media = insertMediaRow(
+          deps.db,
+          postId,
+          next++,
+          { path: rel, mime: result.mime, bytes: file.bytes.length },
+          null,
+        );
+        results.push({ name: file.name, ok: true, media });
+      }
+      return { results };
+    },
+
+    detach(userId, postId, body) {
+      const postRow = getPostRow(deps.db, userId, postId);
+      if (!postRow) return null;
+      if (postRow.status === 'published') throw new PostImmutableError(postId);
+
+      const rows = mediaRowsForPost(deps.db, postId);
+      let deleted: PostMediaRow[];
+      let kept: PostMediaRow[];
+      if ('all' in body) {
+        deleted = rows;
+        kept = [];
+      } else {
+        const byPosition = new Map(rows.map((row) => [row.position, row]));
+        const picked = new Set<number>();
+        deleted = [];
+        for (const position of body.positions) {
+          const row = byPosition.get(position);
+          if (!row || picked.has(position)) {
+            throw new MissingMediaPositionError(postId, position);
+          }
+          picked.add(position);
+          deleted.push(row);
+        }
+        kept = rows.filter((row) => !picked.has(row.position));
+      }
+
+      removeMediaRows(
+        deps.db,
+        deleted.map((row) => row.id),
+        kept,
+      );
+      let cleanupError: unknown;
+      for (const row of deleted) {
+        try {
+          remove(deps.uploadDir, row.path);
+        } catch (error) {
+          cleanupError ??= error;
+        }
+      }
+      if (cleanupError !== undefined) throw cleanupError;
+      return getPost(deps.db, userId, postId, deps.clock.now(), fileExists);
+    },
+
+    async readForSend(postId) {
+      const media = [];
+      for (const row of mediaRowsForPost(deps.db, postId)) {
+        media.push({
+          position: row.position,
+          mime: row.mime as PostMedia['mime'],
+          bytes: await read(deps.uploadDir, row.path),
+        });
+      }
+      return media;
+    },
+
+    exists: fileExists,
+
+    removeAll(userId, postId) {
+      removeDir(deps.uploadDir, userId, postId);
+    },
+  };
+}
