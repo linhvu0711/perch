@@ -87,6 +87,10 @@ async function monthCostUsd(): Promise<number> {
   return ((await response.json()) as { month_cost_usd: number }).month_cost_usd;
 }
 
+async function waitUntil(condition: () => boolean): Promise<void> {
+  while (!condition()) await Bun.sleep(0);
+}
+
 describe('publish', () => {
   test('publishes an official post: media first, then the post, ids stored, time cleared, $0.015 logged', async () => {
     // Given: a connected account and an official post with one image scheduled ahead
@@ -1035,6 +1039,236 @@ describe('in flight', () => {
       mediaIds: ['media-1'],
     });
     expect((await getPost(1)).media).toHaveLength(1);
+  });
+
+  test('refuses an attach that started before the send and removes its file copy', async () => {
+    // Given: a connected account, an official post with one image, and gates on the R2 copy and the send
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    await attachPng(1);
+    let releaseR2: () => void = () => {};
+    const r2Gate = new Promise<void>((resolve) => {
+      releaseR2 = resolve;
+    });
+    const put = spyOn(server.r2, 'put').mockImplementation(async () => {
+      await r2Gate;
+    });
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const form = new FormData();
+    form.append(
+      'files',
+      new File([PNG_3X2.slice().buffer as ArrayBuffer], 'b.png', { type: 'image/png' }),
+    );
+
+    // When: an attach holds inside the R2 copy while a send starts
+    const attach = request('/api/posts/1/media/files', { method: 'POST', body: form });
+    await waitUntil(() => put.mock.calls.length === 1);
+    const first = request('/api/posts/1/publish', { method: 'POST' });
+    await waitUntil(() => server.xClient.calls.some((call) => call.name === 'createPost'));
+    releaseR2();
+    const attachResponse = await attach;
+    release();
+    const firstResponse = await first;
+    put.mockRestore();
+
+    // Then: the attach is refused at the write, its copy is removed, and X got the send's media set
+    expect(attachResponse.status).toBe(409);
+    expect(await attachResponse.json()).toEqual({
+      code: 'in_flight',
+      message: 'Post 1 is being sent',
+    });
+    expect(firstResponse.status).toBe(200);
+    expect(server.xClient.calls.map((call) => call.name)).toEqual(['uploadMedia', 'createPost']);
+    expect(server.xClient.calls[1]?.args[1]).toEqual({ text: 'Hello', mediaIds: ['media-1'] });
+    expect((await getPost(1)).media).toHaveLength(1);
+    expect(fs.readdirSync(mediaDir(1))).toHaveLength(1);
+  });
+
+  test('refuses a resource attach that started before the send and removes its file copy', async () => {
+    // Given: a connected account, an official post with one image, one image resource, and the same gates
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    await attachPng(1);
+    const uploadForm = new FormData();
+    uploadForm.append(
+      'files',
+      new File([PNG_3X2.slice().buffer as ArrayBuffer], 'r.png', { type: 'image/png' }),
+    );
+    const upload = await request('/api/resources/images', { method: 'POST', body: uploadForm });
+    expect(upload.status).toBe(200);
+    let releaseR2: () => void = () => {};
+    const r2Gate = new Promise<void>((resolve) => {
+      releaseR2 = resolve;
+    });
+    const put = spyOn(server.r2, 'put').mockImplementation(async () => {
+      await r2Gate;
+    });
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+
+    // When: a resource attach holds inside the R2 copy while a send starts
+    const attach = request('/api/posts/1/media', {
+      method: 'POST',
+      body: JSON.stringify({ resource_ids: [1] }),
+    });
+    await waitUntil(() => put.mock.calls.length === 1);
+    const first = request('/api/posts/1/publish', { method: 'POST' });
+    await waitUntil(() => server.xClient.calls.some((call) => call.name === 'createPost'));
+    releaseR2();
+    const attachResponse = await attach;
+    release();
+    const firstResponse = await first;
+    put.mockRestore();
+
+    // Then: the attach is refused at the write, its copy is removed, and X got the send's media set
+    expect(attachResponse.status).toBe(409);
+    expect(await attachResponse.json()).toEqual({
+      code: 'in_flight',
+      message: 'Post 1 is being sent',
+    });
+    expect(firstResponse.status).toBe(200);
+    expect(server.xClient.calls[1]?.args[1]).toEqual({ text: 'Hello', mediaIds: ['media-1'] });
+    expect((await getPost(1)).media).toHaveLength(1);
+    expect((await getPost(1)).links).toEqual([]);
+    expect(fs.readdirSync(mediaDir(1))).toHaveLength(1);
+  });
+
+  test('refuses an attach that lands after the send ended as published and removes its file copy', async () => {
+    // Given: a connected account, an official post with one image, and a held R2 copy
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    await attachPng(1);
+    let releaseR2: () => void = () => {};
+    const r2Gate = new Promise<void>((resolve) => {
+      releaseR2 = resolve;
+    });
+    const put = spyOn(server.r2, 'put').mockImplementation(async () => {
+      await r2Gate;
+    });
+    const form = new FormData();
+    form.append(
+      'files',
+      new File([PNG_3X2.slice().buffer as ArrayBuffer], 'b.png', { type: 'image/png' }),
+    );
+
+    // When: an attach holds inside the R2 copy while a send runs to the end
+    const attach = request('/api/posts/1/media/files', { method: 'POST', body: form });
+    await waitUntil(() => put.mock.calls.length === 1);
+    const firstResponse = await request('/api/posts/1/publish', { method: 'POST' });
+    releaseR2();
+    const attachResponse = await attach;
+    put.mockRestore();
+
+    // Then: the send won, the attach is refused as published, and its copy is removed
+    expect(firstResponse.status).toBe(200);
+    expect(attachResponse.status).toBe(400);
+    expect(await attachResponse.json()).toEqual({
+      code: 'validation',
+      message: 'Invalid request',
+      errors: [{ path: 'status', message: 'Post 1 is published' }],
+    });
+    expect(server.xClient.calls[1]?.args[1]).toEqual({ text: 'Hello', mediaIds: ['media-1'] });
+    expect((await getPost(1)).media).toHaveLength(1);
+    expect(fs.readdirSync(mediaDir(1))).toHaveLength(1);
+  });
+
+  test('refuses a resource attach that lands after the send ended as published and removes its file copy', async () => {
+    // Given: a connected account, an official post with one image, one image resource, and a held R2 copy
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    await attachPng(1);
+    const uploadForm = new FormData();
+    uploadForm.append(
+      'files',
+      new File([PNG_3X2.slice().buffer as ArrayBuffer], 'r.png', { type: 'image/png' }),
+    );
+    const upload = await request('/api/resources/images', { method: 'POST', body: uploadForm });
+    expect(upload.status).toBe(200);
+    let releaseR2: () => void = () => {};
+    const r2Gate = new Promise<void>((resolve) => {
+      releaseR2 = resolve;
+    });
+    const put = spyOn(server.r2, 'put').mockImplementation(async () => {
+      await r2Gate;
+    });
+
+    // When: a resource attach holds inside the R2 copy while a send runs to the end
+    const attach = request('/api/posts/1/media', {
+      method: 'POST',
+      body: JSON.stringify({ resource_ids: [1] }),
+    });
+    await waitUntil(() => put.mock.calls.length === 1);
+    const firstResponse = await request('/api/posts/1/publish', { method: 'POST' });
+    releaseR2();
+    const attachResponse = await attach;
+    put.mockRestore();
+
+    // Then: the send won, the attach is refused as published, and its copy is removed
+    expect(firstResponse.status).toBe(200);
+    expect(attachResponse.status).toBe(400);
+    expect(await attachResponse.json()).toEqual({
+      code: 'validation',
+      message: 'Invalid request',
+      errors: [{ path: 'status', message: 'Post 1 is published' }],
+    });
+    expect((await getPost(1)).media).toHaveLength(1);
+    expect((await getPost(1)).links).toEqual([]);
+    expect(fs.readdirSync(mediaDir(1))).toHaveLength(1);
+  });
+
+  test('refuses a batch attach that started before the send and removes every stored copy', async () => {
+    // Given: a connected account, an official post with one image, and a two-file batch held on its second copy
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    await attachPng(1);
+    let puts = 0;
+    let releaseR2: () => void = () => {};
+    const r2Gate = new Promise<void>((resolve) => {
+      releaseR2 = resolve;
+    });
+    const put = spyOn(server.r2, 'put').mockImplementation(async () => {
+      puts += 1;
+      if (puts === 2) await r2Gate;
+    });
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const form = new FormData();
+    for (const name of ['b.png', 'c.png']) {
+      form.append(
+        'files',
+        new File([PNG_3X2.slice().buffer as ArrayBuffer], name, { type: 'image/png' }),
+      );
+    }
+
+    // When: the second file holds in the R2 copy and a send starts before the batch writes
+    const attach = request('/api/posts/1/media/files', { method: 'POST', body: form });
+    await waitUntil(() => puts === 2);
+    const first = request('/api/posts/1/publish', { method: 'POST' });
+    await waitUntil(() => server.xClient.calls.some((call) => call.name === 'createPost'));
+    releaseR2();
+    const attachResponse = await attach;
+    release();
+    const firstResponse = await first;
+    put.mockRestore();
+
+    // Then: the batch is refused at the write and every stored copy is removed
+    expect(attachResponse.status).toBe(409);
+    expect(await attachResponse.json()).toEqual({
+      code: 'in_flight',
+      message: 'Post 1 is being sent',
+    });
+    expect(firstResponse.status).toBe(200);
+    expect(server.xClient.calls.map((call) => call.name)).toEqual(['uploadMedia', 'createPost']);
+    expect(server.xClient.calls[1]?.args[1]).toEqual({ text: 'Hello', mediaIds: ['media-1'] });
+    expect((await getPost(1)).media.map((media) => media.position)).toEqual([1]);
+    expect(fs.readdirSync(mediaDir(1))).toHaveLength(1);
   });
 
   test('refuses demote, unschedule, dismiss, and schedule while the post is being sent', async () => {

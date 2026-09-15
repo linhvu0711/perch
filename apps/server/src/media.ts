@@ -44,11 +44,13 @@ export interface MediaService {
     userId: number,
     postId: number,
     ids: number[],
+    inFlight: (id: number) => boolean,
   ): Promise<PostMediaAttachResponse | null>;
   attachFromFiles(
     userId: number,
     postId: number,
     files: MediaFileInput[],
+    inFlight: (id: number) => boolean,
   ): Promise<PostMediaFilesResponse | null>;
   detach(userId: number, postId: number, body: PostMediaDetachBody): Post | null;
   readForSend(
@@ -127,8 +129,22 @@ export function createMediaService(deps: {
 }): MediaService {
   const fileExists = (rel: string) => fs.existsSync(path.join(deps.uploadDir, rel));
 
+  function refuseLateAttach(
+    userId: number,
+    postId: number,
+    inFlight: (id: number) => boolean,
+  ): void {
+    if (inFlight(postId)) {
+      throw new DomainError('in_flight', null, `Post ${postId} is being sent`);
+    }
+    const postRow = getPostRow(deps.db, userId, postId);
+    if (!postRow || postRow.status === 'published') {
+      throw new PostImmutableError(postId);
+    }
+  }
+
   return {
-    async attachFromResources(userId, postId, ids) {
+    async attachFromResources(userId, postId, ids, inFlight) {
       const postRow = getPostRow(deps.db, userId, postId);
       if (!postRow) return null;
       if (postRow.status === 'published') throw new PostImmutableError(postId);
@@ -194,6 +210,7 @@ export function createMediaService(deps: {
             },
           });
         }
+        refuseLateAttach(userId, postId, inFlight);
         const inserted = insertMediaRows(
           deps.db,
           postId,
@@ -212,7 +229,7 @@ export function createMediaService(deps: {
       return { results };
     },
 
-    async attachFromFiles(userId, postId, files) {
+    async attachFromFiles(userId, postId, files, inFlight) {
       const postRow = getPostRow(deps.db, userId, postId);
       if (!postRow) return null;
       if (postRow.status === 'published') throw new PostImmutableError(postId);
@@ -263,6 +280,7 @@ export function createMediaService(deps: {
             },
           });
         }
+        refuseLateAttach(userId, postId, inFlight);
         const inserted = insertMediaRows(
           deps.db,
           postId,

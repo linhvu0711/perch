@@ -66,7 +66,9 @@ export function postsRoutes(deps: AppDeps) {
       if (sources.length > 0) {
         let attached: Awaited<ReturnType<typeof deps.media.attachFromResources>>;
         try {
-          attached = await deps.media.attachFromResources(userId, post.id, sources);
+          attached = await deps.media.attachFromResources(userId, post.id, sources, (id) =>
+            deps.lifecycle.isInFlight(id),
+          );
         } catch (error) {
           deletePosts(deps.db, userId, [post.id], (postId) => deps.media.removeAll(userId, postId));
           throw error;
@@ -184,6 +186,7 @@ export function postsRoutes(deps: AppDeps) {
           userId,
           id,
           c.req.valid('json').resource_ids,
+          (id) => deps.lifecycle.isInFlight(id),
         );
         if (!result) throw notFound('Post', id);
         return c.json(result, 200);
@@ -211,7 +214,9 @@ export function postsRoutes(deps: AppDeps) {
           inputs.push({ name: file.name, bytes: await file.bytes() });
         }
 
-        const response = await deps.media.attachFromFiles(userId, id, inputs);
+        const response = await deps.media.attachFromFiles(userId, id, inputs, (id) =>
+          deps.lifecycle.isInFlight(id),
+        );
         if (!response) throw notFound('Post', id);
         return c.json(response, 200);
       },
