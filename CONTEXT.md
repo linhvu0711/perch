@@ -76,16 +76,20 @@ _Avoid_: Errored, broken, stuck
 A Post that has a schedule time in the future. Being Scheduled is independent of being Draft or Official.
 _Avoid_: Queued, planned, timed
 
+**Unscheduled**:
+A Draft or Official Post with no schedule time in the future (no time, or a time already past). Published and Failed Posts are neither Scheduled nor Unscheduled; the distinction only applies to Posts still waiting to be sent.
+_Avoid_: Undated, untimed, backlog
+
 **Missed**:
 A Post whose schedule time has passed while it was still a Draft (or its X Account was disconnected), so it was skipped. It is not Failed; nothing was attempted.
 _Avoid_: Overdue, late, expired, blocked
 
-**Needs attention**:
-The set of Posts that need the User's hand: Missed Posts, Failed Posts, and Drafts whose Schedule Time is within the next 3 days. Derived, never stored.
-_Avoid_: Inbox, alerts, todo
+**Issues**:
+The set of Posts that were meant to go out but did not: Missed Posts and Failed Posts. Derived, never stored. Shown only on the Dashboard, with no cap. Drafts due soon are not Issues.
+_Avoid_: Needs attention, inbox, alerts, todo
 
 **Dismiss**:
-Taking a Post out of Needs attention without deleting it: clear the time of a Missed or soon Draft, or Demote a Failed Post to Draft and clear its time. There is no dismissed flag.
+Taking a Post out of Issues without deleting it: clear the time of a Missed Post, or Demote a Failed Post to Draft and clear its time. There is no dismissed flag.
 _Avoid_: Snooze, archive, acknowledge
 
 **Publish**:
