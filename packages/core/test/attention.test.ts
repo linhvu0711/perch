@@ -41,32 +41,15 @@ describe('dueSoonDraft', () => {
 });
 
 describe('needsAttention', () => {
-  test('needsAttention takes missed, failed, and due-soon drafts', () => {
-    // Given: now 2026-09-04T10:00:00Z
+  test('needsAttention takes missed and failed; a due-soon draft is not an Issue', () => {
+    // Given: plain literals, no clock
     // When
     // Then
-    expect(
-      needsAttention(
-        { status: 'draft', scheduled_at: '2026-09-02T09:00:00.000Z', missed: true },
-        NOW,
-      ),
-    ).toBe(true);
-    expect(needsAttention({ status: 'failed', scheduled_at: null, missed: false }, NOW)).toBe(true);
-    expect(
-      needsAttention(
-        { status: 'draft', scheduled_at: '2026-09-05T09:00:00.000Z', missed: false },
-        NOW,
-      ),
-    ).toBe(true);
-    expect(
-      needsAttention(
-        { status: 'official', scheduled_at: '2026-09-05T09:00:00.000Z', missed: false },
-        NOW,
-      ),
-    ).toBe(false);
-    expect(needsAttention({ status: 'published', scheduled_at: null, missed: false }, NOW)).toBe(
-      false,
-    );
+    expect(needsAttention({ status: 'draft', missed: true })).toBe(true);
+    expect(needsAttention({ status: 'failed', missed: false })).toBe(true);
+    expect(needsAttention({ status: 'draft', missed: false })).toBe(false);
+    expect(needsAttention({ status: 'official', missed: false })).toBe(false);
+    expect(needsAttention({ status: 'published', missed: false })).toBe(false);
   });
 });
 

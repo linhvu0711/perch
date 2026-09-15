@@ -661,7 +661,7 @@ describe('post publish and retry', () => {
 });
 
 describe('post list needs attention', () => {
-  test('lists needs-attention posts with reasons', async () => {
+  test('lists Issues with their reasons', async () => {
     // Given: a missed draft, a due-soon draft, and a later draft
     const setup = makeCtx(server);
     await runCli(['post', 'create', '--text', 'Old', '--json'], setup.ctx);
@@ -679,13 +679,12 @@ describe('post list needs attention', () => {
 
     // Then
     const result = JSON.parse(json.out());
-    expect(result.items.map((item: { id: number }) => item.id)).toEqual([2, 1]);
+    expect(result.items.map((item: { id: number }) => item.id)).toEqual([1]);
     expect(result.items.map((item: { reason: string }) => item.reason)).toEqual([
-      'still a draft',
       'time passed, still a draft',
     ]);
-    expect(result.total).toBe(2);
-    expect(table.out()).toContain('still a draft');
+    expect(result.total).toBe(1);
     expect(table.out()).toContain('time passed, still a draft');
+    expect(table.out()).not.toContain('Soon');
   });
 });

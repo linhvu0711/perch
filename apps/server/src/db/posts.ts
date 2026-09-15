@@ -1,5 +1,4 @@
 import {
-  ATTENTION_WINDOW_MS,
   attentionReason,
   type CalendarPost,
   type CalendarQuery,
@@ -49,7 +48,6 @@ import {
   isNotNull,
   isNull,
   lt,
-  lte,
   not,
   or,
   type SQL,
@@ -568,17 +566,9 @@ export function missedSql(userId: number | typeof posts.userId, now: Date): SQL 
     )`;
 }
 
-/** Posts that need the User's hand: Missed, Failed, or a Draft due within the next 3 days. */
+/** Issues: Missed or Failed Posts. A Draft due soon is not an Issue. */
 export function attentionSql(userId: number | typeof posts.userId, now: Date): SQL {
-  return or(
-    missedSql(userId, now),
-    eq(posts.status, 'failed'),
-    and(
-      eq(posts.status, 'draft'),
-      gte(posts.scheduledAt, now),
-      lte(posts.scheduledAt, new Date(now.getTime() + ATTENTION_WINDOW_MS)),
-    ),
-  )!;
+  return or(missedSql(userId, now), eq(posts.status, 'failed'))!;
 }
 
 /** Official posts due to be sent at `now`, oldest schedule time first. */
@@ -862,7 +852,7 @@ export function dismissPosts(db: Db, userId: number, ids: number[], now: Date): 
       if (post === null) {
         return statusResultError(id, 'not_found', `Post ${id} not found`);
       }
-      if (!needsAttention(post, now)) {
+      if (!needsAttention(post)) {
         return statusResultError(id, 'invalid_status', `Post ${id} needs no attention`);
       }
       const action = dismissAction(post.status);

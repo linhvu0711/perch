@@ -34,9 +34,9 @@ Spec for the React SPA. The clickable mockup is `docs/ui/perch-ui.html` (open it
 
 Greeting + date/time in the configured zone. Banner if no X account is connected.
 
-Four stat cards: next official post · needs attention (count, amber if > 0) · scheduled next 7 days · cost this month.
+Four stat cards: next official post · issues (count, amber if > 0) · scheduled next 7 days · cost this month.
 
-**Needs attention** = missed posts + failed posts + drafts with a schedule time in the next 3 days. Each row: date/time, title or first line, reason in gray, status pill, and a **dismiss** (check icon). Dismiss clears the time (missed, due-soon draft) or demotes to draft (failed). Never deletes. Capped at 10 with "See all in Posts".
+**Issues** = missed posts + failed posts (drafts due soon are not Issues). Shown after Next 3 days. Each row: date/time, title or first line, reason in gray, status pill, and a **dismiss** (check icon). Dismiss clears the time (missed) or demotes to draft (failed). Never deletes. No cap, no "See all".
 
 **Next 3 days**: every post with a time until end of day +3.
 
