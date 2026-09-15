@@ -14,12 +14,9 @@ export function dueSoonDraft(
   return now.getTime() <= at && at <= now.getTime() + ATTENTION_WINDOW_MS;
 }
 
-/** The set of Posts that need the User's hand: Missed, Failed, or a Draft due soon. */
-export function needsAttention(
-  post: { status: PostStatus; scheduled_at: string | null; missed: boolean },
-  now: Date,
-): boolean {
-  return post.missed || post.status === 'failed' || dueSoonDraft(post, now);
+/** The Issues set: a Missed or Failed Post. A Draft due soon is not an Issue. */
+export function needsAttention(post: { status: PostStatus; missed: boolean }): boolean {
+  return post.missed || post.status === 'failed';
 }
 
 /** Why a Post needs attention, in plain words; `null` when it does not. */
@@ -42,7 +39,7 @@ export function attentionReason(
   return null;
 }
 
-/** How dismiss takes a Post out of needs attention: demote a Failed post, unschedule the rest. */
+/** How dismiss takes a Post out of Issues: demote a Failed post, unschedule the rest. */
 export function dismissAction(status: PostStatus): 'demote' | 'unschedule' {
   return status === 'failed' ? 'demote' : 'unschedule';
 }

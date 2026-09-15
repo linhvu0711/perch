@@ -138,7 +138,7 @@ describe('needs attention', () => {
     expect(status.failed_count).toBe(0);
   });
 
-  test('dismiss unschedules a missed draft, demotes a failed post, deletes nothing', async () => {
+  test('dismiss unschedules a missed draft, demotes a failed post, leaves a due-soon draft alone, deletes nothing', async () => {
     // Given: the seven-post seed, account connected, clock 2026-09-04T10:31Z
     connectTestAccount(server);
     await seedAttentionPosts();
@@ -156,7 +156,11 @@ describe('needs attention', () => {
       { id: 1, ok: true },
       { id: 2, ok: true },
       { id: 3, ok: true },
-      { id: 4, ok: true },
+      {
+        id: 4,
+        ok: false,
+        error: { code: 'invalid_status', message: 'Post 4 needs no attention' },
+      },
       {
         id: 5,
         ok: false,
@@ -187,6 +191,11 @@ describe('needs attention', () => {
     expect(third.last_error).toBeNull();
     expect(third.retry_count).toBe(0);
     expect(third.reason).toBeNull();
+
+    const fourth = await getPost(4);
+    expect(fourth.status).toBe('draft');
+    expect(fourth.scheduled_at).toBe('2026-09-06T09:00:00.000Z');
+    expect(fourth.reason).toBe('still a draft');
   });
 
   test('dismiss reports unknown ids', async () => {

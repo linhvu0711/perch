@@ -852,7 +852,7 @@ export function dismissPosts(db: Db, userId: number, ids: number[], now: Date): 
       if (post === null) {
         return statusResultError(id, 'not_found', `Post ${id} not found`);
       }
-      if (!needsAttention(post, now)) {
+      if (!needsAttention(post)) {
         return statusResultError(id, 'invalid_status', `Post ${id} needs no attention`);
       }
       const action = dismissAction(post.status);
