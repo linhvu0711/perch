@@ -550,7 +550,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
               json: commandOptions.all ? { all: true } : { positions },
             }),
           );
-          return { value: response.media };
+          return postResult(response);
         },
       ),
     );
