@@ -495,6 +495,32 @@ describe('post media', () => {
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(PNG_3X2);
   });
 
+  test('rejects post create when a from image file is missing', async () => {
+    // Given: an image resource whose file is deleted
+    const [imageId] = await uploadImages({ name: 'a.png', bytes: PNG_3X2 });
+    if (imageId === undefined) throw new Error('upload failed');
+    const resources = await request(`/api/resources/${imageId}`);
+    const resource = (await resources.json()) as Resource;
+    if (resource.type !== 'image') throw new Error('not an image');
+    fs.unlinkSync(path.join(server.dir, 'uploads', resource.path));
+
+    // When: creating a post from it
+    const response = await request('/api/posts', {
+      method: 'POST',
+      body: JSON.stringify({ text: 'Hi', from: [imageId] }),
+    });
+
+    // Then: the create is rejected and leaves no post or files behind
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      code: 'validation',
+      message: 'Invalid request',
+      errors: [{ path: 'from', message: 'Image file is missing' }],
+    });
+    expect((await request('/api/posts/1')).status).toBe(404);
+    expect(fs.existsSync(mediaDir(1))).toBe(false);
+  });
+
   test('attaches image resources on post create', async () => {
     // Given: an image and a note
     await uploadImages({ name: 'a.png', bytes: PNG_3X2 });

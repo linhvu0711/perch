@@ -46,7 +46,6 @@ import {
 import { DomainError } from '../errors';
 import { decodePostCursor, encodePostCursor } from './cursor';
 import type { Db, Tx } from './index';
-import type { MediaFiles } from './postMedia';
 import { accountConnectedAtSql, attentionSql, missedSql, postState } from './postState';
 import { postLinks, postMedia, posts, postTags, resources, xAccounts } from './schema';
 import { getSettings } from './settings';
@@ -158,14 +157,13 @@ function linksForPosts(db: Db, postIds: number[]): Map<number, PostLink[]> {
   return result;
 }
 
-export async function createPost(
+export function createPost(
   db: Db,
   userId: number,
   input: PostCreate,
   now: Date,
-  files: MediaFiles | undefined,
   fileExists: (rel: string) => boolean,
-): Promise<Post> {
+): Post {
   const fromResources = (input.from ?? []).map((resourceId) => {
     const resource = db
       .select()
@@ -205,28 +203,6 @@ export async function createPost(
     ]);
     return inserted;
   });
-
-  if (files) {
-    let position = 1;
-    for (const resource of imageSources) {
-      const imagePath = resource.imagePath;
-      if (imagePath === null) continue;
-      const bytes = await files.read(imagePath);
-      if (!bytes) continue;
-      const ext = imagePath.split('.').pop() ?? 'png';
-      const rel = await files.store(row.id, bytes, ext);
-      db.insert(postMedia)
-        .values({
-          postId: row.id,
-          position: position++,
-          path: rel,
-          mime: resource.imageMime ?? 'image/png',
-          bytes: bytes.length,
-          fromResourceId: resource.id,
-        })
-        .run();
-    }
-  }
 
   const post = getPost(db, userId, row.id, now, fileExists);
   if (!post) throw new Error('post insert failed');

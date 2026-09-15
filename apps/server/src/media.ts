@@ -11,8 +11,20 @@ import {
   PostImmutableError,
 } from './db/posts';
 import { getResource } from './db/resources';
+import { DomainError } from './errors';
 import { copyToR2, mediaFileExists, readMedia, storeMedia } from './images';
 import type { R2Client } from './r2/client';
+
+export class MediaAttachError extends DomainError {
+  constructor(messages: string[]) {
+    super(
+      'validation',
+      'from',
+      messages[0] ?? 'Attach failed',
+      messages.map((message) => ({ path: 'from', message })),
+    );
+  }
+}
 
 export interface MediaService {
   attachFromResources(

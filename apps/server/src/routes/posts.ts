@@ -32,6 +32,7 @@ import {
 import { getSettings } from '../db/settings';
 import { tagPosts, untagPosts } from '../db/tags';
 import { notFound, validationHook } from '../errors';
+import { MediaAttachError } from '../media';
 import {
   copyToR2,
   inspectImage,
@@ -77,14 +78,28 @@ export function postsRoutes(deps: AppDeps) {
     .post('/', zValidator('json', postCreateSchema, validationHook), async (c) => {
       const userId = c.get('user').id;
       const body = c.req.valid('json');
-      const post = await createPost(
+      const post = createPost(
         deps.db,
         userId,
         body,
         deps.clock.now(),
-        mediaFiles(deps, userId),
         mediaFileExists(deps.uploadDir),
       );
+      const imageIds = new Set(
+        post.links.filter((link) => link.type === 'image').map((link) => link.resource_id),
+      );
+      const sources = (body.from ?? []).filter((id) => imageIds.has(id));
+      if (sources.length > 0) {
+        const attached = await deps.media.attachFromResources(userId, post.id, sources);
+        if (!attached) throw new Error('post insert failed');
+        const failed = attached.results.filter((item) => !item.ok);
+        if (failed.length > 0) {
+          deletePosts(deps.db, userId, [post.id], (postId) =>
+            removeMediaDir(deps.uploadDir, userId, postId),
+          );
+          throw new MediaAttachError(failed.map((item) => item.error.message));
+        }
+      }
       if (body.official === true) {
         const result = deps.lifecycle.promote(userId, [post.id]).results[0];
         if (result !== undefined && result.ok === false) {
@@ -105,7 +120,15 @@ export function postsRoutes(deps: AppDeps) {
         if (!fresh) throw notFound('Post', post.id);
         return c.json(fresh, 201);
       }
-      return c.json(post, 201);
+      const created = getPost(
+        deps.db,
+        userId,
+        post.id,
+        deps.clock.now(),
+        mediaFileExists(deps.uploadDir),
+      );
+      if (!created) throw new Error('post insert failed');
+      return c.json(created, 201);
     })
     .post('/tags', zValidator('json', itemTagsBodySchema, validationHook), (c) => {
       const body = c.req.valid('json');
