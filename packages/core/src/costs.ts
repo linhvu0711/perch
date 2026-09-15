@@ -22,8 +22,8 @@ export const X_ENDPOINTS = {
 export const COST_KINDS = ['publish', 'save_tweet', 'connect'] as const;
 export type CostKind = (typeof COST_KINDS)[number];
 
-/** The cost bucket an api_calls endpoint belongs to. */
-export function costKindOf(endpoint: string): CostKind {
+/** The cost bucket an api_calls endpoint belongs to, or null for an unbilled endpoint. */
+export function costKindOf(endpoint: string): CostKind | null {
   switch (endpoint) {
     case X_ENDPOINTS.createPost:
     case X_ENDPOINTS.uploadMedia:
@@ -33,7 +33,7 @@ export function costKindOf(endpoint: string): CostKind {
     case X_ENDPOINTS.getMe:
       return 'connect';
     default:
-      throw new Error(`Unknown X endpoint ${endpoint}`);
+      return null;
   }
 }
 

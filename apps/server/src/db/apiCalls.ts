@@ -68,12 +68,8 @@ export function costMonths(
 
   const byMonth = new Map<CostMonth, CostMonthRow>();
   for (const row of rows) {
-    let kind: 'publish' | 'save_tweet' | 'connect';
-    try {
-      kind = costKindOf(row.endpoint);
-    } catch {
-      continue;
-    }
+    const kind = costKindOf(row.endpoint);
+    if (kind === null) continue;
     const month = zonedParts(row.createdAt, timeZone).date.slice(0, 7) as CostMonth;
     const bucket = byMonth.get(month) ?? emptyMonthRow(month);
     bucket.calls += 1;
@@ -102,12 +98,8 @@ export function costSummary(db: Db, userId: number, month: string, timeZone: str
     .all();
   let allTimeRaw = 0;
   for (const call of all) {
-    try {
-      costKindOf(call.endpoint);
-      allTimeRaw += call.costUsd;
-    } catch {
-      // Endpoints costKindOf does not classify are not billed kinds; skip them.
-    }
+    if (costKindOf(call.endpoint) === null) continue;
+    allTimeRaw += call.costUsd;
   }
   const rows = costMonths(db, userId, timeZone);
   const row = rows.find((item) => item.month === month) ?? emptyMonthRow(month as CostMonth);
