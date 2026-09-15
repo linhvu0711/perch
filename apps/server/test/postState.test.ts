@@ -4,6 +4,7 @@ import type { CalendarRange, Post, PostList, PostStatusResponse, Status } from '
 import { eq } from 'drizzle-orm';
 
 import { openDb } from '../src/db';
+import { postState } from '../src/db/postState';
 import { posts } from '../src/db/schema';
 import { connectTestAccount, createTestServer, type TestServer } from '../src/testing';
 
@@ -136,6 +137,39 @@ describe('post state', () => {
     const secondStatus = (await secondStatusResponse.json()) as Status;
     expect(secondStatus.missed_count).toBe(0);
     expect(secondStatus.failed_count).toBe(0);
+  });
+
+  test('postState maps a row to missed, reason, and dismiss', () => {
+    expect(postState({ status: 'draft', missed: 1, lastError: null })).toEqual({
+      missed: true,
+      reason: 'time passed, still a draft',
+      dismiss: 'unschedule',
+    });
+    expect(postState({ status: 'official', missed: 1, lastError: null })).toEqual({
+      missed: true,
+      reason: 'time passed, no X account',
+      dismiss: 'unschedule',
+    });
+    expect(postState({ status: 'published', missed: 0, lastError: null })).toEqual({
+      missed: false,
+      reason: null,
+      dismiss: null,
+    });
+    expect(postState({ status: 'official', missed: 0, lastError: null })).toEqual({
+      missed: false,
+      reason: null,
+      dismiss: null,
+    });
+    expect(postState({ status: 'failed', missed: 0, lastError: 'Service Unavailable' })).toEqual({
+      missed: false,
+      reason: 'publish failed: Service Unavailable',
+      dismiss: 'demote',
+    });
+    expect(postState({ status: 'failed', missed: 1, lastError: null })).toEqual({
+      missed: true,
+      reason: 'publish failed',
+      dismiss: 'demote',
+    });
   });
 
   test('empty Issues on a fresh server', async () => {
