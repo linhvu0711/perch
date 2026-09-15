@@ -55,7 +55,9 @@ export function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (attention.hasNextPage && !attention.isFetching) void attention.fetchNextPage();
+    if (attention.hasNextPage && !attention.isFetching) {
+      void attention.fetchNextPage().catch(() => undefined);
+    }
   }, [attention.fetchNextPage, attention.hasNextPage, attention.isFetching]);
 
   const today = zonedParts(now, timezone).date;
