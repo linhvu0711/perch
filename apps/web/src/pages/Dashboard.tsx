@@ -55,10 +55,15 @@ export function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (attention.hasNextPage && !attention.isFetching) {
+    if (attention.hasNextPage && !attention.isFetching && !attention.isFetchNextPageError) {
       void attention.fetchNextPage().catch(() => undefined);
     }
-  }, [attention.fetchNextPage, attention.hasNextPage, attention.isFetching]);
+  }, [
+    attention.fetchNextPage,
+    attention.hasNextPage,
+    attention.isFetching,
+    attention.isFetchNextPageError,
+  ]);
 
   const today = zonedParts(now, timezone).date;
   const calendar = useCalendar({ from: today, to: addDays(today, ATTENTION_WINDOW_DAYS) });
