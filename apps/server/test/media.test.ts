@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Post, PostList, PostMediaAttachResponse, Resource } from '@perch/core';
@@ -683,6 +683,41 @@ describe('post media', () => {
         },
       ],
     });
+  });
+
+  test('attaches nothing when the second resource write throws', async () => {
+    // Given: three images, one post, and one media already attached
+    await uploadImages(
+      { name: 'a.png', bytes: PNG_3X2 },
+      { name: 'b.png', bytes: PNG_3X2 },
+      { name: 'c.png', bytes: PNG_3X2 },
+    );
+    await createPost({ text: 'Hi' });
+    expect((await attachMedia(1, [1])).status).toBe(200);
+    const before = await getPost(1);
+    const filesBefore = mediaFiles(1);
+    let calls = 0;
+    const realMkdir = fs.mkdirSync.bind(fs);
+    const mkdir = spyOn(fs, 'mkdirSync');
+    mkdir.mockImplementation((...args) => {
+      calls += 1;
+      if (calls === 2) throw new Error('disk full');
+      return realMkdir(...args);
+    });
+
+    // When: attaching two more resources and the second store throws
+    const response = await attachMedia(1, [2, 3]);
+    mkdir.mockRestore();
+
+    // Then: the request fails and the post keeps its one media, link, and file
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ code: 'internal', message: 'Internal error' });
+    const post = await getPost(1);
+    expect(post.media).toEqual([
+      { id: 1, position: 1, mime: 'image/png', bytes: 73, from_resource_id: 1, present: true },
+    ]);
+    expect(post.links).toEqual(before.links);
+    expect(mediaFiles(1)).toEqual(filesBefore);
   });
 
   test('deleting a post removes its media files', async () => {

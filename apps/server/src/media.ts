@@ -17,7 +17,7 @@ import {
   getPost,
   getPostRow,
   insertMediaRow,
-  insertPostLink,
+  insertMediaRows,
   MediaLimitError,
   mediaRowsForPost,
   PostImmutableError,
@@ -103,6 +103,17 @@ function remove(uploadDir: string, rel: string): void {
   if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
 }
 
+/** Deletes each media file, logging failures and continuing, so cleanup never masks an in-flight error. */
+function discard(uploadDir: string, rels: string[], logError: (error: unknown) => void): void {
+  for (const rel of rels) {
+    try {
+      remove(uploadDir, rel);
+    } catch (error) {
+      logError(error);
+    }
+  }
+}
+
 /** Deletes a post's whole media directory. */
 function removeDir(uploadDir: string, userId: number, postId: number): void {
   fs.rmSync(dirFor(uploadDir, userId, postId), { recursive: true, force: true });
@@ -128,49 +139,76 @@ export function createMediaService(deps: {
         throw new MediaLimitError('resource_ids');
       }
 
-      let next = existing.length + 1;
       const results: PostMediaAttachResponse['results'] = [];
-      for (const id of ids) {
-        const resource = getResource(deps.db, userId, id);
-        if (!resource) {
-          results.push({
-            id,
-            ok: false,
-            error: { code: 'not_found', message: `Resource ${id} not found` },
-          });
-          continue;
-        }
-        if (resource.type !== 'image') {
-          results.push({
-            id,
-            ok: false,
-            error: { code: 'not_image', message: `Resource ${id} is not an image` },
-          });
-          continue;
-        }
-        const bytes = await read(deps.uploadDir, resource.path);
-        if (!bytes) {
-          results.push({
-            id,
-            ok: false,
-            error: { code: 'file_missing', message: 'Image file is missing' },
-          });
-          continue;
-        }
+      const written: Array<{
+        index: number;
+        id: number;
+        file: {
+          path: string;
+          mime: PostMedia['mime'];
+          bytes: number;
+          fromResourceId: number | null;
+        };
+      }> = [];
+      const rels: string[] = [];
+      try {
+        for (const [index, id] of ids.entries()) {
+          const resource = getResource(deps.db, userId, id);
+          if (!resource) {
+            results[index] = {
+              id,
+              ok: false,
+              error: { code: 'not_found', message: `Resource ${id} not found` },
+            };
+            continue;
+          }
+          if (resource.type !== 'image') {
+            results[index] = {
+              id,
+              ok: false,
+              error: { code: 'not_image', message: `Resource ${id} is not an image` },
+            };
+            continue;
+          }
+          const bytes = await read(deps.uploadDir, resource.path);
+          if (!bytes) {
+            results[index] = {
+              id,
+              ok: false,
+              error: { code: 'file_missing', message: 'Image file is missing' },
+            };
+            continue;
+          }
 
-        const ext = resource.path.split('.').pop() ?? 'png';
-        const rel = await store(deps.uploadDir, userId, postId, bytes, ext);
-        await copyToR2(deps.r2, rel, bytes, deps.logError);
-        const media = insertMediaRow(
+          const ext = resource.path.split('.').pop() ?? 'png';
+          const rel = await store(deps.uploadDir, userId, postId, bytes, ext);
+          await copyToR2(deps.r2, rel, bytes, deps.logError);
+          rels.push(rel);
+          written.push({
+            index,
+            id,
+            file: {
+              path: rel,
+              mime: resource.mime,
+              bytes: bytes.length,
+              fromResourceId: id,
+            },
+          });
+        }
+        const inserted = insertMediaRows(
           deps.db,
           postId,
-          next++,
-          { path: rel, mime: resource.mime, bytes: bytes.length },
-          id,
+          existing.length + 1,
+          written.map((item) => item.file),
           fileExists,
         );
-        insertPostLink(deps.db, postId, id);
-        results.push({ id, ok: true, media });
+        written.forEach((item, i) => {
+          const media = inserted[i];
+          if (media) results[item.index] = { id: item.id, ok: true, media };
+        });
+      } catch (error) {
+        discard(deps.uploadDir, rels, deps.logError);
+        throw error;
       }
       return { results };
     },
