@@ -46,6 +46,7 @@ export async function buildServer(options: BuildServerOptions): Promise<PerchSer
     clock: options.clock,
     xClient: options.xClient,
     xOAuth: options.xOAuth ?? null,
+    logError: options.logError,
   });
   const tweets = createTweetService({
     db,

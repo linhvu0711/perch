@@ -118,6 +118,7 @@ describe('account', () => {
     server.xClient.exchangeError = new XError('http', 500, 'boom');
     const failed = await server.app.request(`/auth/x/callback?code=abc&state=${state2}`);
     expect(failed.headers.get('Location')).toBe('/settings?connect_error=failed');
+    expect(server.errors).toHaveLength(1);
 
     const account = await request('/api/account');
     expect(await account.json()).toEqual({
@@ -126,6 +127,22 @@ describe('account', () => {
     });
     const status = await request('/api/status');
     expect((await status.json()).month_cost_usd).toBe(0);
+  });
+
+  test('records a failed connect when getMe fails', async () => {
+    // Given: a started connect whose getMe endpoint is down
+    const start = await request('/api/account/connect', { method: 'POST' });
+    const state = new URL((await start.json()).authorize_url).searchParams.get('state')!;
+    server.xClient.meError = new XError('http', 500, 'boom');
+
+    // When
+    const callback = await server.app.request(`/auth/x/callback?code=abc&state=${state}`);
+
+    // Then
+    expect(callback.headers.get('Location')).toBe('/settings?connect_error=failed');
+    expect(server.errors).toHaveLength(1);
+    const account = await request('/api/account');
+    expect(await account.json()).toEqual({ account: null, char_limit: 280 });
   });
 
   test('disconnects another X user on connect and reuses the row of the same one', async () => {
@@ -334,6 +351,26 @@ describe('account', () => {
     expect(
       server.xClient.calls.filter((c) => c.name === 'revokeToken').map((c) => c.args[0]),
     ).toEqual(['refresh-1', 'access-1']);
+    expect(server.errors).toHaveLength(1);
+  });
+
+  test('records failed revokes on disconnect', async () => {
+    // Given: a connected account whose revoke endpoint is down
+    await connect();
+    server.xClient.revokeError = new XError('http', 500, 'boom');
+
+    // When
+    const res = await request('/api/account/disconnect', { method: 'POST' });
+
+    // Then
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ account: null, char_limit: 280 });
+    expect(server.errors).toHaveLength(2);
+    expect(
+      server.xClient.calls.filter((c) => c.name === 'revokeToken').map((c) => c.args[0]),
+    ).toEqual(['refresh-1', 'access-1']);
+    expect(server.errors[0]).toBeInstanceOf(XError);
+    expect((server.errors[0] as XError).message).toBe('boom');
   });
 
   test('coalesces concurrent refreshes into one call', async () => {
