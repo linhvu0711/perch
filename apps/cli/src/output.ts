@@ -3,19 +3,32 @@ import type { ItemTagsResponse } from '@perch/core';
 import type { CliContext } from './context';
 
 export class CliError extends Error {
+  readonly exitCode: number = 1;
+
   constructor(
     public code: string,
     message: string,
-    public exitCode = 1,
     public errors?: Array<{ path: string; message: string }>,
   ) {
     super(message);
   }
 }
 
+export class UsageError extends CliError {
+  override readonly exitCode = 2;
+}
+
+export class AuthError extends CliError {
+  override readonly exitCode = 3;
+
+  constructor(message: string) {
+    super('unauthorized', message);
+  }
+}
+
 export class BatchFailure extends CliError {
   constructor(failed: number, total: number) {
-    super('batch_failed', `${failed} of ${total} items failed`, 1);
+    super('batch_failed', `${failed} of ${total} items failed`);
   }
 }
 

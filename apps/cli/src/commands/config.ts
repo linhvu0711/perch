@@ -11,7 +11,7 @@ import {
   writeConfig,
 } from '../config';
 import type { CliContext } from '../context';
-import { CliError, printResult, resolveMode } from '../output';
+import { CliError, printResult, resolveMode, UsageError } from '../output';
 
 interface GlobalOptions {
   json?: boolean;
@@ -82,10 +82,9 @@ export function addConfigCommands(program: Command, ctx: CliContext): void {
             value === 'none' ? null : Number(value),
           );
           if (!parsedLimit.success) {
-            throw new CliError(
+            throw new UsageError(
               'usage',
               `char-limit must be a whole number from 1 to ${CHAR_LIMIT_MAX}, or "none"`,
-              2,
             );
           }
           const charLimit = parsedLimit.data;

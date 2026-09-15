@@ -3,7 +3,7 @@ import type { Command } from 'commander';
 import { createApi } from '../api';
 import { readConfig, resolveServerUrl, resolveToken, writeConfig } from '../config';
 import type { CliContext } from '../context';
-import { CliError, printResult, resolveMode } from '../output';
+import { AuthError, CliError, printResult, resolveMode } from '../output';
 
 interface GlobalOptions {
   json?: boolean;
@@ -51,8 +51,8 @@ export function addAuthCommands(program: Command, ctx: CliContext): void {
           server_url: serverUrl,
         });
       } catch (error) {
-        if (error instanceof CliError && error.code === 'unauthorized') {
-          throw new CliError('unauthorized', `Token is not valid for ${serverUrl}`, 3);
+        if (error instanceof AuthError) {
+          throw new AuthError(`Token is not valid for ${serverUrl}`);
         }
         throw error;
       }

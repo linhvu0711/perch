@@ -24,6 +24,7 @@ import {
   mergeItemTagResults,
   printResult,
   resolveMode,
+  UsageError,
 } from '../output';
 
 interface GlobalOptions {
@@ -40,7 +41,7 @@ function apiFor(program: Command, ctx: CliContext) {
 
 function positiveId(value: string, plural = false): number {
   if (!/^\d+$/.test(value) || Number(value) <= 0) {
-    throw new CliError(
+    throw new UsageError(
       'bad_args',
       plural ? 'ids must be positive integers' : 'id must be a positive integer',
     );
@@ -122,7 +123,7 @@ async function readTextInput(
     stdinArg !== undefined,
   ].filter(Boolean).length;
   if (given > 1 || (stdinArg !== undefined && stdinArg !== '-')) {
-    throw new CliError('bad_args', 'Use one of --text, --file, or -');
+    throw new UsageError('bad_args', 'Use one of --text, --file, or -');
   }
   if (commandOptions.text !== undefined) return commandOptions.text;
   if (commandOptions.file !== undefined) {
@@ -204,13 +205,13 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
         needsAttention?: boolean;
       }) => {
         if (commandOptions.scheduled === true && commandOptions.unscheduled === true) {
-          throw new CliError('bad_args', 'Use one of --scheduled or --unscheduled');
+          throw new UsageError('bad_args', 'Use one of --scheduled or --unscheduled');
         }
         if (
           commandOptions.status !== undefined &&
           !(POST_STATUSES as readonly string[]).includes(commandOptions.status)
         ) {
-          throw new CliError(
+          throw new UsageError(
             'bad_value',
             `Unknown status: ${commandOptions.status}. Use ${POST_STATUSES.join(', ')}`,
           );
@@ -220,11 +221,11 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
           ['--to', commandOptions.to],
         ] as const) {
           if (value !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-            throw new CliError('bad_value', `${flag} must be YYYY-MM-DD`);
+            throw new UsageError('bad_value', `${flag} must be YYYY-MM-DD`);
           }
         }
         if (!/^\d+$/.test(commandOptions.limit) || Number(commandOptions.limit) <= 0) {
-          throw new CliError('bad_value', '--limit must be a positive integer');
+          throw new UsageError('bad_value', '--limit must be a positive integer');
         }
 
         const options = program.opts<GlobalOptions>();
@@ -335,10 +336,10 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
           commandOptions.editor === true,
         ].filter(Boolean).length;
         if (textSources > 1) {
-          throw new CliError('bad_args', 'Use one of --text, --file, -, or -e');
+          throw new UsageError('bad_args', 'Use one of --text, --file, -, or -e');
         }
         if (commandOptions.title === undefined && textSources === 0) {
-          throw new CliError(
+          throw new UsageError(
             'bad_args',
             'Nothing to update: pass --title, --text, --file, -, or -e',
           );
@@ -423,7 +424,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
     .action(async (idValues: string[], commandOptions: { add?: string[]; remove?: string[] }) => {
       const ids = idValues.map((value) => positiveId(value, true));
       if (commandOptions.add === undefined && commandOptions.remove === undefined) {
-        throw new CliError('usage', 'Give --add or --remove', 2);
+        throw new UsageError('usage', 'Give --add or --remove');
       }
 
       const api = apiFor(program, ctx);
@@ -482,7 +483,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
       const resourceIds = (commandOptions.resource ?? []).map((value) => positiveId(value, true));
       const files = commandOptions.file ?? [];
       if (resourceIds.length === 0 && files.length === 0) {
-        throw new CliError('bad_args', 'Use --resource or --file');
+        throw new UsageError('bad_args', 'Use --resource or --file');
       }
 
       const api = apiFor(program, ctx);
@@ -545,7 +546,7 @@ export function addPostCommands(program: Command, ctx: CliContext): void {
       const id = positiveId(idValue);
       const positions = (commandOptions.media ?? []).map((value) => positiveId(value, true));
       if (positions.length > 0 === (commandOptions.all === true)) {
-        throw new CliError('bad_args', 'Use one of --media or --all');
+        throw new UsageError('bad_args', 'Use one of --media or --all');
       }
 
       const api = apiFor(program, ctx);

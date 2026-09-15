@@ -4,7 +4,7 @@ import type { Command } from 'commander';
 import { createApi } from '../api';
 import { resolveServerUrl, resolveToken } from '../config';
 import type { CliContext } from '../context';
-import { CliError, printResult, resolveMode } from '../output';
+import { printResult, resolveMode, UsageError } from '../output';
 
 interface GlobalOptions {
   json?: boolean;
@@ -28,7 +28,7 @@ export function addCostCommands(program: Command, ctx: CliContext): void {
         commandOptions.month !== undefined &&
         !costMonthSchema.safeParse(commandOptions.month).success
       ) {
-        throw new CliError('usage', '--month must be YYYY-MM', 2);
+        throw new UsageError('usage', '--month must be YYYY-MM');
       }
 
       const options = program.opts<GlobalOptions>();

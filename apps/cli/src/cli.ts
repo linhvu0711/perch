@@ -12,7 +12,7 @@ import { addResourceCommands } from './commands/resource';
 import { addStatusCommands } from './commands/status';
 import { addTagCommands } from './commands/tag';
 import type { CliContext } from './context';
-import { CliError, printError, resolveMode } from './output';
+import { BatchFailure, CliError, printError, resolveMode, UsageError } from './output';
 
 export async function runCli(argv: string[], ctx: CliContext): Promise<number> {
   const program = new Command()
@@ -49,7 +49,7 @@ export async function runCli(argv: string[], ctx: CliContext): Promise<number> {
     return 0;
   } catch (error) {
     const mode = resolveMode(program.opts(), ctx.isTTY);
-    if (error instanceof CliError && error.code === 'batch_failed') return 1;
+    if (error instanceof BatchFailure) return error.exitCode;
     if (error instanceof CliError) {
       printError(ctx, mode, error);
       return error.exitCode;
@@ -58,10 +58,11 @@ export async function runCli(argv: string[], ctx: CliContext): Promise<number> {
       if (error.code === 'commander.helpDisplayed' || error.code === 'commander.version') {
         return 0;
       }
+      const usage = new UsageError('usage', error.message);
       if (mode === 'json') {
-        printError(ctx, mode, new CliError('usage', error.message, 2));
+        printError(ctx, mode, usage);
       }
-      return 2;
+      return usage.exitCode;
     }
     const message = error instanceof Error ? error.message : String(error);
     printError(ctx, mode, new CliError('internal', message));

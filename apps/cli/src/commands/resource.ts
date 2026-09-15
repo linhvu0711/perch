@@ -27,6 +27,7 @@ import {
   mergeItemTagResults,
   printResult,
   resolveMode,
+  UsageError,
 } from '../output';
 
 interface GlobalOptions {
@@ -43,7 +44,7 @@ function apiFor(program: Command, ctx: CliContext) {
 
 function positiveId(value: string, plural = false): number {
   if (!/^\d+$/.test(value) || Number(value) <= 0) {
-    throw new CliError(
+    throw new UsageError(
       'bad_args',
       plural ? 'ids must be positive integers' : 'id must be a positive integer',
     );
@@ -157,10 +158,10 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
       const mode = resolveMode(options, ctx.isTTY);
       const stdinCount = paths.filter((item) => item === '-').length;
       if (stdinCount > 1) {
-        throw new CliError('bad_args', 'stdin (-) may be given only once');
+        throw new UsageError('bad_args', 'stdin (-) may be given only once');
       }
       if (commandOptions.title !== undefined && paths.length !== 1) {
-        throw new CliError('bad_args', '--title needs exactly one path');
+        throw new UsageError('bad_args', '--title needs exactly one path');
       }
 
       const api = apiFor(program, ctx);
@@ -248,10 +249,10 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
       const options = program.opts<GlobalOptions>();
       const mode = resolveMode(options, ctx.isTTY);
       if (commandOptions.title !== undefined && paths.length !== 1) {
-        throw new CliError('bad_args', '--title needs exactly one path');
+        throw new UsageError('bad_args', '--title needs exactly one path');
       }
       if (paths.includes('-')) {
-        throw new CliError('bad_args', 'stdin (-) is not supported for images');
+        throw new UsageError('bad_args', 'stdin (-) is not supported for images');
       }
 
       const api = apiFor(program, ctx);
@@ -366,13 +367,13 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
           commandOptions.type !== undefined &&
           !(RESOURCE_TYPES as readonly string[]).includes(commandOptions.type)
         ) {
-          throw new CliError(
+          throw new UsageError(
             'bad_value',
             `Unknown type: ${commandOptions.type}. Use tweet, image, or md`,
           );
         }
         if (commandOptions.sort !== 'created' && commandOptions.sort !== 'used') {
-          throw new CliError(
+          throw new UsageError(
             'bad_value',
             `Unknown sort: ${commandOptions.sort}. Use created or used`,
           );
@@ -382,15 +383,14 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
           ['--to', commandOptions.to],
         ] as const) {
           if (value !== undefined && !isValidDate(value)) {
-            throw new CliError('bad_value', `${name} must be YYYY-MM-DD`);
+            throw new UsageError('bad_value', `${name} must be YYYY-MM-DD`);
           }
         }
         const parsedLimit = resourceListQuerySchema.shape.limit.safeParse(commandOptions.limit);
         if (!parsedLimit.success) {
-          throw new CliError(
+          throw new UsageError(
             'usage',
             `--limit must be a whole number from 1 to ${RESOURCE_LIST_LIMIT_MAX}`,
-            2,
           );
         }
 
@@ -472,7 +472,7 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
       ) => {
         const id = positiveId(idValue);
         if (commandOptions.content !== undefined && commandOptions.editor) {
-          throw new CliError('bad_args', 'Use either --content or -e, not both');
+          throw new UsageError('bad_args', 'Use either --content or -e, not both');
         }
         if (
           commandOptions.title === undefined &&
@@ -480,13 +480,13 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
           commandOptions.content === undefined &&
           !commandOptions.editor
         ) {
-          throw new CliError(
+          throw new UsageError(
             'bad_args',
             'Nothing to update: pass --title, --notes, --content, or -e',
           );
         }
         if (commandOptions.title !== undefined && commandOptions.title.trim() === '') {
-          throw new CliError('bad_value', '--title must not be empty');
+          throw new UsageError('bad_value', '--title must not be empty');
         }
         if (commandOptions.editor && (!ctx.isTTY || !ctx.stdinIsTTY)) {
           throw new CliError('no_tty', '-e needs a terminal');
@@ -509,7 +509,7 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
             api.client.api.resources[':id'].$get({ param: { id: String(id) } }),
           );
           if (current.type !== 'md') {
-            throw new CliError('bad_args', 'Only notes have a body');
+            throw new UsageError('bad_args', 'Only notes have a body');
           }
           patch.body = await ctx.editText(current.body);
           if (
@@ -582,7 +582,7 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
     .action(async (idValues: string[], commandOptions: { add?: string[]; remove?: string[] }) => {
       const ids = idValues.map((value) => positiveId(value, true));
       if (commandOptions.add === undefined && commandOptions.remove === undefined) {
-        throw new CliError('usage', 'Give --add or --remove', 2);
+        throw new UsageError('usage', 'Give --add or --remove');
       }
 
       const api = apiFor(program, ctx);

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { CliError } from './output';
+import { UsageError } from './output';
 
 export const cliEnvSchema = z.object({
   PERCH_TOKEN: z.string().optional(),
@@ -21,7 +21,7 @@ export function parseCliEnv(env: Record<string, string | undefined>): CliEnv {
   if (!result.success) {
     const issue = result.error.issues[0];
     const detail = issue ? `${issue.path.join('.')} ${issue.message}` : 'invalid environment';
-    throw new CliError('usage', detail, 2);
+    throw new UsageError('usage', detail);
   }
   return result.data;
 }

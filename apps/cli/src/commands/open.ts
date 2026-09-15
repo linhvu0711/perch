@@ -3,7 +3,7 @@ import type { Command } from 'commander';
 import { createApi } from '../api';
 import { resolveServerUrl, resolveToken } from '../config';
 import type { CliContext } from '../context';
-import { CliError, printResult, resolveMode } from '../output';
+import { printResult, resolveMode, UsageError } from '../output';
 
 interface GlobalOptions {
   json?: boolean;
@@ -13,7 +13,7 @@ interface GlobalOptions {
 
 function positiveId(value: string): number {
   if (!/^\d+$/.test(value) || Number(value) <= 0) {
-    throw new CliError('bad_args', 'id must be a positive integer');
+    throw new UsageError('bad_args', 'id must be a positive integer');
   }
   return Number(value);
 }

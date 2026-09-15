@@ -11,7 +11,7 @@ import type { Command } from 'commander';
 import { createApi } from '../api';
 import { resolveServerUrl, resolveToken } from '../config';
 import type { CliContext } from '../context';
-import { CliError, formatTable, printResult, resolveMode } from '../output';
+import { formatTable, printResult, resolveMode, UsageError } from '../output';
 
 interface GlobalOptions {
   json?: boolean;
@@ -41,10 +41,10 @@ export function addCalendarCommands(program: Command, ctx: CliContext): void {
         tag?: string[];
       }) => {
         if (commandOptions.week === true && commandOptions.month === true) {
-          throw new CliError('usage', 'Use one of --week or --month', 2);
+          throw new UsageError('usage', 'Use one of --week or --month');
         }
         if (commandOptions.from !== undefined && !isValidDate(commandOptions.from)) {
-          throw new CliError('usage', '--from must be YYYY-MM-DD', 2);
+          throw new UsageError('usage', '--from must be YYYY-MM-DD');
         }
 
         const options = program.opts<GlobalOptions>();
