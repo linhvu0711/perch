@@ -263,28 +263,6 @@ function mediaForPosts(
   return result;
 }
 
-function mediaPathsForPosts(
-  db: Db,
-  postIds: number[],
-): Map<number, Array<{ position: number; path: string }>> {
-  const result = new Map<number, Array<{ position: number; path: string }>>();
-  if (postIds.length === 0) return result;
-
-  const rows = db
-    .select({ postId: postMedia.postId, position: postMedia.position, path: postMedia.path })
-    .from(postMedia)
-    .where(inArray(postMedia.postId, postIds))
-    .orderBy(asc(postMedia.postId), asc(postMedia.position))
-    .all();
-
-  for (const row of rows) {
-    const list = result.get(row.postId) ?? [];
-    list.push({ position: row.position, path: row.path });
-    result.set(row.postId, list);
-  }
-  return result;
-}
-
 export function mediaRowsForPost(db: Db, postId: number): PostMediaRow[] {
   return db
     .select()
@@ -309,7 +287,7 @@ export function mediaRowForPost(
 }
 
 export function insertMediaRow(
-  db: Db,
+  db: Db | Tx,
   postId: number,
   position: number,
   file: { path: string; mime: PostMedia['mime']; bytes: number },
@@ -332,7 +310,7 @@ export function insertMediaRow(
   return toPostMedia(row, fileExists);
 }
 
-export function insertPostLink(db: Db, postId: number, resourceId: number): void {
+export function insertPostLink(db: Db | Tx, postId: number, resourceId: number): void {
   db.insert(postLinks).values({ postId, resourceId }).onConflictDoNothing().run();
 }
 
@@ -349,6 +327,35 @@ export function removeMediaRows(db: Db, deletedIds: number[], kept: PostMediaRow
       }
     });
   });
+}
+
+/** Inserts media rows starting at position `first`, and a post link per sourced row, in one transaction. */
+export function insertMediaRows(
+  db: Db,
+  postId: number,
+  first: number,
+  files: Array<{
+    path: string;
+    mime: PostMedia['mime'];
+    bytes: number;
+    fromResourceId: number | null;
+  }>,
+  fileExists: (rel: string) => boolean,
+): PostMedia[] {
+  return db.transaction((tx) =>
+    files.map((file, index) => {
+      const media = insertMediaRow(
+        tx,
+        postId,
+        first + index,
+        file,
+        file.fromResourceId,
+        fileExists,
+      );
+      if (file.fromResourceId !== null) insertPostLink(tx, postId, file.fromResourceId);
+      return media;
+    }),
+  );
 }
 
 export function getPost(
