@@ -1,5 +1,3 @@
-import type { ItemTagsResponse } from '@perch/core';
-
 import type { CliContext } from './context';
 
 export class CliError extends Error {
@@ -101,18 +99,4 @@ export function printError(ctx: CliContext, mode: OutputMode, error: CliError): 
 
   const details = error.errors?.map(({ path, message }) => `  ${path}: ${message}`) ?? [];
   ctx.stderr.write([`Error: ${error.message}`, ...details].join('\n') + '\n');
-}
-
-/** Merges sequential tag add/remove results per id: a later result wins only when the earlier one succeeded. */
-export function mergeItemTagResults(
-  ...batches: ItemTagsResponse['results'][]
-): ItemTagsResponse['results'] {
-  const merged = new Map<number, ItemTagsResponse['results'][number]>();
-  for (const batch of batches) {
-    for (const result of batch) {
-      const existing = merged.get(result.id);
-      if (existing === undefined || existing.ok) merged.set(result.id, result);
-    }
-  }
-  return [...merged.values()];
 }

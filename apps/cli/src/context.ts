@@ -4,18 +4,20 @@ import os from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
 
+import type { LocalConfig } from './config';
+import { readConfig } from './config';
 import type { CliEnv } from './env';
 import { parseCliEnv } from './env';
 import { CliError } from './output';
 
 export interface CliContext {
-  argv: string[];
   env: CliEnv;
   stdout: { write(s: string): void };
   stderr: { write(s: string): void };
   isTTY: boolean;
   stdinIsTTY: boolean;
   configPath: string;
+  readConfig(): LocalConfig;
   homeDir: string;
   now: () => Date;
   fetch: typeof fetch;
@@ -25,16 +27,28 @@ export interface CliContext {
   editText(initial: string): Promise<string>;
 }
 
-export function realContext(argv: string[], env: Record<string, string | undefined>): CliContext {
+export function realContext(env: Record<string, string | undefined>): CliContext;
+/** @deprecated argv is no longer part of the context; kept for existing callers. */
+export function realContext(
+  argv: string[],
+  env: Record<string, string | undefined>,
+): CliContext;
+export function realContext(
+  a: string[] | Record<string, string | undefined>,
+  b?: Record<string, string | undefined>,
+): CliContext {
+  const env = (b ?? a) as Record<string, string | undefined>;
   const parsed = parseCliEnv(env);
+  const configPath =
+    parsed.PERCH_CONFIG_PATH ?? path.join(os.homedir(), '.perch', 'config.json');
   return {
-    argv,
     env: parsed,
     stdout: process.stdout,
     stderr: process.stderr,
     isTTY: Boolean(process.stdout.isTTY),
     stdinIsTTY: Boolean(process.stdin.isTTY),
-    configPath: parsed.PERCH_CONFIG_PATH ?? path.join(os.homedir(), '.perch', 'config.json'),
+    configPath,
+    readConfig: () => readConfig(configPath),
     homeDir: os.homedir(),
     now: () => new Date(),
     fetch: globalThis.fetch,

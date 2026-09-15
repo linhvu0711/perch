@@ -25,7 +25,12 @@ type TagCreateResult =
 
 function apiFor(program: Command, ctx: CliContext) {
   const options = program.opts<GlobalOptions>();
-  return createApi(ctx, resolveServerUrl(ctx, options.server), resolveToken(ctx));
+  const config = ctx.readConfig();
+  return createApi(
+    ctx,
+    resolveServerUrl(ctx, config, options.server),
+    resolveToken(ctx, config),
+  );
 }
 
 export function addTagCommands(program: Command, ctx: CliContext): void {

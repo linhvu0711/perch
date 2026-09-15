@@ -123,6 +123,32 @@ describe('exit numbers', () => {
     });
   });
 
+  test('prints errors as JSON or as an Error line by mode', async () => {
+    // Given: three contexts, table and json modes
+    const table = makeCtx(server, { isTTY: true });
+    const json = makeCtx(server, { isTTY: true });
+    const unknown = makeCtx(server, { isTTY: true });
+
+    // When
+    const tableCode = await runCli(['open', 'post', 'abc'], table.ctx);
+    const jsonCode = await runCli(['open', 'post', 'abc', '--json'], json.ctx);
+    const unknownCode = await runCli(['nope'], unknown.ctx);
+
+    // Then
+    expect(tableCode).toBe(2);
+    expect(jsonCode).toBe(2);
+    expect(unknownCode).toBe(2);
+    expect(table.err()).toBe('Error: id must be a positive integer\n');
+    expect(JSON.parse(json.err())).toEqual({
+      code: 'bad_args',
+      message: 'id must be a positive integer',
+    });
+    expect(unknown.err()).toContain("error: unknown command 'nope'");
+    expect(table.out()).toBe('');
+    expect(json.out()).toBe('');
+    expect(unknown.out()).toBe('');
+  });
+
   test('the entry file prints Error: and exits 2 on a bad env', () => {
     // Given: a real process with an invalid PERCH_SERVER_URL
     const result = Bun.spawnSync([process.execPath, 'src/index.ts', 'auth', 'status'], {

@@ -17,6 +17,7 @@ import {
 import type { Command } from 'commander';
 
 import { createApi } from '../api';
+import { mergeItemTagResults } from '../cli';
 import { resolveMirrorDir, resolveServerUrl, resolveToken } from '../config';
 import type { CliContext } from '../context';
 import { applyMirror } from '../mirror';
@@ -24,7 +25,6 @@ import {
   BatchFailure,
   CliError,
   formatTable,
-  mergeItemTagResults,
   printResult,
   resolveMode,
   UsageError,
@@ -39,7 +39,12 @@ interface GlobalOptions {
 
 function apiFor(program: Command, ctx: CliContext) {
   const options = program.opts<GlobalOptions>();
-  return createApi(ctx, resolveServerUrl(ctx, options.server), resolveToken(ctx));
+  const config = ctx.readConfig();
+  return createApi(
+    ctx,
+    resolveServerUrl(ctx, config, options.server),
+    resolveToken(ctx, config),
+  );
 }
 
 function positiveId(value: string, plural = false): number {
@@ -637,8 +642,9 @@ export function addResourceCommands(program: Command, ctx: CliContext): void {
     .action(async (commandOptions: { dir?: string }) => {
       const options = program.opts<GlobalOptions>();
       const mode = resolveMode(options, ctx.isTTY);
-      const serverUrl = resolveServerUrl(ctx, options.server);
-      const dir = resolveMirrorDir(ctx, commandOptions.dir);
+      const config = ctx.readConfig();
+      const serverUrl = resolveServerUrl(ctx, config, options.server);
+      const dir = resolveMirrorDir(ctx, config, commandOptions.dir);
       const api = apiFor(program, ctx);
       const text = await api.callText(api.client.api.resources.export.$get());
       const resources: Resource[] = [];

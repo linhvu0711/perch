@@ -40,23 +40,24 @@ export function writeConfig(configPath: string, config: LocalConfig): void {
   fs.renameSync(temporaryPath, configPath);
 }
 
-export function resolveServerUrl(ctx: CliContext, flagValue?: string): string {
+export function resolveServerUrl(
+  ctx: CliContext,
+  config: LocalConfig,
+  flagValue?: string,
+): string {
   const value =
-    flagValue ??
-    ctx.env.PERCH_SERVER_URL ??
-    readConfig(ctx.configPath)['server-url'] ??
-    'http://localhost:3000';
+    flagValue ?? ctx.env.PERCH_SERVER_URL ?? config['server-url'] ?? 'http://localhost:3000';
   return value.endsWith('/') ? value.slice(0, -1) : value;
 }
 
-export function resolveToken(ctx: CliContext): string | undefined {
-  return ctx.env.PERCH_TOKEN ?? readConfig(ctx.configPath).token;
+export function resolveToken(ctx: CliContext, config: LocalConfig): string | undefined {
+  return ctx.env.PERCH_TOKEN ?? config.token;
 }
 
-export function resolveMirrorDir(ctx: CliContext, flagValue?: string): string {
-  return (
-    flagValue ??
-    readConfig(ctx.configPath)['mirror-dir'] ??
-    path.join(ctx.homeDir, '.perch', 'resources')
-  );
+export function resolveMirrorDir(
+  ctx: CliContext,
+  config: LocalConfig,
+  flagValue?: string,
+): string {
+  return flagValue ?? config['mirror-dir'] ?? path.join(ctx.homeDir, '.perch', 'resources');
 }
