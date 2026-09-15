@@ -337,8 +337,12 @@ export function postsRoutes(deps: AppDeps) {
     .delete('/', zValidator('json', postDeleteBodySchema, validationHook), (c) => {
       const userId = c.get('user').id;
       return c.json(
-        deletePosts(deps.db, userId, c.req.valid('json').ids, (postId) =>
-          removeMediaDir(deps.uploadDir, userId, postId),
+        deletePosts(
+          deps.db,
+          userId,
+          c.req.valid('json').ids,
+          (postId) => removeMediaDir(deps.uploadDir, userId, postId),
+          (id) => deps.lifecycle.isInFlight(id),
         ),
         200,
       );

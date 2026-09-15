@@ -881,4 +881,43 @@ describe('in flight', () => {
     expect(patchFailed.status).toBe(200);
     expect((await getPost(2)).text).toBe('Changed');
   });
+
+  test('refuses a delete of a post being sent, deletes the rest, and keeps the row and media', async () => {
+    // Given: post 1 with media being sent on a held gate, and post 2
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    await attachPng(1);
+    await createPost({ text: 'Two' });
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+
+    // When: a publish holds the send and a batch delete arrives before it answers
+    const first = request('/api/posts/1/publish', { method: 'POST' });
+    const del = await request('/api/posts', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids: [1, 2] }),
+    });
+    release();
+    const firstResponse = await first;
+
+    // Then: id 1 is refused per-id, id 2 is gone, and post 1 kept its row and media
+    expect(del.status).toBe(200);
+    expect(await del.json()).toEqual({
+      results: [
+        {
+          id: 1,
+          ok: false,
+          error: { code: 'in_flight', message: 'Post 1 is being sent' },
+        },
+        { id: 2, ok: true },
+      ],
+    });
+    expect(firstResponse.status).toBe(200);
+    expect(await getPost(1)).toMatchObject({ status: 'published', x_post_id: '2' });
+    expect((await getPost(1)).media).toHaveLength(1);
+    expect(fs.existsSync(mediaDir(1))).toBe(true);
+    expect((await request('/api/posts/2')).status).toBe(404);
+  });
 });

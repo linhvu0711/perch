@@ -683,9 +683,17 @@ export function deletePosts(
   userId: number,
   ids: number[],
   removeMediaDir?: (postId: number) => void,
+  inFlight?: (id: number) => boolean,
 ): PostDeleteResponse {
   return {
     results: ids.map((id) => {
+      if (inFlight?.(id)) {
+        return {
+          id,
+          ok: false as const,
+          error: { code: 'in_flight', message: `Post ${id} is being sent` },
+        };
+      }
       const deleted = db
         .delete(posts)
         .where(and(eq(posts.id, id), eq(posts.userId, userId)))
