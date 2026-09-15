@@ -1136,9 +1136,7 @@ describe('in flight', () => {
     expect(
       server.r2.calls.filter((call) => call.name === 'put' && call.key.startsWith('uploads/')),
     ).toEqual([]);
-    expect([...server.r2.objects.keys()].filter((key) => key.startsWith('uploads/'))).toEqual(
-      [],
-    );
+    expect([...server.r2.objects.keys()].filter((key) => key.startsWith('uploads/'))).toEqual([]);
   });
 
   test('refuses a resource attach that started before the send and removes its file copy', async () => {

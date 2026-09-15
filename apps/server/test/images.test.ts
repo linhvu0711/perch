@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { ImageCreateResponse } from '@perch/core';
+import { copyToR2 } from '../src/images';
+import { fakeR2Client } from '../src/r2/fake';
 import {
   createTestServer,
   GIF_4X3,
@@ -330,6 +332,20 @@ describe('images', () => {
     );
     expect(server.errors.map((e) => (e as Error).message)).toEqual(['r2 down']);
     expect(server.r2.objects.size).toBe(0);
+  });
+
+  test('does not fail the copy when the error logger throws', async () => {
+    // Given: an R2 client that rejects and a logger that throws
+    const r2 = fakeR2Client();
+    r2.putError = new Error('r2 down');
+
+    // When: copying a stored upload
+    const copy = copyToR2(r2, '1/posts/1/a.png', PNG_3X2, () => {
+      throw new Error('log failed');
+    });
+
+    // Then: the copy still resolves
+    await expect(copy).resolves.toBeUndefined();
   });
 
   test('requires authentication', async () => {
