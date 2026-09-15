@@ -78,7 +78,13 @@ export function Posts() {
     content = <div className="countline">Loading…</div>;
   } else if (posts.isError) {
     content = <Empty title="Could not load posts" text={errorMessage(posts.error)} />;
-  } else if (total === 0 && status === undefined && search === '' && tag === undefined) {
+  } else if (
+    total === 0 &&
+    status === undefined &&
+    scheduled === undefined &&
+    search === '' &&
+    tag === undefined
+  ) {
     content = <Empty title="No posts yet" text="Create one with the New post button." />;
   } else if (total === 0) {
     content = <Empty title="No posts match" text="Change a filter or the search." />;
