@@ -1042,16 +1042,18 @@ describe('in flight', () => {
   });
 
   test('refuses an attach that started before the send and removes its file copy', async () => {
-    // Given: a connected account, an official post with one image, and gates on the R2 copy and the send
+    // Given: a connected account, an official post with one image, and gates on the file write and the send
     connectTestAccount(server);
     await createPost({ text: 'Hello', official: true });
     await attachPng(1);
-    let releaseR2: () => void = () => {};
-    const r2Gate = new Promise<void>((resolve) => {
-      releaseR2 = resolve;
+    let releaseWrite: () => void = () => {};
+    const writeGate = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
     });
-    const put = spyOn(server.r2, 'put').mockImplementation(async () => {
-      await r2Gate;
+    const realWrite = Bun.write;
+    const write = spyOn(Bun, 'write').mockImplementation(async (destination, data) => {
+      await writeGate;
+      return realWrite(destination as string, data as Uint8Array);
     });
     let release: () => void = () => {};
     server.xClient.createPostGate = new Promise((resolve) => {
@@ -1063,16 +1065,16 @@ describe('in flight', () => {
       new File([PNG_3X2.slice().buffer as ArrayBuffer], 'b.png', { type: 'image/png' }),
     );
 
-    // When: an attach holds inside the R2 copy while a send starts
+    // When: an attach holds inside the file write while a send starts
     const attach = request('/api/posts/1/media/files', { method: 'POST', body: form });
-    await waitUntil(() => put.mock.calls.length === 1);
+    await waitUntil(() => write.mock.calls.length === 1);
     const first = request('/api/posts/1/publish', { method: 'POST' });
     await waitUntil(() => server.xClient.calls.some((call) => call.name === 'createPost'));
-    releaseR2();
+    releaseWrite();
     const attachResponse = await attach;
     release();
     const firstResponse = await first;
-    put.mockRestore();
+    write.mockRestore();
 
     // Then: the attach is refused at the write, its copy is removed, and X got the send's media set
     expect(attachResponse.status).toBe(409);
@@ -1087,6 +1089,58 @@ describe('in flight', () => {
     expect(fs.readdirSync(mediaDir(1))).toHaveLength(1);
   });
 
+  test('uploads nothing to R2 when the attach is refused in flight', async () => {
+    // Given: a connected account, an official post with one image, and gates on the file write and the send
+    connectTestAccount(server);
+    await createPost({ text: 'Hello', official: true });
+    await attachPng(1);
+    server.r2.calls.length = 0;
+    server.r2.objects.clear();
+    let releaseWrite: () => void = () => {};
+    const writeGate = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
+    });
+    const realWrite = Bun.write;
+    const write = spyOn(Bun, 'write').mockImplementation(async (destination, data) => {
+      await writeGate;
+      return realWrite(destination as string, data as Uint8Array);
+    });
+    let release: () => void = () => {};
+    server.xClient.createPostGate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const form = new FormData();
+    form.append(
+      'files',
+      new File([PNG_3X2.slice().buffer as ArrayBuffer], 'b.png', { type: 'image/png' }),
+    );
+
+    // When: an attach holds inside the file write while a send starts
+    const attach = request('/api/posts/1/media/files', { method: 'POST', body: form });
+    await waitUntil(() => write.mock.calls.length === 1);
+    const first = request('/api/posts/1/publish', { method: 'POST' });
+    await waitUntil(() => server.xClient.calls.some((call) => call.name === 'createPost'));
+    releaseWrite();
+    const attachResponse = await attach;
+    release();
+    const firstResponse = await first;
+    write.mockRestore();
+
+    // Then: the attach is refused and no uploads/ object was copied
+    expect(attachResponse.status).toBe(409);
+    expect(await attachResponse.json()).toEqual({
+      code: 'in_flight',
+      message: 'Post 1 is being sent',
+    });
+    expect(firstResponse.status).toBe(200);
+    expect(
+      server.r2.calls.filter((call) => call.name === 'put' && call.key.startsWith('uploads/')),
+    ).toEqual([]);
+    expect([...server.r2.objects.keys()].filter((key) => key.startsWith('uploads/'))).toEqual(
+      [],
+    );
+  });
+
   test('refuses a resource attach that started before the send and removes its file copy', async () => {
     // Given: a connected account, an official post with one image, one image resource, and the same gates
     connectTestAccount(server);
@@ -1099,31 +1153,33 @@ describe('in flight', () => {
     );
     const upload = await request('/api/resources/images', { method: 'POST', body: uploadForm });
     expect(upload.status).toBe(200);
-    let releaseR2: () => void = () => {};
-    const r2Gate = new Promise<void>((resolve) => {
-      releaseR2 = resolve;
+    let releaseWrite: () => void = () => {};
+    const writeGate = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
     });
-    const put = spyOn(server.r2, 'put').mockImplementation(async () => {
-      await r2Gate;
+    const realWrite = Bun.write;
+    const write = spyOn(Bun, 'write').mockImplementation(async (destination, data) => {
+      await writeGate;
+      return realWrite(destination as string, data as Uint8Array);
     });
     let release: () => void = () => {};
     server.xClient.createPostGate = new Promise((resolve) => {
       release = resolve;
     });
 
-    // When: a resource attach holds inside the R2 copy while a send starts
+    // When: a resource attach holds inside the file write while a send starts
     const attach = request('/api/posts/1/media', {
       method: 'POST',
       body: JSON.stringify({ resource_ids: [1] }),
     });
-    await waitUntil(() => put.mock.calls.length === 1);
+    await waitUntil(() => write.mock.calls.length === 1);
     const first = request('/api/posts/1/publish', { method: 'POST' });
     await waitUntil(() => server.xClient.calls.some((call) => call.name === 'createPost'));
-    releaseR2();
+    releaseWrite();
     const attachResponse = await attach;
     release();
     const firstResponse = await first;
-    put.mockRestore();
+    write.mockRestore();
 
     // Then: the attach is refused at the write, its copy is removed, and X got the send's media set
     expect(attachResponse.status).toBe(409);
@@ -1139,16 +1195,18 @@ describe('in flight', () => {
   });
 
   test('refuses an attach that lands after the send ended as published and removes its file copy', async () => {
-    // Given: a connected account, an official post with one image, and a held R2 copy
+    // Given: a connected account, an official post with one image, and a held file write
     connectTestAccount(server);
     await createPost({ text: 'Hello', official: true });
     await attachPng(1);
-    let releaseR2: () => void = () => {};
-    const r2Gate = new Promise<void>((resolve) => {
-      releaseR2 = resolve;
+    let releaseWrite: () => void = () => {};
+    const writeGate = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
     });
-    const put = spyOn(server.r2, 'put').mockImplementation(async () => {
-      await r2Gate;
+    const realWrite = Bun.write;
+    const write = spyOn(Bun, 'write').mockImplementation(async (destination, data) => {
+      await writeGate;
+      return realWrite(destination as string, data as Uint8Array);
     });
     const form = new FormData();
     form.append(
@@ -1156,13 +1214,13 @@ describe('in flight', () => {
       new File([PNG_3X2.slice().buffer as ArrayBuffer], 'b.png', { type: 'image/png' }),
     );
 
-    // When: an attach holds inside the R2 copy while a send runs to the end
+    // When: an attach holds inside the file write while a send runs to the end
     const attach = request('/api/posts/1/media/files', { method: 'POST', body: form });
-    await waitUntil(() => put.mock.calls.length === 1);
+    await waitUntil(() => write.mock.calls.length === 1);
     const firstResponse = await request('/api/posts/1/publish', { method: 'POST' });
-    releaseR2();
+    releaseWrite();
     const attachResponse = await attach;
-    put.mockRestore();
+    write.mockRestore();
 
     // Then: the send won, the attach is refused as published, and its copy is removed
     expect(firstResponse.status).toBe(200);
@@ -1189,24 +1247,26 @@ describe('in flight', () => {
     );
     const upload = await request('/api/resources/images', { method: 'POST', body: uploadForm });
     expect(upload.status).toBe(200);
-    let releaseR2: () => void = () => {};
-    const r2Gate = new Promise<void>((resolve) => {
-      releaseR2 = resolve;
+    let releaseWrite: () => void = () => {};
+    const writeGate = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
     });
-    const put = spyOn(server.r2, 'put').mockImplementation(async () => {
-      await r2Gate;
+    const realWrite = Bun.write;
+    const write = spyOn(Bun, 'write').mockImplementation(async (destination, data) => {
+      await writeGate;
+      return realWrite(destination as string, data as Uint8Array);
     });
 
-    // When: a resource attach holds inside the R2 copy while a send runs to the end
+    // When: a resource attach holds inside the file write while a send runs to the end
     const attach = request('/api/posts/1/media', {
       method: 'POST',
       body: JSON.stringify({ resource_ids: [1] }),
     });
-    await waitUntil(() => put.mock.calls.length === 1);
+    await waitUntil(() => write.mock.calls.length === 1);
     const firstResponse = await request('/api/posts/1/publish', { method: 'POST' });
-    releaseR2();
+    releaseWrite();
     const attachResponse = await attach;
-    put.mockRestore();
+    write.mockRestore();
 
     // Then: the send won, the attach is refused as published, and its copy is removed
     expect(firstResponse.status).toBe(200);
@@ -1222,18 +1282,20 @@ describe('in flight', () => {
   });
 
   test('refuses a batch attach that started before the send and removes every stored copy', async () => {
-    // Given: a connected account, an official post with one image, and a two-file batch held on its second copy
+    // Given: a connected account, an official post with one image, and a two-file batch held on its second write
     connectTestAccount(server);
     await createPost({ text: 'Hello', official: true });
     await attachPng(1);
-    let puts = 0;
-    let releaseR2: () => void = () => {};
-    const r2Gate = new Promise<void>((resolve) => {
-      releaseR2 = resolve;
+    let writes = 0;
+    let releaseWrite: () => void = () => {};
+    const writeGate = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
     });
-    const put = spyOn(server.r2, 'put').mockImplementation(async () => {
-      puts += 1;
-      if (puts === 2) await r2Gate;
+    const realWrite = Bun.write;
+    const write = spyOn(Bun, 'write').mockImplementation(async (destination, data) => {
+      writes += 1;
+      if (writes === 2) await writeGate;
+      return realWrite(destination as string, data as Uint8Array);
     });
     let release: () => void = () => {};
     server.xClient.createPostGate = new Promise((resolve) => {
@@ -1247,16 +1309,16 @@ describe('in flight', () => {
       );
     }
 
-    // When: the second file holds in the R2 copy and a send starts before the batch writes
+    // When: the second file holds in the write and a send starts before the batch commits
     const attach = request('/api/posts/1/media/files', { method: 'POST', body: form });
-    await waitUntil(() => puts === 2);
+    await waitUntil(() => writes === 2);
     const first = request('/api/posts/1/publish', { method: 'POST' });
     await waitUntil(() => server.xClient.calls.some((call) => call.name === 'createPost'));
-    releaseR2();
+    releaseWrite();
     const attachResponse = await attach;
     release();
     const firstResponse = await first;
-    put.mockRestore();
+    write.mockRestore();
 
     // Then: the batch is refused at the write and every stored copy is removed
     expect(attachResponse.status).toBe(409);

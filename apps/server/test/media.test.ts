@@ -720,6 +720,37 @@ describe('post media', () => {
     expect(mediaFiles(1)).toEqual(filesBefore);
   });
 
+  test('uploads nothing to R2 when the second resource write throws', async () => {
+    // Given: three images, one post, and one media already attached
+    await uploadImages(
+      { name: 'a.png', bytes: PNG_3X2 },
+      { name: 'b.png', bytes: PNG_3X2 },
+      { name: 'c.png', bytes: PNG_3X2 },
+    );
+    await createPost({ text: 'Hi' });
+    expect((await attachMedia(1, [1])).status).toBe(200);
+    server.r2.calls.length = 0;
+    const objectsBefore = server.r2.objects.size;
+    let calls = 0;
+    const realMkdir = fs.mkdirSync.bind(fs);
+    const mkdir = spyOn(fs, 'mkdirSync');
+    mkdir.mockImplementation((...args) => {
+      calls += 1;
+      if (calls === 2) throw new Error('disk full');
+      return realMkdir(...args);
+    });
+
+    // When: attaching two more resources and the second store throws
+    const response = await attachMedia(1, [2, 3]);
+    mkdir.mockRestore();
+
+    // Then: the request fails and no R2 copy ran
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ code: 'internal', message: 'Internal error' });
+    expect(server.r2.calls.filter((call) => call.name === 'put')).toEqual([]);
+    expect(server.r2.objects.size).toBe(objectsBefore);
+  });
+
   test('attaches nothing when the second file write throws', async () => {
     // Given: a post with one media already attached by file
     await createPost({ text: 'Hi' });
@@ -764,12 +795,54 @@ describe('post media', () => {
     expect(mediaFiles(1)).toEqual(filesBefore);
   });
 
+  test('uploads nothing to R2 when the second file write throws', async () => {
+    // Given: a post with one media already attached by file
+    await createPost({ text: 'Hi' });
+    const first = new FormData();
+    first.append(
+      'files',
+      new File([PNG_3X2.slice().buffer as ArrayBuffer], 'a.png', { type: 'image/png' }),
+    );
+    expect(
+      (await request('/api/posts/1/media/files', { method: 'POST', body: first })).status,
+    ).toBe(200);
+    server.r2.calls.length = 0;
+    const objectsBefore = server.r2.objects.size;
+    let calls = 0;
+    const realMkdir = fs.mkdirSync.bind(fs);
+    const mkdir = spyOn(fs, 'mkdirSync');
+    mkdir.mockImplementation((...args) => {
+      calls += 1;
+      if (calls === 2) throw new Error('disk full');
+      return realMkdir(...args);
+    });
+
+    // When: attaching two more files and the second store throws
+    const form = new FormData();
+    form.append(
+      'files',
+      new File([PNG_3X2.slice().buffer as ArrayBuffer], 'b.png', { type: 'image/png' }),
+    );
+    form.append(
+      'files',
+      new File([PNG_3X2.slice().buffer as ArrayBuffer], 'c.png', { type: 'image/png' }),
+    );
+    const response = await request('/api/posts/1/media/files', { method: 'POST', body: form });
+    mkdir.mockRestore();
+
+    // Then: the request fails and no R2 copy ran
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ code: 'internal', message: 'Internal error' });
+    expect(server.r2.calls.filter((call) => call.name === 'put')).toEqual([]);
+    expect(server.r2.objects.size).toBe(objectsBefore);
+  });
+
   test('removes a file whose write rejects after it was created', async () => {
     // Given: a post and a Bun.write that writes three bytes to the destination, then rejects
     await createPost({ text: 'Hi' });
     const realWrite = Bun.write;
     const write = spyOn(Bun, 'write');
-    write.mockImplementation(async (destination, data) => {
+    write.mockImplementation(async (destination, _data) => {
       await realWrite(destination, new Uint8Array(3));
       throw new Error('ENOSPC');
     });

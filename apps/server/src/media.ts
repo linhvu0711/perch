@@ -161,6 +161,7 @@ export function createMediaService(deps: {
       const written: Array<{
         index: number;
         id: number;
+        bytes: Uint8Array;
         file: {
           path: string;
           mime: PostMedia['mime'];
@@ -200,10 +201,10 @@ export function createMediaService(deps: {
 
           const ext = resource.path.split('.').pop() ?? 'png';
           const rel = await store(deps.uploadDir, userId, postId, bytes, ext, rels);
-          await copyToR2(deps.r2, rel, bytes, deps.logError);
           written.push({
             index,
             id,
+            bytes,
             file: {
               path: rel,
               mime: resource.mime,
@@ -224,6 +225,9 @@ export function createMediaService(deps: {
           const media = inserted[i];
           if (media) results[item.index] = { id: item.id, ok: true, media };
         });
+        for (const item of written) {
+          await copyToR2(deps.r2, item.file.path, item.bytes, deps.logError);
+        }
       } catch (error) {
         discard(deps.uploadDir, rels, deps.logError);
         throw error;
@@ -254,6 +258,7 @@ export function createMediaService(deps: {
       const written: Array<{
         index: number;
         name: string;
+        bytes: Uint8Array;
         file: {
           path: string;
           mime: PostMedia['mime'];
@@ -268,18 +273,11 @@ export function createMediaService(deps: {
             results[index] = { name: file.name, ok: false, error: result.error };
             continue;
           }
-          const rel = await store(
-            deps.uploadDir,
-            userId,
-            postId,
-            file.bytes,
-            result.ext,
-            rels,
-          );
-          await copyToR2(deps.r2, rel, file.bytes, deps.logError);
+          const rel = await store(deps.uploadDir, userId, postId, file.bytes, result.ext, rels);
           written.push({
             index,
             name: file.name,
+            bytes: file.bytes,
             file: {
               path: rel,
               mime: result.mime,
@@ -300,6 +298,9 @@ export function createMediaService(deps: {
           const media = inserted[i];
           if (media) results[item.index] = { name: item.name, ok: true, media };
         });
+        for (const item of written) {
+          await copyToR2(deps.r2, item.file.path, item.bytes, deps.logError);
+        }
       } catch (error) {
         discard(deps.uploadDir, rels, deps.logError);
         throw error;
