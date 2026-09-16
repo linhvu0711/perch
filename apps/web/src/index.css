@@ -862,6 +862,7 @@ table.t tr.cur td:first-child {
   width: min(1180px, 100%);
   height: min(780px, 100%);
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto 1fr;
   overflow: hidden;
   position: relative;
@@ -870,6 +871,7 @@ table.t tr.cur td:first-child {
 .modal.sm {
   width: min(520px, 100%);
   height: auto;
+  max-height: 100%;
 }
 .drop {
   border: 1.5px dashed var(--border-strong);
@@ -1038,6 +1040,8 @@ table.t tr.cur td:first-child {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  min-height: 0;
+  overflow-y: auto;
 }
 .sfoot {
   display: flex;
