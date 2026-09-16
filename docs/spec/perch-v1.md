@@ -270,7 +270,7 @@ All decisions below come from the design session and are recorded in the ADRs an
 - The full command tree and per-command rules are the CLI spec in the repo docs; it is the contract, not this list.
 
 **Web UI**
-- The web UI spec and the clickable mockup in the repo docs are the contract for pages, layout, colors, icons, confirmations, tooltips, paging sizes (posts 50, resources 30, drawer 20), Calendar caps, and the custom date-time picker. Where the spec and the mockup disagree, the spec wins.
+- The web UI spec and the clickable mockup in the repo docs are the contract for pages, layout, colors, icons, confirmations, tooltips, paging sizes (posts 50, resources 18, drawer 20), Calendar caps, and the custom date-time picker. Where the spec and the mockup disagree, the spec wins.
 - Modals are routes rendered over their list page. Theme is three CSS token sets (light, dark, system).
 
 ## Testing Decisions
