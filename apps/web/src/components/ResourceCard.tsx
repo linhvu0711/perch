@@ -36,7 +36,12 @@ export function ResourceCard({ resource }: { resource: Resource }): JSX.Element 
         <span className="date">{formatDayMonth(resource.created_at)}</span>
       </div>
       {isImage && (
-        <img className="thumb" src={`/api/resources/${resource.id}/file`} alt={resource.title} />
+        <img
+          className="thumb"
+          src={`/api/resources/${resource.id}/file`}
+          alt={resource.title}
+          loading="lazy"
+        />
       )}
       {!isTweet && <div className="title">{resource.title}</div>}
       {isImage ? (
