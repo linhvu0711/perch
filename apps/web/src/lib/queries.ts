@@ -119,7 +119,7 @@ export interface ResourceFilters {
   order: 'asc' | 'desc';
 }
 
-export const RESOURCES_PAGE_SIZE = 30;
+export const RESOURCES_PAGE_SIZE = 18;
 
 export function useResources(filters: ResourceFilters, pageSize = RESOURCES_PAGE_SIZE) {
   const api = useApi();
